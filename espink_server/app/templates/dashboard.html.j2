@@ -20,19 +20,26 @@
   .mdi::before { line-height: 1; }
 
   /* ── Hlavička ───────────────────────────── */
-  header { height: 138px; padding: 8px 16px 0; display: flex; border-bottom: 3px solid var(--ink); }
+  header { height: 138px; padding: 8px 16px 0; border-bottom: 3px solid var(--ink); position: relative; }
+  .hrow { display: flex; }
+  /* upozornění přes celou šířku dole v hlavičce */
+  .hline { position: absolute; left: 16px; right: 16px; bottom: 3px; height: 24px; font-size: 19px; font-weight: 800; }
   .date { display: flex; align-items: flex-start; flex: 1; min-width: 0; }
   .daynum { font-size: 96px; font-weight: 800; line-height: 0.95; letter-spacing: -4px; margin-right: 12px; }
   .datetext { padding-top: 6px; min-width: 0; }
   .weekday { font-size: 32px; font-weight: 800; line-height: 1.05; }
   .month { font-size: 18px; font-weight: 600; margin-top: 3px; }
   .nameday { font-size: 18px; font-weight: 600; margin-top: 8px; }
-  .holiday, .alert { font-size: 19px; font-weight: 800; margin-top: 2px; }
-  .now { width: 196px; text-align: right; overflow: hidden; }
-  .now-top { display: flex; justify-content: flex-end; align-items: center; gap: 2px; height: 46px; }
-  .now-top .mdi { font-size: 46px; line-height: 1; }
-  .temp { font-size: 46px; font-weight: 800; letter-spacing: -1.5px; line-height: 1; }
-  .now-sub { font-size: 18px; font-weight: 600; height: 25px; margin-top: 1px; display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+  .now { width: 212px; text-align: right; overflow: hidden; }
+  .now-top { display: flex; justify-content: flex-end; align-items: center; gap: 4px; height: 54px; margin-bottom: 2px; }
+  .now-top .mdi { font-size: 50px; line-height: 1; flex: none; }
+  .minmax { display: flex; flex-direction: column; align-items: flex-end; line-height: 20px; font-size: 18px; margin-right: 2px; flex: none; }
+  .minmax .hi { font-weight: 800; }
+  .minmax .lo { font-weight: 600; }
+  .minmax small { font-size: 12px; font-weight: 800; line-height: 13px; text-transform: uppercase; }
+  .temp { font-size: 46px; font-weight: 800; letter-spacing: -1.5px; line-height: 1; white-space: nowrap; }
+  .temp.long { font-size: 38px; letter-spacing: -1px; }
+  .now-sub { font-size: 18px; font-weight: 600; height: 24px; display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
   .now-sub.mm { font-weight: 800; }
   .now-sub span { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; flex: none; }
   .now-sub .mdi { font-size: 26px; line-height: 1; margin: -3px 0; }
@@ -95,22 +102,24 @@
 <body>
 {% set h = v.header %}{% set w = v.weather %}
 <header>
+<div class="hrow">
   <div class="date">
     <div class="daynum num {{ 'red' if h.holiday }}">{{ h.day }}</div>
     <div class="datetext">
       <div class="weekday {{ 'red' if h.holiday }}">{{ h.weekday }}</div>
       <div class="month">{{ h.month }} · {{ h.week }}</div>
       {% if h.nameday %}<div class="nameday ellipsis">{{ h.nameday if 'svátek' in h.nameday|lower else 'Svátek: ' ~ h.nameday }}</div>{% endif %}
-      {% if h.alert %}<div class="alert red ellipsis">{{ h.alert }}</div>
-      {% elif h.holiday %}<div class="holiday red ellipsis">{{ h.holiday }}</div>{% endif %}
     </div>
   </div>
   <div class="now">
     <div class="now-top">
       <i class="mdi mdi-{{ w.icon }}"></i>
-      <span class="temp num">{{ w.temp or '--' }}°</span>
+      {% if w.min and w.max %}<span class="minmax num">
+        {% if w.minmax_label %}<small>{{ w.minmax_label }}</small>{% endif %}
+        <span class="hi">{{ w.max }}°</span><span class="lo">{{ w.min }}°</span>
+      </span>{% endif %}
+      <span class="temp num {{ 'long' if (w.temp or '')|length > 4 }}">{{ w.temp or '--' }}°</span>
     </div>
-    {% if w.min and w.max %}<div class="now-sub num mm">{% if w.minmax_label %}<small>{{ w.minmax_label }}</small> {% endif %}{{ w.min }}° / {{ w.max }}°</div>{% endif %}
     <div class="now-sub num">
       {% if w.humidity %}<span><i class="mdi mdi-water-percent"></i>{{ w.humidity }} %</span>{% endif %}
       {% if w.rain %}<span><i class="mdi mdi-weather-pouring"></i>{{ w.rain }} mm</span>{% endif %}
@@ -120,6 +129,9 @@
       {% if w.pressure %}<span><i class="mdi mdi-gauge"></i>{{ w.pressure }} hPa</span>{% endif %}
     </div>{% endif %}
   </div>
+</div>
+{% if h.alert %}<div class="hline red ellipsis">{{ h.alert }}</div>
+{% elif h.holiday %}<div class="hline red ellipsis">{{ h.holiday }}</div>{% endif %}
 </header>
 
 {% if v.departures %}{% set d = v.departures %}

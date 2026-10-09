@@ -95,7 +95,8 @@ class HomeAssistant:
         states = await self._get("/states")
         return sorted(
             ({"id": s["entity_id"], "name": s["attributes"].get("friendly_name", ""),
-              "unit": s["attributes"].get("unit_of_measurement", "")} for s in states),
+              "unit": s["attributes"].get("unit_of_measurement", ""), "state": str(s.get("state", ""))[:60]}
+             for s in states),
             key=lambda e: e["id"],
         )
 

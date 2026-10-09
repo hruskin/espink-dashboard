@@ -6,8 +6,14 @@
 > rozvržení není uložené z editoru, odvozuje se z konfigurace níže, takže dashboard
 > vypadá stejně jako ve stabilní verzi.
 >
-> API pro editor (jen přes Ingress): `GET layout.json` (rozvržení + popis bloků),
-> `POST layout/preview` (náhled neuloženého rozvržení, PNG), `POST layout` (uložení).
+> **Editor** (panel ESPink DEV → Rozvržení): bloky vlevo (přetažení za úchyt nebo
+> šipky, skrytí okem, „Přidat blok“), vpravo náhled neuloženého návrhu vykreslený
+> stejně jako pro desku. Ukazatel výšky hlídá, aby se bloky vešly. Po prvním uložení
+> platí pro obsah jen editor (entity v Systém → nastavení se pak už nepoužijí).
+> Baterii v náhledu bere DEV verze ze senzoru, který plní stabilní add-on.
+>
+> API (jen přes Ingress): `GET layout.json`, `POST layout/preview` (PNG + hlavička
+> X-Geometry s polohou bloků), `POST layout` (uložení).
 
 Lokální náhrada serveru [Živý obraz](https://zivyobraz.eu) pro e-paper ESPink.
 Add-on sbírá data z Home Assistantu (kalendáře, odjezdy, meteostanice, předpověď),

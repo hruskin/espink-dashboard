@@ -70,6 +70,8 @@ BLOCK_TYPES: dict[str, dict] = {
 HEADER_H, HEADER_COMPACT_H = 136, 114
 FORECAST_H, FOOTER_H = 104, 23
 DEPS_BASE_H, DEP_ROW_H = 36, 30
+# nejmenší smysluplná agenda: odsazení + pruh „Dnes“ + jedna událost
+AGENDA_MIN_H = 6 + 34 + 29
 
 
 def fixed_height(block: dict) -> int | None:
@@ -87,7 +89,12 @@ def fixed_height(block: dict) -> int | None:
 
 
 def line_px(block: dict, index: int) -> int:
+    """Čára nad blokem; index = pořadí mezi viditelnými bloky (nad prvním čára není)."""
     return 0 if index == 0 else LINES[block.get("line", "none")]
+
+
+def visible(layout: dict) -> list[dict]:
+    return [b for b in layout["blocks"] if not b.get("hidden")]
 
 
 def _check(value, kind, default):
@@ -130,13 +137,15 @@ def sanitize(layout: dict) -> dict:
             raise ValueError(f"neznámý typ bloku: {raw.get('type') if isinstance(raw, dict) else raw!r}")
         spec = BLOCK_TYPES[raw["type"]]
         b = {"type": raw["type"], "id": str(raw.get("id") or uuid.uuid4().hex[:8])[:16],
-             "line": raw.get("line") if raw.get("line") in LINES else "none"}
+             "line": raw.get("line") if raw.get("line") in LINES else "none",
+             "hidden": bool(raw.get("hidden"))}
         for key, (default, kind) in spec["params"].items():
             b[key] = _check(raw[key], kind, default) if key in raw else copy.deepcopy(default)
         blocks.append(b)
     if sum(1 for b in blocks if b["type"] == "agenda") > 1:
         raise ValueError("blok Události může být jen jeden (vyplňuje zbývající místo)")
-    used = sum((fixed_height(b) or 0) + line_px(b, i) for i, b in enumerate(blocks))
+    shown = [b for b in blocks if not b["hidden"]]
+    used = sum((fixed_height(b) or AGENDA_MIN_H) + line_px(b, i) for i, b in enumerate(shown))
     if used > SCREEN_H:
         raise ValueError(f"bloky se nevejdou na displej ({used} px z {SCREEN_H} px)")
     return {"version": 1, "blocks": blocks}
@@ -196,7 +205,7 @@ def needs(layout: dict) -> dict:
         if v and v not in lst:
             lst.append(v)
 
-    for b in layout["blocks"]:
+    for b in visible(layout):
         t = b["type"]
         if t == "header":
             for k in ("weather", "temperature", "humidity", "rain", "pressure", "indoor"):
@@ -214,8 +223,8 @@ def needs(layout: dict) -> dict:
             add(cals, b["holiday_calendar"])
         elif t == "forecast":
             add(forecasts, b["weather"])
-    if any(b["type"] == "header" and b["alert"] for b in layout["blocks"]):
-        for b in layout["blocks"]:
+    if any(b["type"] == "header" and b["alert"] for b in visible(layout)):
+        for b in visible(layout):
             if b["type"] == "agenda":
                 for c in b["calendars"]:
                     if c.get("red"):
@@ -224,8 +233,13 @@ def needs(layout: dict) -> dict:
 
 
 def schema() -> dict:
-    """Popis typů bloků pro editor."""
-    return {t: {"title": s["title"], "fill": t == "agenda",
-                "params": {k: {"default": d, "kind": list(kind) if isinstance(kind, tuple) else kind}
-                           for k, (d, kind) in s["params"].items()}}
-            for t, s in BLOCK_TYPES.items()}
+    """Popis typů bloků a výšek pro editor (aby JS nekopíroval konstanty)."""
+    return {
+        "types": {t: {"title": s["title"], "fill": t == "agenda",
+                      "params": {k: {"default": d, "kind": list(kind) if isinstance(kind, tuple) else kind}
+                                 for k, (d, kind) in s["params"].items()}}
+                  for t, s in BLOCK_TYPES.items()},
+        "dims": {"screen": SCREEN_H, "lines": LINES, "header": [HEADER_COMPACT_H, HEADER_H],
+                 "departures": [DEPS_BASE_H, DEP_ROW_H], "forecast": FORECAST_H, "footer": FOOTER_H,
+                 "agenda_min": AGENDA_MIN_H, "agenda_pad": 6, "day_header": 34, "event_row": 29},
+    }

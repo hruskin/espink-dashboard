@@ -291,6 +291,9 @@ def _events(raw: dict, b: dict, now: datetime, tz, budget: int) -> dict:
                 uniq.append({k: v for k, v in it.items() if k != "sort"})
         is_today = d == today
         if d in holidays and not is_today:  # dnešní svátek je v hlavičce
+            # stejný svátek může být i v některém z běžných kalendářů
+            uniq = [it for it in uniq if not it.get("allday")
+                    or it["summary"].casefold() != holidays[d].casefold()]
             uniq.insert(0, {"summary": holidays[d], "label": "", "red": True, "icon": None,
                             "time": "", "allday": True})
         if not uniq:
@@ -379,7 +382,7 @@ def _device(device: dict) -> dict:
 
 def _header(raw: dict, b: dict, layout: dict, now: datetime, tz) -> dict:
     today = now.date()
-    red_cals = [c for x in layout["blocks"] if x["type"] == "agenda" for c in x["calendars"]] if b["alert"] else []
+    red_cals = [c for x in layout_mod.visible(layout) if x["type"] == "agenda" for c in x["calendars"]] if b["alert"] else []
     holiday = _special_days(raw, b.get("holiday_calendar"), tz).get(today)
     alert = _alert(raw, red_cals, now, tz)
     # Červeně jen státní svátek – víkend by ředil význam červené
@@ -399,9 +402,9 @@ def build(raw: dict, layout: dict, device: dict, now: datetime) -> dict:
     """Model zobrazení: seznam bloků s hotovými daty a výškami v px."""
     tz = now.tzinfo
     blocks, fill = [], None
-    for i, b in enumerate(layout["blocks"]):
+    for b in layout_mod.visible(layout):
         t = b["type"]
-        vb = {"type": t, "id": b["id"], "line": layout_mod.line_px(b, i)}
+        vb = {"type": t, "id": b["id"], "line": layout_mod.line_px(b, len(blocks))}
         if t == "header":
             vb.update(_header(raw, b, layout, now, tz))
         elif t == "departures":
@@ -422,7 +425,18 @@ def build(raw: dict, layout: dict, device: dict, now: datetime) -> dict:
         used = sum(x["height"] + x["line"] for x in blocks if x["height"] is not None)
         budget = layout_mod.SCREEN_H - used - blocks[idx]["line"] - EVENTS_PAD
         blocks[idx].update(_events(raw, b, now, tz, budget))
+        blocks[idx]["fill_h"] = layout_mod.SCREEN_H - used - blocks[idx]["line"]
     return {"blocks": blocks, "device": _device(device)}
+
+
+def geometry(view: dict) -> list[dict]:
+    """Svislá poloha bloků v px (pro zvýraznění bloků nad náhledem v editoru)."""
+    y, out = 0, []
+    for b in view["blocks"]:
+        h = b["line"] + (b["height"] if b["height"] is not None else b.get("fill_h", 0))
+        out.append({"id": b["id"], "y": y, "h": h})
+        y += h
+    return out
 
 
 def digest(view: dict) -> str:

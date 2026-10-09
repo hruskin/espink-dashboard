@@ -108,7 +108,16 @@ class Server:
     async def build_view(self, layout: dict, now: datetime) -> dict:
         needs = layout_mod.needs(layout)
         raw = mock.raw(needs, now) if MOCK else await ha_mod.collect(self.ha, needs, now)
-        return model.build(raw, layout, self.device, now)
+        return model.build(raw, layout, self.device or await self.device_from_sensor(), now)
+
+    async def device_from_sensor(self) -> dict:
+        """Deska se k tomuto serveru zatím nehlásila (DEV vedle stabilního add-onu) –
+        napětí a signál pro náhled vzít ze senzoru baterie, který plní stabilní verze."""
+        if MOCK or not self.ha or not self.opts.get("battery_sensor"):
+            return {}
+        s = await self.ha.state(self.opts["battery_sensor"])
+        a = (s or {}).get("attributes", {})
+        return {"voltage": model.fnum(a.get("voltage")), "rssi": model.fnum(a.get("rssi"))} if a.get("voltage") else {}
 
     async def loop(self) -> None:
         # Ve vývoji se při změně šablony hned překreslí (bez čekání na data)
@@ -270,7 +279,7 @@ class Server:
 <div class="wrap"><img id="p" src="preview.png?{self.content_ts}" alt="Náhled displeje">
 <div><table>{rows}</table>
 <button onclick="fetch('refresh',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:'{{}}'}}).then(()=>location.reload())">Překreslit hned</button>
-<p><a href="settings"><b>Nastavení</b></a> · <a href="view.json">Model zobrazení (JSON)</a></p></div></div>
+<p><a href="./"><b>Editor rozvržení</b></a> · <a href="settings"><b>Nastavení</b></a> · <a href="view.json">Model zobrazení (JSON)</a></p></div></div>
 <script>
  // obnovit náhled jen při změně obsahu
  let ts={self.content_ts};
@@ -292,6 +301,10 @@ class Server:
                                  dumps=lambda o: json.dumps(o, ensure_ascii=False, indent=2, default=str))
 
     # ── nastavení s našeptávačem ─────────────────────────────────────────
+    async def handle_editor(self, request: web.Request) -> web.Response:
+        return web.FileResponse(render.APP_DIR / "templates" / "editor.html",
+                                headers={"Cache-Control": "no-store"})
+
     async def handle_settings_page(self, request: web.Request) -> web.Response:
         return web.FileResponse(render.APP_DIR / "templates" / "settings.html",
                                 headers={"Cache-Control": "no-store"})
@@ -328,7 +341,7 @@ class Server:
     # ── rozvržení (editor) ───────────────────────────────────────────────
     async def handle_layout(self, request: web.Request) -> web.Response:
         return web.json_response({"layout": self.layout, "saved": self.layout_saved,
-                                  "schema": layout_mod.schema(), "screen_h": layout_mod.SCREEN_H},
+                                  "schema": layout_mod.schema(), "device": self.device},
                                  headers={"Cache-Control": "no-store"})
 
     async def read_layout(self, request: web.Request) -> dict:
@@ -363,7 +376,8 @@ class Server:
                                              after(now, self.schedule.sleep_seconds(now)))
             except Exception as e:  # noqa: BLE001
                 return web.json_response({"error": f"{type(e).__name__}: {e}"}, status=502)
-        return web.Response(body=png, content_type="image/png", headers={"Cache-Control": "no-store"})
+        return web.Response(body=png, content_type="image/png", headers={
+            "Cache-Control": "no-store", "X-Geometry": json.dumps(model.geometry(view))})
 
     async def handle_refresh(self, request: web.Request) -> web.Response:
         if request.content_type != "application/json":  # ochrana proti CSRF
@@ -394,7 +408,8 @@ async def main() -> None:
         app = web.Application(middlewares=[srv.ingress_only])
         app.add_routes([
             web.post("/index.php", srv.handle_device),
-            web.get("/", srv.handle_index),
+            web.get("/", srv.handle_editor),
+            web.get("/status", srv.handle_index),
             web.get("/preview.png", srv.handle_preview),
             web.get("/ts", srv.handle_ts),
             web.get("/view.json", srv.handle_view),
@@ -404,6 +419,7 @@ async def main() -> None:
             web.get("/options.json", srv.handle_options),
             web.get("/entities.json", srv.handle_entities),
             web.get("/layout.json", srv.handle_layout),
+            web.static("/static", render.STATIC_DIR),
             web.post("/layout", srv.handle_layout_save),
             web.post("/layout/preview", srv.handle_layout_preview),
         ])

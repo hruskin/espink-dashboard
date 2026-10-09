@@ -55,7 +55,7 @@ def raw(opts: dict, now: datetime) -> dict:
             {"summary": "Divadlo ve školce – přinést 50 Kč", "start": {"dateTime": at(2, 9, 30)}, "end": {"dateTime": at(2, 11)}},
         ],
         "calendar.plavani": [
-            {"summary": "Plavání – Kateřinky", "start": {"dateTime": at(1, 16)}, "end": {"dateTime": at(1, 17)}},
+            {"summary": "🏃 Atletika – závody 🏅", "start": {"dateTime": at(1, 16)}, "end": {"dateTime": at(1, 17)}},
         ],
         "calendar.narozeniny_2": [{"summary": "Narozeniny – Petr", **allday(2)}],
         "calendar.svoz_popelnice": [{"summary": "Svoz – papír", **allday(1)}],

@@ -5,15 +5,16 @@
 <link rel="stylesheet" href="{{ static }}/mdi/css/materialdesignicons.min.css">
 <style>
   @font-face { font-family: "Inter"; src: url("{{ static }}/fonts/Inter.ttf"); font-weight: 100 900; }
+  @font-face { font-family: "NotoEmoji"; src: url("{{ static }}/fonts/NotoEmoji.ttf"); font-weight: 300 700; }
   @font-face { font-family: "RobotoCondensed"; src: url("{{ static }}/fonts/RobotoCondensed.ttf"); font-weight: 100 900; }
 
   /* Pouze tři barvy panelu – žádné šedé, ty by se rozpadly na šum */
   :root { --ink: #000; --paper: #fff; --red: #e00000; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 480px; height: 800px; overflow: hidden; background: var(--paper); color: var(--ink); }
-  body { font-family: "Inter", sans-serif; font-weight: 500; display: flex; flex-direction: column; }
+  body { font-family: "Inter", "NotoEmoji", sans-serif; font-weight: 500; display: flex; flex-direction: column; }
   .red { color: var(--red); }
-  .cond { font-family: "RobotoCondensed", sans-serif; }
+  .cond { font-family: "RobotoCondensed", "NotoEmoji", sans-serif; }
   .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .num { font-variant-numeric: tabular-nums; }
   .mdi::before { line-height: 1; }

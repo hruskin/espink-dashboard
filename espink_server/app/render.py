@@ -12,6 +12,9 @@ from PIL import Image
 APP_DIR = Path(__file__).resolve().parent
 STATIC_DIR = APP_DIR / "static"
 WIDTH, HEIGHT = 480, 800  # portrét; zařízení dostane obraz otočený do nativních 800x480
+# Headless Chromium (některé verze) odečte z --window-size výšku neviditelného UI,
+# takže okno bereme vyšší a snímek ořízneme.
+WINDOW_EXTRA = 300
 
 # Kódy barev protokolu Živý obraz (Z2): 0 bílá, 1 černá, 2 červená
 WHITE, BLACK, RED = 0, 1, 2
@@ -43,7 +46,7 @@ async def screenshot(html: str) -> Image.Image:
             chromium_binary(),
             "--headless", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
             "--hide-scrollbars", "--no-first-run", "--mute-audio",
-            "--force-device-scale-factor=1", f"--window-size={WIDTH},{HEIGHT}",
+            "--force-device-scale-factor=1", f"--window-size={WIDTH},{HEIGHT + WINDOW_EXTRA}",
             "--default-background-color=FFFFFFFF", "--virtual-time-budget=2000",
             "--font-render-hinting=full", "--disable-lcd-text",
             f"--user-data-dir={tmp}/profile", f"--screenshot={out}", page.as_uri(),

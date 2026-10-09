@@ -59,23 +59,59 @@ class HomeAssistant:
             return []
 
     async def daily_forecast(self, entity_id: str) -> list[dict]:
+        """Denní předpověď; když ji entita neumí, dopočítá se z twice_daily/hourly."""
         if not entity_id:
             return []
-        try:
-            res = await self._post(
-                "/services/weather/get_forecasts?return_response",
-                {"entity_id": entity_id, "type": "daily"},
-            )
-            return res.get("service_response", {}).get(entity_id, {}).get("forecast", [])
-        except Exception as e:  # noqa: BLE001
-            print(f"[ha] předpověď {entity_id}: {e}")
-            return []
+        errors = []
+        for kind in ("daily", "twice_daily", "hourly"):
+            try:
+                res = await self._post(
+                    "/services/weather/get_forecasts?return_response",
+                    {"entity_id": entity_id, "type": kind},
+                )
+                items = res.get("service_response", {}).get(entity_id, {}).get("forecast", [])
+            except Exception as e:  # noqa: BLE001
+                errors.append(f"{kind}: {e}")
+                continue
+            if items:
+                return items if kind == "daily" else aggregate_daily(items)
+        print(f"[ha] předpověď {entity_id} nedostupná ({'; '.join(errors) or 'prázdná'})")
+        return []
 
     async def set_state(self, entity_id: str, state, attributes: dict) -> None:
         try:
             await self._post(f"/states/{entity_id}", {"state": state, "attributes": attributes})
         except Exception as e:  # noqa: BLE001
             print(f"[ha] zápis {entity_id}: {e}")
+
+
+def aggregate_daily(items: list[dict]) -> list[dict]:
+    """Sloučí hodinovou/dvoudenní předpověď do dnů (max/min teplota, součet srážek,
+    počasí nejblíže poledni)."""
+    days: dict[str, dict] = {}
+    for f in items:
+        try:
+            dt = datetime.fromisoformat(f["datetime"]).astimezone()
+        except (KeyError, ValueError):
+            continue
+        key = dt.date().isoformat()
+        d = days.setdefault(key, {"datetime": dt.replace(hour=12, minute=0).isoformat(),
+                                  "temperature": None, "templow": None, "precipitation": 0.0,
+                                  "condition": None, "_dist": 99})
+        temps = [t for t in (f.get("temperature"), f.get("templow")) if isinstance(t, (int, float))]
+        if temps:
+            d["temperature"] = max(temps + ([d["temperature"]] if d["temperature"] is not None else []))
+            d["templow"] = min(temps + ([d["templow"]] if d["templow"] is not None else []))
+        if isinstance(f.get("precipitation"), (int, float)):
+            d["precipitation"] += f["precipitation"]
+        dist = abs(dt.hour - 12)
+        if f.get("condition") and dist < d["_dist"]:
+            d["condition"], d["_dist"] = f["condition"], dist
+    out = []
+    for d in days.values():
+        d.pop("_dist")
+        out.append(d)
+    return sorted(out, key=lambda d: d["datetime"])
 
 
 async def collect(ha: HomeAssistant, opts: dict, now: datetime) -> dict:

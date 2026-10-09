@@ -48,7 +48,7 @@ Ověřené sestavení: RAM 29,4 %, flash 15,2 % (~1 MB z 6,25 MB aplikačního o
 
 Upstream firmware nabízí dva způsoby:
 
-1. **WiFiManager (přístupový bod):** když zařízení nezná WiFi nebo se k ní nepřipojí, spustí vlastní AP s názvem `INK_<MAC bez dvojteček>` a heslem **`zivyobraz`**. Na displeji se zobrazí název AP, heslo a adresa konfiguračního portálu (`http://192.168.4.1`). Po připojení k AP v portálu vybereš síť a zadáš heslo.
+1. **WiFiManager (přístupový bod):** když zařízení nezná WiFi nebo se k ní nepřipojí, spustí vlastní AP s názvem `INK_<MAC bez dvojteček>` a heslem z **`config.local.env`** (`ZO_AP_PASSWORD`; při prvním `./prepare.sh` se vygeneruje náhodné, soubor se necommituje). Na displeji se zobrazí název AP, heslo a adresa konfiguračního portálu (`http://192.168.4.1`). Po připojení k AP v portálu vybereš síť a zadáš heslo.
 2. **Improv přes sériovou linku:** když zařízení běží v režimu AP, poslouchá zároveň na USB sériové lince protokol Improv. Přihlašovací údaje se tak dají poslat i z prohlížeče přes web s Improv (Chrome/Edge).
 
 Zařízení si navíc pamatuje kanál a BSSID poslední sítě, takže se po probuzení připojí rychleji. Pokud se připojit nepodaří, provede úplné vyhledání sítí.
@@ -97,7 +97,7 @@ Ověřeno ve zdrojovém kódu upstreamu (`src/http_client.cpp`, `src/main.cpp`, 
   - `Timestamp: <int>` (`substring(11)`). Když se shoduje s hodnotou uloženou v RTC paměti, zařízení **nepřekresluje** a usne.
   - `PreciseSleep: <sekundy>` (`substring(14)`). Délka spánku. Bez této hlavičky zařízení spí 120 s. Ze spánku se odečte doba stahování a překreslení, nejvýš 60 s.
   - `Rotate: <int>` (volitelné). Jakákoli hodnota vypne přímé streamování a otočí obraz o 180°. **Nepoužívat**, rotaci dělá server.
-  - Volitelně `X-OTA-Update: <url>` (zařízení stáhne a nahraje firmware), `PartialRefresh` (3C panel to neumí), `ForceWifiFullScan`, `ShowNoWifiError: 0|1`.
+  - Volitelně `X-OTA-Update: <url>` (upstream firmware stáhne a nahraje firmware; **v našem sestavení vypnuto** přes `ZO_DISABLE_OTA` – po HTTP by šlo podvrhnout), `PartialRefresh` (3C panel to neumí), `ForceWifiFullScan`, `ShowNoWifiError: 0|1`.
 - **Tělo musí následovat hned za hlavičkami už v odpovědi na `timestampCheck=1`.** Firmware nechává spojení otevřené a obrázek z něj rovnou streamuje. Když `Timestamp` beze změny, tělo zahodí.
 - `Transfer-Encoding: chunked` **není podporované**, protože tělo se čte jako surové bajty. Server musí poslat `Content-Length`.
 - Když přímé streamování nejde použít, zařízení si obrázek stáhne znovu přes `timestampCheck=0`, případně i několikrát (stránkovaný režim). Server proto musí stejný obrázek vracet opakovaně, ne generovat nový.
@@ -105,3 +105,11 @@ Ověřeno ve zdrojovém kódu upstreamu (`src/http_client.cpp`, `src/main.cpp`, 
   - **Z2** (doporučený): ASCII `Z2` a za ním bajty `(barva << 6) | počet`, kde počet je 1–63. Barvy: `0` bílá, `1` černá, `2` červená. Pixely jdou po řádcích v nativní orientaci panelu, tedy **800×480 na šířku**. Běh může přecházet přes konec řádku.
   - PNG: barvy se mapují podle prahu. Červená je, když `r ≥ 128`, `r > g+80` a `r > b+80`. Jinak se počítá jas `(77r+150g+29b)>>8` a hodnota ≤ 160 znamená černou.
   - Dále Z1 (1 bajt barvy a 1 bajt počtu) a Z3 (3 bity barvy a 5 bitů počtu).
+
+## Bezpečnostní úpravy (patches/02-hardening.patch)
+
+- `ZO_DISABLE_OTA` – hlavička `X-OTA-Update` se ignoruje. Spojení se serverem je
+  nešifrované HTTP, takže by podvržená odpověď v LAN mohla nahrát cizí firmware.
+  Firmware nahráváme přes USB.
+- `ZO_AP_PASSWORD` – vlastní heslo konfiguračního AP místo veřejně známého
+  `zivyobraz` (z `config.local.env`, který se necommituje).

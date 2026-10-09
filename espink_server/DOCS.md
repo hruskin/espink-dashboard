@@ -27,6 +27,22 @@ Firmware s touto adresou připravíte podle `firmware/README.md`.
   (výchozí `sensor.espink_baterie`). Senzor má atributy `voltage`, `rssi`,
   `last_seen` a `next_wake`. Po restartu HA zmizí, dokud se zařízení znovu neozve.
 
+## Bezpečnost
+
+- **Povolená zařízení:** port 8099 obsluhuje jen desky ze seznamu `allowed_devices`
+  (MAC adresy). Je-li seznam prázdný, první deska, která se ozve, se zapíše sama;
+  ostatní dostanou `403`. Poslední odmítnuté zařízení je vidět v panelu ESPink.
+  Novou desku přidáte v Nastavení (nebo seznam vyprázdněte a nechte ji zapsat).
+- **Omezení rychlosti:** deska vynutí nové vykreslení nejvýš jednou za 30 s a zápis
+  do HA nejvýš jednou za minutu.
+- **Webové rozhraní** je dostupné jen přes Ingress (administrátoři HA); ukládání
+  vyžaduje `application/json` (ochrana proti CSRF).
+- **ID entit** se kontrolují (`doména.objekt`), takže se jimi nedá zavolat jiné API HA.
+- **Chromium** běží pod neprivilegovaným uživatelem, bez sítě a stránka má
+  Content-Security-Policy, která blokuje skripty.
+- **Firmware** ignoruje pokyn k OTA aktualizaci ze serveru a konfigurační AP má
+  vlastní heslo (viz `firmware/README.md`).
+
 ## Konfigurace
 
 Nejpohodlnější je stránka **Nastavení** ve webovém rozhraní add-onu (odkaz pod náhledem).
@@ -48,6 +64,7 @@ se hned, bez restartu. Stejné volby jsou i na záložce *Konfigurace* add-onu:
 | `nameday_calendar`, `holiday_calendar` | Svátek a státní svátky v hlavičce dne. |
 | `event_days` | Kolik dní dopředu ukazovat události vždy; pokud zbývá místo, přidají se další dny (až 31). |
 | `schedule` | Rozvrh probouzení, viz níže. |
+| `allowed_devices` | MAC adresy povolených desek (viz Bezpečnost). |
 
 ### Rozvrh probouzení
 
@@ -65,7 +82,7 @@ schedule:
 ## Lokální náhled (vývoj)
 
 ```bash
-./dev.sh          # skutečná data z HA → http://localhost:8099
+./dev.sh          # skutečná data z HA → http://localhost:8099 (jen z tohoto počítače)
 ./dev.sh mock     # ukázková data, bez HA
 ./dev.sh once x.png
 ```

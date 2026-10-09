@@ -1,0 +1,35 @@
+diff --git a/src/http_client.cpp b/src/http_client.cpp
+index 27130ee..9c98165 100644
+--- a/src/http_client.cpp
++++ b/src/http_client.cpp
+@@ -173,7 +173,13 @@ bool HttpClient::parseHeaders(bool checkTimestampOnly, uint64_t storedTimestamp)
+     if (checkTimestampOnly)
+     {
+       // Parse X-OTA-Update header for firmware update
++      // ZO_DISABLE_OTA: lokální server po HTTP => OTA na pokyn serveru vypnuto
++      // (podvržená odpověď v LAN by jinak mohla nahrát cizí firmware)
++#ifndef ZO_DISABLE_OTA
+       if (line.startsWith("X-OTA-Update"))
++#else
++      if (false)
++#endif
+       {
+         m_otaUrl = line.substring(14); // Skip "X-OTA-Update: "
+         m_otaUrl.trim();               // Remove whitespace and \r
+diff --git a/src/main.cpp b/src/main.cpp
+index 3308bf5..50ad3be 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -46,7 +46,11 @@ extern const String serverName = "zivyobraz.eu";
+ #endif
+ const char *host = ZO_HOST;
+ const char *firmware = "3.2";
+-const String wifiPassword = "zivyobraz";
++// Heslo konfiguračního AP lze změnit při sestavení: -D ZO_AP_PASSWORD=\"...\"
++#ifndef ZO_AP_PASSWORD
++  #define ZO_AP_PASSWORD "zivyobraz"
++#endif
++const String wifiPassword = ZO_AP_PASSWORD;
+ const String urlWiki = "https://wiki.zivyobraz.eu";
+ extern const char *const NVS_NAMESPACE = "zivyobraz";
+ 

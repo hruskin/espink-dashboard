@@ -23,10 +23,12 @@ HA_TOKEN=
 # certifikát HA je na doménu, ne na IP
 HA_VERIFY_SSL=0
 CFG
+  chmod 600 "$ENV_FILE"
   echo "Vytvořen $ENV_FILE – doplň HA_TOKEN a spusť znovu."
   exit 1
 fi
 
+chmod 600 "$ENV_FILE"  # obsahuje token k HA
 set -a; source "$ENV_FILE"; set +a
 export DEV=1
 # vlastní kopie konfigurace (stejný formát jako konfigurace add-onu)
@@ -35,9 +37,9 @@ export OPTIONS_PATH="${OPTIONS_PATH:-$HERE/dev-options.json}"
 
 cd "$HERE/app"
 case "${1:-}" in
-  mock) export MOCK=1; exec "$VENV/bin/python" -u main.py --port "${PORT:-8099}" ;;
+  mock) export MOCK=1; exec "$VENV/bin/python" -u main.py --host 127.0.0.1 --port "${PORT:-8099}" ;;
   once) exec "$VENV/bin/python" -u main.py --once "${2:-nahled.png}" ;;
   *)    [ -n "${HA_TOKEN:-}" ] || { echo "Chybí HA_TOKEN v $ENV_FILE"; exit 1; }
         echo "Náhled: http://localhost:${PORT:-8099}/   (konfigurace: $OPTIONS_PATH)"
-        exec "$VENV/bin/python" -u main.py --port "${PORT:-8099}" ;;
+        exec "$VENV/bin/python" -u main.py --host 127.0.0.1 --port "${PORT:-8099}" ;;
 esac

@@ -1,5 +1,5 @@
 name: ESPink Server
-version: "0.3.7"
+version: "0.4.0"
 slug: espink_server
 description: Lokální server protokolu Živý obraz – kreslí dashboard z dat Home Assistantu pro e-paper ESPink
 arch:
@@ -47,6 +47,7 @@ options:
     - "1-5 05:45-08:30=300"
     - "06:00-22:30=1200"
   battery_sensor: sensor.espink_baterie
+  allowed_devices: []
 schema:
   rotate: list(0|90|180|270)
   image_format: list(z2|png)
@@ -72,3 +73,5 @@ schema:
   schedule:
     - str
   battery_sensor: str?
+  allowed_devices:
+    - "match(^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$)"

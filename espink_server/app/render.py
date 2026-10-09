@@ -2,6 +2,7 @@
 import asyncio
 import io
 import os
+import pwd
 import shutil
 import tempfile
 from pathlib import Path
@@ -38,7 +39,41 @@ def render_html(view: dict, updated: str, next_wake: str = "") -> str:
         v=view, updated=updated, updated_time=updated.split()[-1], next_wake=next_wake, static=STATIC_DIR.as_uri())
 
 
+# V kontejneru běží add-on jako root – Chromium (s --no-sandbox) spouštíme pod
+# neprivilegovaným uživatelem z Dockerfile.
+RENDER_USER = "espink-render"
+
+
+def unprivileged(tmp: str) -> dict:
+    if os.geteuid() != 0:
+        return {}
+    try:
+        pw = pwd.getpwnam(RENDER_USER)
+    except KeyError:
+        return {}
+    os.chown(tmp, pw.pw_uid, pw.pw_gid)
+    return {"user": pw.pw_uid, "group": pw.pw_gid, "env": {**os.environ, "HOME": tmp}}
+
+
+_unprivileged_ok = True
+
+
 async def screenshot(html: str) -> Image.Image:
+    """Pod neprivilegovaným uživatelem; kdyby to v daném prostředí nešlo,
+    raději vykreslit postaru (s varováním) než nekreslit vůbec."""
+    global _unprivileged_ok
+    if _unprivileged_ok:
+        try:
+            return await _screenshot(html, drop=True)
+        except RuntimeError as e:
+            if os.geteuid() != 0:
+                raise
+            _unprivileged_ok = False
+            print(f"[security] VAROVÁNÍ: Chromium pod {RENDER_USER} selhal ({e}); vykresluji jako root")
+    return await _screenshot(html, drop=False)
+
+
+async def _screenshot(html: str, drop: bool) -> Image.Image:
     with tempfile.TemporaryDirectory(prefix="espink-") as tmp:
         page = Path(tmp) / "page.html"
         out = Path(tmp) / "shot.png"
@@ -50,8 +85,13 @@ async def screenshot(html: str) -> Image.Image:
             "--force-device-scale-factor=1", f"--window-size={WIDTH},{HEIGHT + WINDOW_EXTRA}",
             "--default-background-color=FFFFFFFF", "--virtual-time-budget=2000",
             "--font-render-hinting=full", "--disable-lcd-text",
+            # stránka nepotřebuje síť (názvy událostí jsou cizí obsah); skripty blokuje CSP
+            # v šabloně (scriptEnabled=false nejde – headless snímek JS potřebuje)
+            "--disable-background-networking",
+            "--proxy-server=127.0.0.1:9", "--proxy-bypass-list=<-loopback>",
             f"--user-data-dir={tmp}/profile", f"--screenshot={out}", page.as_uri(),
             stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE,
+            **(unprivileged(tmp) if drop else {}),
         )
         try:
             _, err = await asyncio.wait_for(proc.communicate(), timeout=60)

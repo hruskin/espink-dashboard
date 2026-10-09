@@ -25,7 +25,27 @@ DEFAULTS = {
     "event_days": 7,
     "schedule": ["06:00-22:30=1200"],
     "battery_sensor": "sensor.espink_baterie",
+    "allowed_devices": [],
 }
+
+# ID entity se skládá do URL API HA – nic jiného než „doména.objekt“ nesmí projít
+# (jinak by např. „../services/homeassistant/restart“ zavolalo libovolnou službu)
+ENTITY_RE = re.compile(r"^[a-z_]+\.[a-z0-9_]+$")
+MAC_RE = re.compile(r"^([0-9A-F]{2}:){5}[0-9A-F]{2}$")
+ENTITY_KEYS = {"meteo_temperature", "meteo_humidity", "meteo_rain_today", "meteo_pressure",
+               "indoor_temperature", "weather", "departures", "disruptions",
+               "nameday_calendar", "holiday_calendar", "battery_sensor"}
+
+
+def check_entity(value: str) -> str:
+    if value and not ENTITY_RE.match(value):
+        raise ValueError(f"neplatné ID entity: {value}")
+    return value
+
+
+def normalize_mac(value) -> str | None:
+    mac = str(value or "").strip().upper().replace("-", ":")
+    return mac if MAC_RE.match(mac) else None
 
 
 def load(path: str | None = None) -> dict:
@@ -57,6 +77,13 @@ def sanitize(new: dict, current: dict) -> dict:
                 {k: c[k] for k in ("entity", "label", "icon", "red") if c.get(k)}
                 for c in v if isinstance(c, dict) and str(c.get("entity", "")).strip()
             ]
+            for c in v:
+                c["entity"] = check_entity(str(c["entity"]).strip())
+        elif key == "allowed_devices":
+            macs = [normalize_mac(m) for m in v if str(m).strip()]
+            if None in macs:
+                raise ValueError("neplatná MAC adresa v povolených zařízeních")
+            v = macs
         elif key == "schedule":
             v = [str(r).strip() for r in v if str(r).strip()]
             bad = [r for r in v if not _RULE.match(r)]
@@ -64,6 +91,8 @@ def sanitize(new: dict, current: dict) -> dict:
                 raise ValueError(f"neplatné pravidlo rozvrhu: {bad[0]}")
         else:
             v = str(v).strip()
+            if key in ENTITY_KEYS:
+                check_entity(v)
         out[key] = v
     return out
 

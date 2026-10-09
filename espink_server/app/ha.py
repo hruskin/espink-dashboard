@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 
 import aiohttp
 
+from options import ENTITY_RE
+
 TIMEOUT = aiohttp.ClientTimeout(total=15)
 
 
@@ -42,7 +44,9 @@ class HomeAssistant:
             raise RuntimeError(f"Home Assistant API nedostupné ({type(e).__name__}: {e})") from e
 
     async def state(self, entity_id: str) -> dict | None:
-        if not entity_id:
+        if not ENTITY_RE.match(entity_id or ""):
+            if entity_id:
+                print(f"[ha] neplatné ID entity ignorováno: {entity_id!r}")
             return None
         try:
             return await self._get(f"/states/{entity_id}")
@@ -51,6 +55,10 @@ class HomeAssistant:
             return None
 
     async def calendar_events(self, entity_id: str, start: datetime, end: datetime) -> list[dict]:
+        if not ENTITY_RE.match(entity_id or ""):
+            if entity_id:
+                print(f"[ha] neplatné ID entity ignorováno: {entity_id!r}")
+            return []
         try:
             return await self._get(
                 f"/calendars/{entity_id}",
@@ -62,7 +70,9 @@ class HomeAssistant:
 
     async def daily_forecast(self, entity_id: str) -> list[dict]:
         """Denní předpověď; když ji entita neumí, dopočítá se z twice_daily/hourly."""
-        if not entity_id:
+        if not ENTITY_RE.match(entity_id or ""):
+            if entity_id:
+                print(f"[ha] neplatné ID entity ignorováno: {entity_id!r}")
             return []
         errors = []
         for kind in ("daily", "twice_daily", "hourly"):
@@ -98,6 +108,10 @@ class HomeAssistant:
                 raise RuntimeError(body.get("message") or f"HTTP {r.status}")
 
     async def set_state(self, entity_id: str, state, attributes: dict) -> None:
+        if not ENTITY_RE.match(entity_id or ""):
+            if entity_id:
+                print(f"[ha] neplatné ID entity ignorováno: {entity_id!r}")
+            return None
         try:
             await self._post(f"/states/{entity_id}", {"state": state, "attributes": attributes})
         except Exception as e:  # noqa: BLE001

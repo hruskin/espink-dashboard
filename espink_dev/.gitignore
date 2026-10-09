@@ -1,0 +1,5 @@
+.venv
+.env.dev
+dev-options.json
+nahled.png
+dev-layout.json

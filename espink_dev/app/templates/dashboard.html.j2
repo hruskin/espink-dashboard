@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' file:; font-src file:; img-src file: data:">
+<link rel="stylesheet" href="{{ static }}/mdi/css/materialdesignicons.min.css">
+<style>
+  @font-face { font-family: "Inter"; src: url("{{ static }}/fonts/Inter.ttf"); font-weight: 100 900; }
+  @font-face { font-family: "NotoEmoji"; src: url("{{ static }}/fonts/NotoEmoji.ttf"); font-weight: 300 700; }
+  @font-face { font-family: "RobotoCondensed"; src: url("{{ static }}/fonts/RobotoCondensed.ttf"); font-weight: 100 900; }
+
+  /* Pouze tři barvy panelu – žádné šedé, ty by se rozpadly na šum */
+  :root { --ink: #000; --paper: #fff; --red: #e00000; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 480px; height: 800px; overflow: hidden; background: var(--paper); color: var(--ink); }
+  body { font-family: "Inter", "NotoEmoji", sans-serif; font-weight: 500; display: flex; flex-direction: column; }
+  .red { color: var(--red); }
+  .cond { font-family: "RobotoCondensed", "NotoEmoji", sans-serif; }
+  .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .num { font-variant-numeric: tabular-nums; }
+  .mdi::before { line-height: 1; }
+
+  /* Bloky jdou pod sebou; výšku a čáru nad blokem nastavuje model (layout.py) */
+  .blk { flex: none; overflow: hidden; border-top-style: solid; border-top-color: var(--ink); }
+
+  /* ── Záhlaví ────────────────────────────── */
+  .blk.header { padding: 8px 16px 0; position: relative; }
+  .hrow { display: flex; }
+  /* upozornění přes celou šířku dole v hlavičce */
+  .hline { position: absolute; left: 16px; right: 16px; bottom: 3px; height: 24px; font-size: 19px; font-weight: 800; }
+  .date { display: flex; align-items: flex-start; flex: 1; min-width: 0; overflow: hidden; margin-right: 6px; }
+  .daynum { font-size: 98px; font-weight: 400; line-height: 0.74; letter-spacing: -7px; margin: 12px 12px 0 -4px; flex: none; }
+  .datetext { padding-top: 4px; min-width: 0; }
+  .weekday { font-size: 28px; font-weight: 800; line-height: 1.05; white-space: nowrap; }
+  .month { font-size: 18px; font-weight: 600; margin-top: 3px; white-space: nowrap; }
+  .nameday { font-size: 17px; font-weight: 600; margin-top: 8px; letter-spacing: -0.2px; }
+  .nameday .mdi { font-size: 20px; margin-right: 1px; }
+  .now { width: 212px; text-align: right; overflow: hidden; }
+  .now-top { display: flex; justify-content: flex-end; align-items: center; gap: 4px; height: 54px; margin-bottom: 2px; }
+  .now-top .mdi { font-size: 50px; line-height: 1; flex: none; }
+  .minmax { display: flex; flex-direction: column; align-items: flex-end; line-height: 20px; font-size: 17px; margin-right: 2px; flex: none; letter-spacing: -0.5px; }
+  .minmax .hi { font-weight: 800; }
+  .minmax .lo { font-weight: 600; }
+  .minmax small { font-size: 12px; font-weight: 800; line-height: 13px; text-transform: uppercase; }
+  .temp { font-size: 46px; font-weight: 800; letter-spacing: -1.5px; line-height: 1; white-space: nowrap; }
+  .temp.long { font-size: 36px; letter-spacing: -1.5px; }
+  .now-sub { font-size: 18px; font-weight: 600; height: 24px; display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+  .now-sub.mm { font-weight: 800; }
+  .now-sub span { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; flex: none; }
+  .now-sub .mdi { font-size: 26px; line-height: 1; margin: -3px 0; }
+  .now-sub small { font-size: 15px; font-weight: 700; }
+
+  /* ── Odjezdy ────────────────────────────── */
+  .blk.departures { padding: 8px 16px 0; }
+  .sec-title { display: flex; align-items: center; gap: 6px; font-size: 17px; font-weight: 800;
+               text-transform: uppercase; letter-spacing: 0.5px; height: 26px; }
+  .sec-title .mdi { font-size: 22px; }
+  .sec-title .right { margin-left: auto; font-size: 17px; letter-spacing: 0; text-transform: none; }
+  .dep { display: flex; align-items: center; height: 30px; gap: 8px; }
+  .dep .time { font-size: 25px; font-weight: 800; width: 72px; }
+  .dep .delay { font-size: 19px; font-weight: 800; width: 32px; margin-left: -2px; }
+  .route { font-size: 18px; font-weight: 800; background: var(--ink); color: var(--paper);
+           width: 48px; height: 25px; line-height: 25px; text-align: center; border-radius: 4px; }
+  .dep .head { font-size: 22px; font-weight: 600; flex: 1; min-width: 0; }
+  .plat { font-size: 16px; font-weight: 800; width: 24px; height: 24px; line-height: 21px; text-align: center;
+          border: 2px solid var(--ink); border-radius: 4px; }
+  .dep.canceled .time { text-decoration: line-through; text-decoration-thickness: 3px; }
+  .dis { font-size: 17px; font-weight: 700; height: 30px; padding-top: 5px; }
+  .msg { font-size: 19px; font-weight: 600; padding-top: 8px; }
+
+  /* ── Události ───────────────────────────── */
+  .blk.agenda { flex: 1; padding: 6px 16px 0; }
+  .day { display: flex; align-items: baseline; height: 34px; padding: 6px 8px 0; margin: 0 -8px; gap: 8px; }
+  /* agenda: dny oddělené tenkou čarou (1 px = SEP_H v modelu) */
+  .aday + .aday { border-top: 1px solid var(--ink); }
+  .ev .dl { width: 58px; flex: none; font-size: 17px; font-weight: 800; white-space: nowrap; }
+  .ev.red .dl { color: var(--ink); }
+  .aday.hday .dl { color: var(--red); }
+  .day .label { font-size: 20px; font-weight: 800; }
+  .day .ddate { font-size: 16px; font-weight: 600; }
+  .day .hol { margin-left: auto; font-size: 15px; font-weight: 700; }
+  .day.today { background: var(--ink); color: var(--paper); border-radius: 5px; height: 30px; padding-top: 3px; margin-bottom: 4px; }
+  .ev { display: flex; align-items: baseline; height: 29px; gap: 8px; }
+  .ev .t { width: 50px; flex: none; font-size: 18px; font-weight: 700; }
+  .ev .s { font-size: 21px; font-weight: 500; flex: 1; min-width: 0; }
+  .ev .ci { width: 24px; flex: none; font-size: 23px; text-align: center; margin: 0 -4px 0 -2px; align-self: center; }
+  .ev .ci::before { line-height: 1; }
+  .ev.red .s, .ev.allday .s { font-weight: 700; }
+  .tag { font-size: 15px; font-weight: 700; border: 2px solid currentColor; border-radius: 4px; padding: 0 6px;
+         line-height: 20px; flex: none; position: relative; top: -2px; }
+  .more { font-size: 15px; font-weight: 700; text-align: right; height: 22px; padding-top: 2px; }
+
+  /* ── Předpověď ──────────────────────────── */
+  .blk.forecast { display: flex; }
+  .fday { flex: 1; text-align: center; padding-top: 6px; }
+  .fday .fl { font-size: 17px; font-weight: 800; }
+  .fday .fl small { font-size: 15px; font-weight: 700; }
+  .fday .mdi { font-size: 36px; display: block; height: 38px; }
+  .fday .ft { font-size: 18px; font-weight: 800; }
+  .fday .ft .lo { font-weight: 600; }
+  .fday .fp { font-size: 15px; font-weight: 700; }
+
+  /* ── Patička ────────────────────────────── */
+  .blk.footer { display: flex; align-items: center; padding: 0 16px; font-size: 14px; font-weight: 600; gap: 4px; }
+  .footer .mdi { font-size: 20px; }
+  .footer .num { font-size: 15px; font-weight: 700; margin-left: 2px; }
+  .footer .sp { flex: 1; }
+  .footer .fi { margin-left: 12px; }
+  .footer > .fi:first-child { margin-left: 0; }
+</style>
+</head>
+<body>
+{% for b in v.blocks %}
+<section class="blk {{ b.type }}" style="{% if b.height is not none %}height: {{ b.height + b.line }}px; {% endif %}border-top-width: {{ b.line }}px">
+{% include "blocks/" ~ b.type ~ ".html.j2" %}
+</section>
+{% endfor %}
+</body>
+</html>

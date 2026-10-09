@@ -1,0 +1,8 @@
+{% for f in b.days %}
+<div class="fday">
+  <div class="fl">{{ f.label }} <small>{{ f.date }}</small></div>
+  <i class="mdi mdi-{{ f.icon }}"></i>
+  <div class="ft num">{{ f.max or '--' }}° <span class="lo">/ {{ f.min or '--' }}°</span></div>
+  {% if f.precip %}<div class="fp num">{{ f.precip }}</div>{% endif %}
+</div>
+{% endfor %}

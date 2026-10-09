@@ -1,0 +1,31 @@
+{% set w = b.weather %}
+<div class="hrow">
+  <div class="date">
+    <div class="daynum num {{ 'red' if b.holiday }}">{{ b.day }}</div>
+    <div class="datetext">
+      <div class="weekday {{ 'red' if b.holiday }}">{{ b.weekday }}</div>
+      <div class="month">{{ b.month }}</div>
+      {% if b.nameday %}<div class="nameday ellipsis"><i class="mdi mdi-flower-tulip-outline"></i>{{ b.nameday }}</div>{% endif %}
+    </div>
+  </div>
+  <div class="now">
+    <div class="now-top">
+      <i class="mdi mdi-{{ w.icon }}"></i>
+      {% if w.min and w.max %}<span class="minmax num">
+        {% if w.minmax_label %}<small>{{ w.minmax_label }}</small>{% endif %}
+        <span class="hi">{{ w.max }}°</span><span class="lo">{{ w.min }}°</span>
+      </span>{% endif %}
+      <span class="temp num {{ 'long' if (w.temp or '')|length > 4 }}">{{ w.temp or '--' }}°</span>
+    </div>
+    <div class="now-sub num">
+      {% if w.humidity %}<span><i class="mdi mdi-water-percent"></i>{{ w.humidity }} %</span>{% endif %}
+      {% if w.rain %}<span><i class="mdi mdi-weather-pouring"></i>{{ w.rain }} mm</span>{% endif %}
+    </div>
+    {% if w.indoor or w.pressure %}<div class="now-sub num">
+      {% if w.indoor %}<span><i class="mdi mdi-home-thermometer-outline"></i>{{ w.indoor }}°</span>{% endif %}
+      {% if w.pressure %}<span><i class="mdi mdi-gauge"></i>{{ w.pressure }} hPa</span>{% endif %}
+    </div>{% endif %}
+  </div>
+</div>
+{% if b.alert %}<div class="hline red ellipsis">{{ b.alert }}</div>
+{% elif b.holiday %}<div class="hline red ellipsis">{{ b.holiday }}</div>{% endif %}

@@ -1,0 +1,8 @@
+{"rotate":90,"image_format":"z2","render_interval":60,
+"meteo_temperature":"sensor.temperature_10","meteo_humidity":"sensor.humidity_11",
+"meteo_rain_today":"sensor.zahrada_meteo_denni_uhrn_srazek","weather":"weather.chmu_home_predpoved",
+"departures":"sensor.odjezdova_tabule_krizkovy_ujezdec_odjezdy","disruptions":"sensor.odjezdova_tabule_krizkovy_ujezdec_vyluky",
+"departures_count":5,"walk_minutes":0,
+"calendars":[{"entity":"calendar.rodina"},{"entity":"calendar.martin_hruska"},{"entity":"calendar.tam"},{"entity":"calendar.skolka","label":"Školka"},{"entity":"calendar.plavani","label":"Plavání"},{"entity":"calendar.narozeniny_2","red":true},{"entity":"calendar.svoz_popelnice","red":true}],
+"nameday_calendar":"calendar.jmenne_svatky_ceske","holiday_calendar":"calendar.ceske_statni_svatky","event_days":7,
+"schedule":["1-5 05:45-08:30=300","06:00-22:30=1200"],"battery_sensor":"sensor.espink_baterie"}

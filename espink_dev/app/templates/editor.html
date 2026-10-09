@@ -365,7 +365,7 @@ function renderStatus() {            // vrací true, když návrh nejde uložit 
   const bad = vis.filter(b => clashes(b).length), small = vis.filter(tooSmall);
   $("#cover").textContent = `pokryto ${Math.min(100, Math.round(used / area * 100))} %`;
   const msg = $("#budgetMsg");
-  let cls = "ok", txt = "Bloky tahej v náhledu, roztahuj za úchyty; šipky posouvají vybraný blok (Shift+šipky mění velikost).";
+  let cls = "ok", txt = "Bloky tahej v náhledu, roztahuj za úchyty (dvojklik na úchyt = roztáhnout k sousednímu bloku); šipky posouvají vybraný blok, Shift+šipky mění velikost.";
   if (bad.length) { cls = "err"; txt = `Bloky ${[...new Set(bad.map(b => name(b.type)))].join(", ")} se překrývají – posuň je, jinak nejde uložit.`; }
   else if (small.length) { cls = "warn"; txt = `${small.map(b => name(b.type)).join(", ")}: menší než doporučeno – obsah se nemusí vejít.`; }
   else if (used < area) txt = "Volná místa jsou v náhledu šrafovaná. " + txt;
@@ -767,13 +767,32 @@ function startDrag(e, b, d, mode) {
   };
   d.onpointerup = () => {
     d.onpointermove = d.onpointerup = null; coords.hidden = true;
-    if (!moved) { openBlock(b.id); drawBoxes(); return; }
+    if (!moved) {
+      // dvojklik na úchyt: roztáhnout k nejbližšímu bloku (nebo okraji) v tom směru
+      const now = Date.now(), dbl = mode !== "move" && lastHandle.id === b.id && lastHandle.mode === mode && now - lastHandle.t < 450;
+      lastHandle = { id: b.id, mode, t: now };
+      if (dbl) { expand(b, mode); return; }
+      if (mode === "move") { openBlock(b.id); drawBoxes(); }
+      return;
+    }
     if (clashes(b).length) {
       const other = clashes(b).map(x => name(x.type)).join(", ");
       Object.assign(b, o); drawBoxes(); toast(`Tam už je ${other} – blok vrácen zpět.`); return;
     }
     commit(); say(`${name(b.type)}: ${fmtPos(b)}`);
   };
+}
+let lastHandle = { id: null, mode: null, t: 0 };
+function expand(b, mode) {
+  const others = shown().filter(o => o !== b);
+  const rowsOverlap = o => o.y < b.y + b.h && b.y < o.y + o.h, colsOverlap = o => o.x < b.x + b.w && b.x < o.x + o.w;
+  const o0 = { x: b.x, y: b.y, w: b.w, h: b.h };
+  if (mode.includes("e")) { const lim = Math.min(D.cols, ...others.filter(o => rowsOverlap(o) && o.x >= b.x + b.w).map(o => o.x)); b.w = lim - b.x; }
+  if (mode.includes("w")) { const lim = Math.max(0, ...others.filter(o => rowsOverlap(o) && o.x + o.w <= b.x).map(o => o.x + o.w)); b.w += b.x - lim; b.x = lim; }
+  if (mode.includes("s")) { const lim = Math.min(D.h, ...others.filter(o => colsOverlap(o) && o.y >= b.y + b.h).map(o => o.y)); b.h = lim - b.y; }
+  if (mode.includes("n")) { const lim = Math.max(0, ...others.filter(o => colsOverlap(o) && o.y + o.h <= b.y).map(o => o.y + o.h)); b.h += b.y - lim; b.y = lim; }
+  if (b.x === o0.x && b.y === o0.y && b.w === o0.w && b.h === o0.h) { toast("V tom směru už není kam roztáhnout."); return; }
+  commit(); say(`${name(b.type)}: ${fmtPos(b)}`);
 }
 function keyMove(e, b) {
   const k = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];

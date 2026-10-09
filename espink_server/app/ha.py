@@ -14,7 +14,7 @@ class HomeAssistant:
         if os.environ.get("SUPERVISOR_TOKEN") or os.path.exists("/data/options.json"):
             # V add-onu vždy přes Supervisor; chybějící token je chyba, ne důvod jít jinudy
             self.base = "http://supervisor/core/api"
-            token = os.environ.get("SUPERVISOR_TOKEN", "")
+            token = os.environ.get("SUPERVISOR_TOKEN", "").strip()
             if not token:
                 print("[ha] VAROVÁNÍ: chybí SUPERVISOR_TOKEN")
         else:
@@ -37,11 +37,7 @@ class HomeAssistant:
         try:
             await self._get("/")
         except Exception as e:  # noqa: BLE001
-            hint = ""
-            if self.base.startswith("http://supervisor"):
-                hint = (" – pokud má HA zapnuté HTTPS, nastavte v terminálu HA"
-                        " `ha core options --ssl=true` a restartujte add-on")
-            raise RuntimeError(f"Home Assistant API nedostupné ({type(e).__name__}: {e}){hint}") from e
+            raise RuntimeError(f"Home Assistant API nedostupné ({type(e).__name__}: {e})") from e
 
     async def state(self, entity_id: str) -> dict | None:
         if not entity_id:

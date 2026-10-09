@@ -29,7 +29,7 @@ def load_container_env() -> None:
     if env_dir.is_dir():
         for f in env_dir.iterdir():
             if f.is_file():
-                os.environ.setdefault(f.name, f.read_text())
+                os.environ.setdefault(f.name, f.read_text().strip())  # soubory končí \n
     time.tzset()
 
 

@@ -1,7 +1,9 @@
-{% if b.updated %}<i class="mdi mdi-update"></i><span>{{ updated }}</span>{% endif %}
-{% if b.next and next_wake %}<i class="mdi mdi-timer-sand fi"></i><span>za {{ next_wake }}</span>{% endif %}
-{% if b.week %}<i class="mdi mdi-calendar-week fi"></i><span>{{ b.week_label }}</span>{% endif %}
+<div class="fbox">
+{% if b.updated %}<span class="fit f-upd"><i class="mdi mdi-update"></i><span>{{ updated }}</span></span>{% endif %}
+{% if b.next and next_wake %}<span class="fit f-next"><i class="mdi mdi-timer-sand"></i><span>za {{ next_wake }}</span></span>{% endif %}
+{% if b.week %}<span class="fit f-week"><i class="mdi mdi-calendar-week"></i><span>{{ b.week_label }}</span></span>{% endif %}
 <span class="sp"></span>
 {% if v.device.wifi_icon %}<i class="mdi mdi-{{ v.device.wifi_icon }}"></i> slabá WiFi{% endif %}
 {% if b.battery and v.device.battery is not none %}<i class="mdi mdi-{{ v.device.battery_icon }} {{ 'red' if v.device.battery_low }}"></i>
 <span class="num {{ 'red' if v.device.battery_low }}">{{ v.device.battery }} %</span>{% endif %}
+</div>

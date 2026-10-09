@@ -392,7 +392,7 @@ def _value(raw: dict, b: dict) -> dict:
     s = raw["states"].get(b["entity"]) if b["entity"] else None
     a = (s or {}).get("attributes", {})
     icon = b["icon"] or a.get("icon") or ""
-    out = {"label": b["label"] or a.get("friendly_name") or b["entity"] or "Hodnota",
+    out = {"label": (b["label"] or a.get("friendly_name") or b["entity"] or "Hodnota") if b["show_label"] else "",
            "icon": icon[4:] if icon.startswith("mdi:") else (icon or None),
            "value": "—", "unit": "", "red": False}
     if not s or s["state"] in ("unavailable", "unknown"):
@@ -482,7 +482,10 @@ def build(raw: dict, layout: dict, device: dict, now: datetime, worst: bool = Fa
                 vb["disruptions"] = {"count": 1, "text": "Ukázková výluka"}
                 vb["rows"] = vb["rows"][:max(1, rows - 1)]
         elif t == "forecast":
-            vb["days"] = _forecast(raw, b, now, tz)
+            # dní jen kolik se vejde (aspoň 60 px na den); pod 100 px na den max a min pod sebou
+            fit = max(1, min(b["days"], (width - ll) // 60))
+            vb["days"] = _forecast(raw, dict(b, days=fit), now, tz)
+            vb["stack"] = bool(vb["days"]) and (width - ll) / len(vb["days"]) < 100
         elif t == "footer":
             vb.update({k: b[k] for k in ("updated", "next", "week", "battery")},
                       week_label=f"{now.isocalendar().week}. týden")

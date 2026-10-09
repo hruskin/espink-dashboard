@@ -42,7 +42,14 @@
   .blk.weather_now { display: flex; align-items: center; justify-content: center; padding: 0 12px; }
   .blk.weather_now .now { width: 100%; }
   .blk.weather_now .now-top, .blk.weather_now .now-sub { justify-content: center; }
-  @container (max-width: 180px) { .blk.weather_now .minmax { display: none; } .blk.weather_now .temp { font-size: 36px; } }
+  @container (max-width: 210px) {
+    .weather_now .minmax, .weather_now .now-sub + .now-sub, .weather_now .rain { display: none; }
+    .weather_now .now-top { height: auto; gap: 2px; }
+    .weather_now .now-top .mdi { font-size: clamp(22px, 22cqw, 40px); }
+    .weather_now .temp, .weather_now .temp.long { font-size: clamp(20px, 26cqw, 46px); letter-spacing: -1px; }
+    .weather_now .now-sub { font-size: 15px; gap: 4px; }
+    .weather_now .now-sub .mdi { font-size: 18px; }
+  }
   .now-top { display: flex; justify-content: flex-end; align-items: center; gap: 4px; height: 54px; margin-bottom: 2px; }
   .now-top .mdi { font-size: 50px; line-height: 1; flex: none; }
   .minmax { display: flex; flex-direction: column; align-items: flex-end; line-height: 20px; font-size: 17px; margin-right: 2px; flex: none; letter-spacing: -0.5px; }
@@ -98,7 +105,10 @@
   .more { font-size: 15px; font-weight: 700; text-align: right; height: 22px; padding-top: 2px; }
 
   /* ── Předpověď ──────────────────────────── */
-  .blk.forecast { display: flex; }
+  .fcbox { display: flex; width: 100%; height: 100%; }
+  .fcbox.stack .sl { display: none; }
+  .fcbox.stack .ft .lo { display: block; }
+  .fcbox.stack .fp { display: none; }
   .fday { flex: 1; text-align: center; padding-top: 6px; }
   .fday .fl { font-size: 17px; font-weight: 800; }
   .fday .fl small { font-size: 15px; font-weight: 700; }
@@ -116,12 +126,15 @@
   .value .mdi { flex: none; font-size: clamp(16px, 60cqh, 64px); }
   .value .vl { flex: 1; min-width: 0; font-weight: 600; font-size: clamp(14px, 34cqh, 30px); }
   .value .vv { flex: none; font-weight: 800; white-space: nowrap; letter-spacing: -0.5px; font-size: clamp(16px, min(66cqh, 13cqw), 80px); }
+  .vbox.nolabel { justify-content: center; flex-wrap: nowrap; }
   .value .vv small { font-size: 0.55em; font-weight: 700; letter-spacing: 0; }
   @container (max-width: 359px) {
     .vbox { flex-wrap: wrap; align-content: center; column-gap: 4px; row-gap: 0; }
     .value .mdi { font-size: clamp(14px, 26cqh, 28px); }
     .value .vl { font-size: clamp(12px, 24cqh, 22px); }
     .value .vv { width: 100%; text-align: center; line-height: 1; font-size: clamp(14px, min(50cqh, 24cqw), 80px); }
+    .vbox.nolabel { flex-wrap: nowrap; }
+    .vbox.nolabel .vv { width: auto; font-size: clamp(14px, min(64cqh, 22cqw), 80px); }
   }
 
   /* úzké bloky (mřížka): méně detailů místo přetékání */
@@ -129,7 +142,7 @@
     .departures .sec-title .right, .departures .plat { display: none; }
     .dep { gap: 5px; }
     .dep .time { font-size: 21px; width: 58px; }
-    .dep .delay { font-size: 16px; width: 26px; }
+    .dep .delay { font-size: 15px; width: 30px; margin-left: 0; }
     .route { font-size: 15px; width: 40px; height: 22px; line-height: 22px; }
     .dep .head { font-size: 18px; }
     .agenda .tag { display: none; }
@@ -139,6 +152,13 @@
     .ev .s { font-size: 18px; }
     .fday .fl small { display: none; }
     .fday .ft { font-size: 16px; }
+  }
+  @container (max-width: 280px) {
+    .ev .ci { display: none; }
+    .ev { gap: 4px; }
+    .ev .dl { width: 38px; font-size: 13px; }
+    .ev .t { width: 44px; font-size: 14px; flex: none; }
+    .ev .s { font-size: 17px; }
   }
   @container (max-width: 420px) {
     .header .now { width: 150px; }
@@ -158,12 +178,17 @@
   .tplerr { font-size: 15px; font-weight: 700; }
 
   /* ── Patička ────────────────────────────── */
-  .blk.footer { display: flex; align-items: center; padding: 0 16px; font-size: 14px; font-weight: 600; gap: 4px; }
+  .blk.footer { padding: 0 16px; font-size: 14px; font-weight: 600; }
+  .fbox { display: flex; align-items: center; gap: 4px; width: 100%; height: 100%; white-space: nowrap; }
+  .fit { display: inline-flex; align-items: center; gap: 4px; }
   .footer .mdi { font-size: 20px; }
   .footer .num { font-size: 15px; font-weight: 700; margin-left: 2px; }
   .footer .sp { flex: 1; }
-  .footer .fi { margin-left: 12px; }
-  .footer > .fi:first-child { margin-left: 0; }
+  .footer .fit + .fit { margin-left: 12px; }
+  /* úzká patička: schovávat podle priority – týden, další obnovení, čas aktualizace */
+  @container (max-width: 440px) { .footer .f-week { display: none; } }
+  @container (max-width: 330px) { .footer .f-next { display: none; } }
+  @container (max-width: 200px) { .footer .f-upd { display: none; } }
 </style>
 </head>
 <body>

@@ -85,6 +85,7 @@ BLOCK_TYPES: dict[str, dict] = {
         "title": "Hodnota entity", "size": (6, 56), "min": (2, 28),
         "params": {
             "entity": ("", "entity"),
+            "show_label": (True, "bool"),
             "label": ("", "text"),          # prázdné = název entity v HA
             "icon": ("", "text"),           # mdi:… ; prázdné = ikona entity v HA
             "decimals": (1, ("int", 0, 3)),
@@ -376,5 +377,6 @@ def schema() -> dict:
                       "params": {k: {"default": d, "kind": list(kind) if isinstance(kind, tuple) else kind}
                                  for k, (d, kind) in s["params"].items()}}
                   for t, s in BLOCK_TYPES.items()},
-        "grid": {"w": SCREEN_W, "h": SCREEN_H, "cols": COLS, "col_w": COL_W, "step": ROW_STEP, "lines": LINES},
+        "grid": {"w": SCREEN_W, "h": SCREEN_H, "cols": COLS, "col_w": COL_W, "step": ROW_STEP, "lines": LINES,
+                 "text_line": TEXT_LINE_H, "text_pad": 8},
     }

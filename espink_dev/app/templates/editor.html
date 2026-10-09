@@ -166,11 +166,10 @@
   .help code { background: var(--hover); padding: 0 3px; border-radius: 3px; }
   .withbtn { display: flex; gap: 4px; align-items: center; }
   .withbtn input { flex: 1; min-width: 0; }
-  .grid-on .screen::after { content: ""; position: absolute; inset: 0; pointer-events: none;
-    background-image: linear-gradient(rgba(3,169,244,.35) 1px, transparent 1px), linear-gradient(90deg, rgba(3,169,244,.35) 1px, transparent 1px),
-                      linear-gradient(rgba(3,169,244,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(3,169,244,.12) 1px, transparent 1px);
-    background-size: calc(50px * var(--s)) calc(50px * var(--s)), calc(50px * var(--s)) calc(50px * var(--s)),
-                     calc(10px * var(--s)) calc(10px * var(--s)), calc(10px * var(--s)) calc(10px * var(--s)); }
+  /* mřížka editoru: 12 sloupců po 40 px a pomocné vodorovné čáry po 40 px; při tažení sama */
+  .grid-on .screen::after, body.dragging .screen::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 1;
+    background-image: linear-gradient(90deg, rgba(3,169,244,.5) 1px, transparent 1px), linear-gradient(rgba(3,169,244,.15) 1px, transparent 1px);
+    background-size: calc(40px * var(--s)) 100%, 100% calc(40px * var(--s)); }
   .worst { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
   .worst input { accent-color: var(--primary); }
   .icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 4px; max-height: 50vh; overflow: auto; margin-top: 10px; }
@@ -201,7 +200,28 @@
   .hd-e { right: -7px; top: calc(50% - 6px); cursor: ew-resize; } .hd-w { left: -7px; top: calc(50% - 6px); cursor: ew-resize; }
   .hd-ne { top: -7px; right: -7px; cursor: nesw-resize; } .hd-sw { bottom: -7px; left: -7px; cursor: nesw-resize; }
   .hd-nw { top: -7px; left: -7px; cursor: nwse-resize; } .hd-se { bottom: -7px; right: -7px; cursor: nwse-resize; }
-  .free { position: absolute; pointer-events: none; background: repeating-linear-gradient(45deg, rgba(255,166,0,.4) 0 3px, transparent 3px 8px); }
+  .free { position: absolute; cursor: copy; background: repeating-linear-gradient(45deg, rgba(120,120,120,.28) 0 2px, transparent 2px 8px); }
+  .free:hover { background-color: rgba(3,169,244,.12); }
+  .gbox { touch-action: pan-y; }
+  .gbox.sel { touch-action: none; }
+  .gbox.drag { opacity: .92; box-shadow: 0 6px 18px rgba(0,0,0,.35); z-index: 4; }
+  .gbox.swap { border: 2px solid var(--primary); }
+  .gbox.target { background: rgba(3,169,244,.22); border: 2px dashed var(--primary); }
+  .hole { position: absolute; background: #fff repeating-linear-gradient(45deg, rgba(120,120,120,.25) 0 2px, transparent 2px 8px); pointer-events: none; }
+  .land { position: absolute; border: 2px dashed var(--ok); background: rgba(67,160,71,.15); pointer-events: none; z-index: 3; }
+  .minbox { position: absolute; border: 1px dotted var(--muted); pointer-events: none; z-index: 3; }
+  .hd::before { content: ""; position: absolute; inset: -10px; }
+  .gbox:focus-visible { outline: 3px solid var(--primary); outline-offset: 1px; }
+  .gbox:focus .glabel { display: block; }
+  .glabel { top: -17px !important; border-radius: 3px 3px 0 0; }
+  .shake { animation: shake .3s; }
+  @keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+  .colnums { position: absolute; left: 0; right: 0; top: -18px; display: none; font-size: 10px; color: var(--primary); }
+  .colnums span { float: left; width: calc(40px * var(--s)); text-align: center; }
+  .grid-on .colnums, body.dragging .colnums { display: block; }
+  .selbar { display: none; border-top: 1px solid var(--line); padding: 8px 12px; }
+  .selhead { display: flex; align-items: center; justify-content: space-between; }
+  @media (max-width: 999px) { .selbar:not([hidden]) { display: block; } }
   .coords { position: absolute; right: 4px; bottom: 4px; z-index: 5; background: rgba(0,0,0,.75); color: #fff; font-size: 11px;
             padding: 1px 6px; border-radius: 3px; font-variant-numeric: tabular-nums; pointer-events: none; }
   .pos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0 8px; }
@@ -245,7 +265,7 @@
       <div class="ptool">
         <span class="st" id="pstat" aria-live="polite">Načítám…</span>
         <label class="worst" title="Vynutí upozornění v záhlaví a výluku v odjezdech – nejméně místa pro události"><input type="checkbox" id="worst">Nejhorší případ</label>
-        <button class="icon-btn" id="gridBtn" title="Mřížka 10/50 px" aria-pressed="false"><i class="mdi mdi-grid"></i></button>
+        <button class="icon-btn" id="gridBtn" title="Mřížka: 12 sloupců po 40 px (při tažení se ukáže sama)" aria-pressed="false"><i class="mdi mdi-grid"></i></button>
         <div class="segbtn" role="group" aria-label="Měřítko">
           <button aria-pressed="true" data-z="fit" title="Přizpůsobit oknu"><i class="mdi mdi-fit-to-screen-outline"></i></button>
           <button aria-pressed="false" data-z="1" title="Skutečná velikost 1:1">1:1</button>
@@ -255,10 +275,12 @@
       <div class="stage">
         <div class="frame"><div class="screen busy" id="screen" style="--s:.75">
           <img id="pimg" alt="Náhled displeje" width="480" height="800">
+          <div class="colnums"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span><span>11</span><span>12</span></div>
           <div id="boxes"></div><div class="spin"></div><div class="coords" id="coords" hidden></div>
           <div class="perr" id="perr"></div>
         </div></div>
       </div>
+      <div class="selbar" id="selbar" hidden></div>
     </div>
   </section>
 </main>
@@ -316,10 +338,14 @@ const fromServer = l => l.blocks.map(({ id, type, hidden, x, y, w, h, line_top, 
 const toServer = () => ({ rev, blocks: blocks.map(({ p, ...g }) => ({ ...g, ...p })) });
 
 // ───────── Historie (undo/redo) ─────────
-function commit() {
+let lastMerge = 0;
+function commit(merge) {             // merge: rychle po sobě jdoucí kroky (šipky) = jeden krok Zpět
   const s = snap();
   if (s === hist[hpos]) return;
-  hist = hist.slice(0, hpos + 1); hist.push(s); if (hist.length > 50) hist.shift(); hpos = hist.length - 1;
+  const now = Date.now();
+  if (merge && now - lastMerge < 600 && hpos > 0) hist[hpos] = s;
+  else { hist = hist.slice(0, hpos + 1); hist.push(s); if (hist.length > 50) hist.shift(); hpos = hist.length - 1; }
+  lastMerge = merge ? now : 0;
   refresh();
 }
 function travel(d) { if (hpos + d < 0 || hpos + d >= hist.length) return; hpos += d; blocks = JSON.parse(hist[hpos]); refresh(); }
@@ -332,7 +358,8 @@ const inside = r => r.x >= 0 && r.w >= 1 && r.x + r.w <= D.cols && r.y >= 0 && r
 const fits = (r, except) => inside(r) && !shown().some(o => o !== except && o.id !== r.id && overlap(o, r));
 const minOf = t => SCHEMA.types[t].min;
 const tooSmall = b => b.w < minOf(b.type)[0] || b.h < minOf(b.type)[1];
-const fmtPos = b => `sl. ${b.x + 1}–${b.x + b.w} · y ${b.y} · ${b.w * D.col_w}×${b.h} px`;
+const fmtCols = b => b.w === 1 ? `sloupec ${b.x + 1}` : `sloupce ${b.x + 1}–${b.x + b.w}`;
+const fmtPos = b => `${fmtCols(b)} · shora ${b.y} px · ${b.w * D.col_w}×${b.h} px`;
 
 function findSpot(type, w, h) {     // první volné místo shora; zkusí i menší rozměr až po minimum
   const [mw, mh] = minOf(type);
@@ -359,15 +386,19 @@ function freeRects() {               // volná místa: po sloupcích svisle, pak
   }));
   return out;
 }
+const textLines = b => Math.max(1, b.p.text.split("\n").length);
+const textFit = b => Math.max(0, Math.floor((b.h - D.lines[b.line_top] - D.text_pad) / D.text_line[b.p.size]));
 function renderStatus() {            // vrací true, když návrh nejde uložit (překryv)
   const vis = shown(), area = D.cols * D.col_w * D.h;
   const used = vis.reduce((s, b) => s + b.w * D.col_w * b.h, 0);
   const bad = vis.filter(b => clashes(b).length), small = vis.filter(tooSmall);
+  const cut = vis.filter(b => b.type === "text" && textFit(b) < textLines(b));
   $("#cover").textContent = `pokryto ${Math.min(100, Math.round(used / area * 100))} %`;
   const msg = $("#budgetMsg");
-  let cls = "ok", txt = "Bloky tahej v náhledu, roztahuj za úchyty (dvojklik na úchyt = roztáhnout k sousednímu bloku); šipky posouvají vybraný blok, Shift+šipky mění velikost.";
+  let cls = "ok", txt = "Bloky tahej v náhledu, roztahuj za úchyty (dvojklik na úchyt = až k sousedovi). Stejně široké pásy se přetažením prohodí. Šipky posouvají (Alt po 40 px), Shift+šipky mění velikost, Esc zruší výběr, Delete odebere.";
   if (bad.length) { cls = "err"; txt = `Bloky ${[...new Set(bad.map(b => name(b.type)))].join(", ")} se překrývají – posuň je, jinak nejde uložit.`; }
-  else if (small.length) { cls = "warn"; txt = `${small.map(b => name(b.type)).join(", ")}: menší než doporučeno – obsah se nemusí vejít.`; }
+  else if (small.length) { cls = "warn"; txt = small.map(b => `${name(b.type)}: doporučeno aspoň ${minOf(b.type)[0]} sloupců × ${minOf(b.type)[1]} px`).join("; ") + " – jinak se obsah nemusí vejít."; }
+  else if (cut.length) { cls = "warn"; txt = cut.map(b => `Text: vejde se ${textFit(b)} z ${textLines(b)} řádků`).join("; ") + " – zvětši blok nebo zmenši písmo."; }
   else if (used < area) txt = "Volná místa jsou v náhledu šrafovaná. " + txt;
   msg.className = "budget-msg " + cls;
   msg.replaceChildren(icon(cls === "ok" ? "check-circle" : cls === "err" ? "alert-circle" : "alert"), el("span", { textContent: txt }));
@@ -504,7 +535,7 @@ function params(b) {
       const e = ENT && ENT[b.p.entity];
       return [entityField("Entita", b, "entity", "all"),
         el("div", { className: "grid2" },
-          textField("Popisek", b, "label", e ? e.name : "název z HA"),
+          el("div", {}, chk("Zobrazit popisek", b, "show_label"), b.p.show_label ? textField("Popisek", b, "label", e ? e.name : "název z HA") : null),
           iconField("Ikona", b.p, "icon", "z HA"),
           numField("Desetinná místa", b, "decimals"),
           textField("Červeně pod", b, "red_below", "např. 18"),
@@ -528,6 +559,11 @@ function params(b) {
 
 function entName(id, strip) { return id ? ((ENT && ENT[id] && ENT[id].name) || id).replace(strip || /$^/, "") : "nenastaveno"; }
 function summary(b) {
+  const twin = blocks.filter(x => x.type === b.type).length > 1;
+  const s = summary1(b);
+  return twin ? `${s} · ${fmtCols(b)}` : s;
+}
+function summary1(b) {
   const p = b.p;
   switch (b.type) {
     case "header": return [p.alert && "upozornění", p.show_weather && "počasí"].filter(Boolean).join(" · ") || "datum";
@@ -550,16 +586,20 @@ const invalid = b => !!ENT && (ENT_KEYS.some(k => typeof b.p[k] === "string" && 
 function posFields(b) {
   const f = (label, key, toUser, fromUser, min, max, step) => {
     const i = el("input", { type: "number", value: toUser(b[key]), min, max, step });
+    i.dataset.k = key;
     i.onchange = () => {
       const r = { ...b, [key]: fromUser(+i.value) };
-      if (!fits(r, b)) { toast(inside(r) ? "Tam už je jiný blok." : "Blok by přesáhl displej."); i.value = toUser(b[key]); return; }
+      if (!fits(r, b)) {
+        const cl = shown().filter(o => o !== b && overlap(o, r));
+        toast(!inside(r) ? "Blok by přesáhl displej." : `Místo zabírá blok ${name(cl[0].type)}.`); i.value = toUser(b[key]); return;
+      }
       b[key] = r[key]; commit();
     };
     return el("label", { className: "f" }, el("span", { textContent: label }), i);
   };
   return el("div", { className: "pos" },
     f("Sloupec", "x", v => v + 1, v => v - 1, 1, D.cols, 1),
-    f("Šířka (sl.)", "w", v => v, v => v, 1, D.cols, 1),
+    f("Šířka (sloupce)", "w", v => v, v => v, 1, D.cols, 1),
     f("Shora (px)", "y", v => v, v => Math.round(v / D.step) * D.step, 0, D.h - D.step, D.step),
     f("Výška (px)", "h", v => v, v => Math.round(v / D.step) * D.step, D.step, D.h, D.step));
 }
@@ -582,7 +622,7 @@ function renderList() {
         b.hidden ? el("span", { className: "badge muted", textContent: "skrytý" }) : null),
       el("small", { textContent: summary(b) }));
     tog.setAttribute("aria-expanded", open);
-    tog.onclick = () => { openId = open ? null : b.id; refresh(true); renderList(); };
+    tog.onclick = () => select(open ? null : b.id);
     const hEl = el("span", { className: "bh", textContent: b.hidden ? "—" : `${b.w * D.col_w}×${b.h}` });
     const eye = el("button", { className: "icon-btn", title: b.hidden ? "Zobrazit" : "Skrýt" }, icon(b.hidden ? "eye-off" : "eye"));
     eye.setAttribute("aria-pressed", b.hidden);
@@ -627,20 +667,19 @@ function remove(id) {
   blocks.splice(i, 1); openId = null; commit();
   toast(`Blok ${name(b.type)} odebrán`, () => { blocks.splice(i, 0, b); commit(); });
 }
-function openBlock(id) {
-  openId = id; refresh(true); renderList(); setPane("blocks");
-  document.querySelector(`li[data-id="${id}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-}
 $("#stackBtn").onclick = () => {
   const vis = shown().sort((a, b) => a.y - b.y || a.x - b.x);
   let total = vis.reduce((s, b) => s + b.h, 0);
   const ag = vis.find(b => b.type === "agenda");
   const before = snap();
-  if (total > D.h && ag) { const cut = Math.min(total - D.h, ag.h - minOf("agenda")[1]); ag.h -= cut; total -= cut; }
+  let shrunk = 0;
+  if (total > D.h && ag) { shrunk = Math.min(total - D.h, ag.h - minOf("agenda")[1]); ag.h -= shrunk; total -= shrunk; }
   if (total > D.h) { blocks = JSON.parse(before); toast(`Pod sebe se bloky nevejdou (${total} px z ${D.h}) – některé zmenši nebo skryj.`); return; }
   let y = 0;
   for (const b of vis) { b.x = 0; b.w = D.cols; b.y = y; y += b.h; }
-  commit(); toast("Bloky seřazeny pod sebe." + (y < D.h ? ` Dole zbývá ${D.h - y} px.` : ""));
+  commit();
+  toast("Bloky seřazeny pod sebe." + (shrunk ? ` Události zmenšeny o ${shrunk} px, aby se vše vešlo.` : "")
+        + (y < D.h ? ` Dole zbývá ${D.h - y} px.` : ""), () => travel(-1));
 };
 
 // ───────── Přidat blok ─────────
@@ -660,6 +699,12 @@ function newBlock(type) {
   const [w, h] = SCHEMA.types[type].size;
   return { id: Math.random().toString(16).slice(2, 10), type, hidden: false, x: 0, y: 0, w, h, line_top: "none", line_left: "none", p };
 }
+let addAt = null;                      // volné místo vybrané klikem do šrafované plochy
+function openAddAt(r) {
+  addAt = r; setPane("blocks"); renderMenu(); $("#addMenu").hidden = false; $("#addBtn").setAttribute("aria-expanded", true);
+  $("#addBtn").scrollIntoView({ behavior: "smooth", block: "center" });
+  toast(`Vyber typ bloku pro volné místo ${fmtPos(r)}.`);
+}
 function renderMenu() {
   const m = $("#addMenu"); m.replaceChildren();
   const hasAgenda = blocks.some(b => b.type === "agenda");
@@ -669,18 +714,30 @@ function renderMenu() {
       el("div", {}, el("b", { textContent: name(k) }), el("small", { textContent: dis ? "Může být jen jednou" : t.desc })));
     btn.onclick = () => {
       closeMenu();
-      const nb = newBlock(k), spot = findSpot(k, nb.w, nb.h);
-      if (!spot) { toast(`Pro blok ${name(k)} není volné místo – zmenši, posuň nebo skryj jiný blok.`); return; }
-      Object.assign(nb, spot); blocks.push(nb); openId = nb.id; commit();
-      toast(`${name(k)} vložen na volné místo (${fmtPos(nb)}).`);
+      const nb = newBlock(k);
+      let msg = "", undo = false;
+      if (addAt) {
+        Object.assign(nb, { x: addAt.x, y: addAt.y, w: addAt.w, h: Math.min(addAt.h, Math.max(nb.h, minOf(k)[1])) });
+        if (!fits(nb)) nb.h = addAt.h;
+        msg = `Blok ${name(k)} vložen na vybrané místo.`;
+      } else {
+        const spot = findSpot(k, nb.w, nb.h), ag = shown().find(b => b.type === "agenda");
+        if (spot) { Object.assign(nb, spot); msg = `Blok ${name(k)} vložen na volné místo (${fmtPos(nb)}).`; }
+        else if (ag && ag.h - nb.h >= minOf("agenda")[1]) {   // Události jsou pružné: uberou místo novému bloku
+          ag.h -= nb.h; Object.assign(nb, { x: ag.x, w: ag.w, y: ag.y + ag.h });
+          msg = `Blok ${name(k)} vložen pod Události, ty se zmenšily o ${nb.h} px.`; undo = true;
+        } else { nb.hidden = true; msg = `Pro blok ${name(k)} není místo – vložen jako skrytý. Uvolni místo a zobraz ho okem.`; }
+      }
+      addAt = null; blocks.push(nb); openId = nb.id; commit();
+      toast(msg, undo ? () => travel(-1) : null);
       requestAnimationFrame(() => document.querySelector(`li[data-id="${nb.id}"] .bbody input`)?.focus());
     };
     m.append(btn);
   }
 }
 const closeMenu = () => { $("#addMenu").hidden = true; $("#addBtn").setAttribute("aria-expanded", false); };
-$("#addBtn").onclick = e => { e.stopPropagation(); const m = $("#addMenu"); renderMenu(); m.hidden = !m.hidden; $("#addBtn").setAttribute("aria-expanded", !m.hidden); };
-document.addEventListener("click", e => { if (!e.target.closest(".add")) closeMenu(); });
+$("#addBtn").onclick = e => { addAt = null; e.stopPropagation(); const m = $("#addMenu"); renderMenu(); m.hidden = !m.hidden; $("#addBtn").setAttribute("aria-expanded", !m.hidden); };
+document.addEventListener("click", e => { if (!e.target.closest(".add") && !e.target.closest(".free")) { closeMenu(); addAt = null; } });
 
 // ───────── Náhled: server vykreslí neuložený návrh stejně jako pro desku ─────────
 let timer, ctrl, lastUrl = null;
@@ -707,7 +764,7 @@ async function draw() {
     $("#pimg").src = url; if (lastUrl) URL.revokeObjectURL(lastUrl); lastUrl = url;
     scr.classList.remove("busy", "failed");
     const dirty = snap() !== saved;
-    $("#pstat").textContent = "Vykresleno " + new Date().toLocaleTimeString("cs-CZ") + (dirty ? " · neuložený návrh" : " · uložené rozvržení");
+    $("#pstat").textContent = "Vykresleno " + new Date().toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" }) + (dirty ? " · návrh" : "");
     $("#pimg").alt = `Náhled displeje, ${shown().length} bloků`;
   } catch (e) {
     if (e.name === "AbortError") return;
@@ -723,7 +780,11 @@ function place(d, r, s) {
 function drawBoxes() {
   const box = $("#boxes"); if (!SCHEMA) return;
   const s = scale(); box.replaceChildren();
-  for (const f of freeRects()) { const d = el("div", { className: "free" }); place(d, f, s); box.append(d); }
+  for (const f of freeRects()) {
+    const d = el("div", { className: "free", title: "Volné místo – klikni a přidej sem blok" }); place(d, f, s);
+    d.onclick = e => { e.stopPropagation(); openAddAt(f); };
+    box.append(d);
+  }
   for (const b of shown()) {
     const d = el("div", { className: "gbox" + (b.id === openId ? " sel" : "") + (clashes(b).length ? " bad" : ""),
                           tabIndex: 0, title: name(b.type) + " – " + fmtPos(b) },
@@ -733,51 +794,138 @@ function drawBoxes() {
     d.dataset.id = b.id; place(d, b, s);
     d.onpointerdown = e => startDrag(e, b, d, e.target.dataset.h || "move");
     d.onkeydown = e => keyMove(e, b);
+    d.onfocus = () => { if (openId !== b.id) select(b.id, { focus: true }); };
     box.append(d);
   }
 }
 function hl(id, on) { document.querySelector(`.gbox[data-id="${id}"]`)?.classList.toggle("hl", on); }
 
-// Tažení a změna velikosti: přichytává se ke sloupcům (40 px) a svisle po 4 px
+// Výběr bloku bez nového vykreslení náhledu (nic se nezměnilo)
+function select(id, { pane = false, focus = false } = {}) {
+  openId = id; renderList(); drawBoxes(); updateSelbar();
+  if (pane) setPane("blocks");
+  if (id) document.querySelector(`li[data-id="${id}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  if (focus && id) document.querySelector(`.gbox[data-id="${id}"]`)?.focus({ preventScroll: true });
+}
+function openBlock(id) { select(id, { pane: true }); }
+
+// Kompaktní lišta pod náhledem (telefon): poloha vybraného bloku bez přepnutí na seznam
+function updateSelbar() {
+  const bar = $("#selbar"), b = blocks.find(x => x.id === openId);
+  bar.hidden = !b; if (!b) return;
+  const more = el("button", { className: "txtbtn" }, "Nastavení bloku", icon("chevron-right"));
+  more.onclick = () => openBlock(b.id);
+  bar.replaceChildren(el("div", { className: "selhead" }, el("b", { textContent: name(b.type) }), more), posFields(b));
+}
+
+const sameColumn = (t, o) => t.x === o.x && t.w === o.w;
+// Prohození pásů ve stejných sloupcích: bloky mezi nimi se přeskládají po ose y
+function swapInColumn(b, o, t) {
+  const top = Math.min(o.y, t.y), bottom = Math.max(o.y + o.h, t.y + t.h);
+  const span = { x: o.x, w: o.w, y: top, h: bottom - top };
+  const others = shown().filter(x => x !== b && overlap(x, span));
+  if (others.some(x => !sameColumn(x, o))) return false;
+  const list = others.sort((a, c) => a.y - c.y);
+  const i = list.indexOf(t), down = t.y > o.y;
+  list.splice(down ? i + 1 : i, 0, b);
+  let y = top;
+  for (const x of list) { x.y = y; y += x.h; }
+  b.x = o.x; b.w = o.w;
+  return true;
+}
+function nearestFree(b, r) {            // nejbližší volná poloha v okolí (±3 sloupce, ±80 px)
+  const c = [];
+  for (let dx = -3; dx <= 3; dx++) for (let dy = -80; dy <= 80; dy += D.step) c.push([dx, dy, Math.abs(dx) * D.col_w + Math.abs(dy)]);
+  c.sort((a, z) => a[2] - z[2]);
+  for (const [dx, dy] of c) { const t = { ...r, x: r.x + dx, y: r.y + dy }; if (fits(t, b)) return t; }
+  return null;
+}
+const MAGNET = 8;                        // px: hrany se přichytí k hranám sousedních bloků
+function magnet(v, edges) { for (const e of edges) if (Math.abs(v - e) <= MAGNET) return e; return null; }
+
+// Tažení a změna velikosti: přichytává se ke sloupcům (40 px), svisle po 4 px a k hranám sousedů
 function startDrag(e, b, d, mode) {
   if (e.button !== 0) return;
+  if (e.pointerType === "touch" && openId !== b.id) {   // dotyk: klepnutí jen vybere, tažení posouvá stránku
+    const sx = e.clientX, sy = e.clientY;
+    d.onpointerup = ev => { d.onpointerup = null; if (Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) < 10) select(b.id); };
+    return;
+  }
   e.preventDefault(); e.stopPropagation();
   d.setPointerCapture(e.pointerId);
   const s = scale(), sx = e.clientX, sy = e.clientY, o = { x: b.x, y: b.y, w: b.w, h: b.h };
-  const [mw, mh] = [1, D.step];   // tvrdé minimum; doporučené minimum jen varuje
-  let moved = false;
-  if (openId !== b.id) { openId = b.id; renderList(); document.querySelectorAll(".gbox.sel").forEach(x => x.classList.remove("sel")); d.classList.add("sel"); }
-  const coords = $("#coords");
+  const [rw, rh] = minOf(b.type);        // doporučené minimum: zarážka, ale jde ho podkročit
+  const edges = [0, D.h, ...shown().filter(x => x !== b).flatMap(x => [x.y, x.y + x.h])];
+  let moved = false, target = null, landing = null;
+  if (openId !== b.id) { openId = b.id; renderList(); updateSelbar(); document.querySelectorAll(".gbox.sel").forEach(x => x.classList.remove("sel")); d.classList.add("sel"); }
+  const coords = $("#coords"), box = $("#boxes"), scr = $("#screen").getBoundingClientRect();
+  const hole = el("div", { className: "hole" }), land = el("div", { className: "land" }), minb = el("div", { className: "minbox" });
   d.onpointermove = ev => {
-    const dc = Math.round((ev.clientX - sx) / s / D.col_w), dy = Math.round((ev.clientY - sy) / s / D.step) * D.step;
     if (!moved && Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) < 4) return;
-    moved = true;
+    if (!moved) {                        // začátek tažení: obsah bloku jede s rámečkem, původní místo prázdné
+      moved = true; document.body.classList.add("dragging");
+      place(hole, o, s); box.prepend(hole); box.append(land, minb);
+      Object.assign(d.style, { backgroundImage: `url(${$("#pimg").src})`, backgroundSize: `${480 * s}px ${800 * s}px`, backgroundRepeat: "no-repeat" });
+      d.classList.add("drag");
+    }
+    const dc = Math.round((ev.clientX - sx) / s / D.col_w), dy = Math.round((ev.clientY - sy) / s / D.step) * D.step;
     const r = { ...o };
     if (mode === "move") {
       r.x = Math.max(0, Math.min(D.cols - o.w, o.x + dc)); r.y = Math.max(0, Math.min(D.h - o.h, o.y + dy));
+      const top = magnet(r.y, edges), bot = magnet(r.y + r.h, edges);
+      if (top !== null) r.y = top; else if (bot !== null) r.y = bot - r.h;
     } else {
-      if (mode.includes("e")) r.w = Math.max(mw, Math.min(D.cols - o.x, o.w + dc));
-      if (mode.includes("s")) r.h = Math.max(mh, Math.min(D.h - o.y, o.h + dy));
-      if (mode.includes("w")) { const nx = Math.max(0, Math.min(o.x + o.w - mw, o.x + dc)); r.w = o.w + o.x - nx; r.x = nx; }
-      if (mode.includes("n")) { const ny = Math.max(0, Math.min(o.y + o.h - mh, o.y + dy)); r.h = o.h + o.y - ny; r.y = ny; }
+      if (mode.includes("e")) r.w = Math.max(1, Math.min(D.cols - o.x, o.w + dc));
+      if (mode.includes("w")) { const nx = Math.max(0, Math.min(o.x + o.w - 1, o.x + dc)); r.w = o.w + o.x - nx; r.x = nx; }
+      if (mode.includes("s")) {
+        r.h = Math.max(D.step, Math.min(D.h - o.y, o.h + dy));
+        const m = magnet(r.y + r.h, edges); if (m !== null && m > r.y) r.h = m - r.y;
+        else if (Math.abs(r.h - rh) <= MAGNET) r.h = rh;
+      }
+      if (mode.includes("n")) {
+        const ny = Math.max(0, Math.min(o.y + o.h - D.step, o.y + dy));
+        r.h = o.h + o.y - ny; r.y = ny;
+        const m = magnet(r.y, edges); if (m !== null && m < o.y + o.h) { r.h = o.y + o.h - m; r.y = m; }
+      }
     }
     Object.assign(b, r); place(d, r, s);
-    d.classList.toggle("bad", clashes(b).length > 0);
-    coords.hidden = false; coords.textContent = fmtPos(b) + (clashes(b).length ? " · překryv!" : "");
+    // obsah: při posunu jede s blokem, při změně velikosti zůstává na místě (jen se ořízne)
+    d.style.backgroundPosition = mode === "move" ? `${-o.x * D.col_w * s}px ${-o.y * s}px` : `${-r.x * D.col_w * s}px ${-r.y * s}px`;
+    if (mode !== "move") { place(minb, { x: r.x, y: r.y, w: rw, h: rh }, s); minb.hidden = false; } else minb.hidden = true;
+    const cl = clashes(b);
+    // prohození: stejně široký blok ve stejných sloupcích, nad kterým je kurzor
+    const py = (ev.clientY - scr.top) / s, px = (ev.clientX - scr.left) / s / D.col_w;
+    target = mode === "move" && cl.length ? shown().find(t => t !== b && sameColumn(t, o) && py >= t.y && py < t.y + t.h && px >= t.x && px < t.x + t.w) || null : null;
+    landing = cl.length && !target ? nearestFree(b, r) : null;
+    d.classList.toggle("bad", cl.length > 0 && !target);
+    d.classList.toggle("swap", !!target);
+    document.querySelectorAll(".gbox.target").forEach(x => x.classList.remove("target"));
+    if (target) document.querySelector(`.gbox[data-id="${target.id}"]`)?.classList.add("target");
+    land.hidden = !landing; if (landing) place(land, landing, s);
+    coords.hidden = false;
+    coords.textContent = target ? `Prohodit s blokem ${name(target.type)}`
+      : cl.length ? (landing ? "Překryv – položí se na čárkované místo" : "Překryv – není kam, vrátí se zpět") : fmtPos(b);
+    Object.assign(coords.style, { left: Math.min(ev.clientX - scr.left + 14, scr.width - 150) + "px", top: Math.max(0, ev.clientY - scr.top - 28) + "px" });
+    document.querySelectorAll(`li[data-id="${b.id}"] .pos input`).forEach(i => { i.value = i.dataset.k === "x" ? b.x + 1 : b[i.dataset.k]; });
   };
   d.onpointerup = () => {
     d.onpointermove = d.onpointerup = null; coords.hidden = true;
+    document.body.classList.remove("dragging"); hole.remove(); land.remove(); minb.remove();
     if (!moved) {
       // dvojklik na úchyt: roztáhnout k nejbližšímu bloku (nebo okraji) v tom směru
       const now = Date.now(), dbl = mode !== "move" && lastHandle.id === b.id && lastHandle.mode === mode && now - lastHandle.t < 450;
       lastHandle = { id: b.id, mode, t: now };
-      if (dbl) { expand(b, mode); return; }
-      if (mode === "move") { openBlock(b.id); drawBoxes(); }
+      if (dbl) expand(b, mode); else if (mode === "move") select(b.id);
       return;
     }
+    if (target) {
+      if (swapInColumn(b, o, target)) { commit(); toast(`Prohozeno s blokem ${name(target.type)}.`); return; }
+      Object.assign(b, o); drawBoxes(); toast("Prohodit nejde – mezi bloky je něco v jiných sloupcích."); return;
+    }
     if (clashes(b).length) {
+      if (landing) { Object.assign(b, landing); commit(); toast(`Místo bylo obsazené – blok ${name(b.type)} položen vedle.`); return; }
       const other = clashes(b).map(x => name(x.type)).join(", ");
-      Object.assign(b, o); drawBoxes(); toast(`Tam už je ${other} – blok vrácen zpět.`); return;
+      Object.assign(b, o); drawBoxes(); toast(`Místo zabírá blok ${other} – vrácen zpět.`); return;
     }
     commit(); say(`${name(b.type)}: ${fmtPos(b)}`);
   };
@@ -794,15 +942,31 @@ function expand(b, mode) {
   if (b.x === o0.x && b.y === o0.y && b.w === o0.w && b.h === o0.h) { toast("V tom směru už není kam roztáhnout."); return; }
   commit(); say(`${name(b.type)}: ${fmtPos(b)}`);
 }
+function shake(b) {
+  const d = document.querySelector(`.gbox[data-id="${b.id}"]`);
+  d?.classList.remove("shake"); void d?.offsetWidth; d?.classList.add("shake");
+}
+// Klávesnice: šipky posun (Alt = po 40 px), Shift+šipky pravá/dolní hrana, Ctrl+Shift+šipky levá/horní hrana,
+// Enter nastavení, Esc zrušit výběr, Delete odebrat
 function keyMove(e, b) {
+  if (e.key === "Escape") { select(null); return; }
+  if (e.key === "Delete") { e.preventDefault(); remove(b.id); return; }
+  if (e.key === "Enter") { openBlock(b.id); return; }
   const k = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
-  if (!k) { if (e.key === "Enter") openBlock(b.id); return; }
+  if (!k) return;
   e.preventDefault();
   const step = e.altKey ? 10 * D.step : D.step, r = { ...b };
-  if (e.shiftKey) { r.w += k[0]; r.h += k[1] * step; } else { r.x += k[0]; r.y += k[1] * step; }
-  if (r.w < 1 || r.h < D.step || !fits(r, b)) return;
-  Object.assign(b, { x: r.x, y: r.y, w: r.w, h: r.h }); commit(); say(`${name(b.type)}: ${fmtPos(b)}`);
-  requestAnimationFrame(() => document.querySelector(`.gbox[data-id="${b.id}"]`)?.focus());
+  if (e.shiftKey && (e.ctrlKey || e.metaKey)) { r.x += k[0]; r.w -= k[0]; r.y += k[1] * step; r.h -= k[1] * step; }
+  else if (e.shiftKey) { r.w += k[0]; r.h += k[1] * step; }
+  else { r.x += k[0]; r.y += k[1] * step; }
+  if (r.w < 1 || r.h < D.step || !fits(r, b)) {
+    shake(b);
+    const cl = shown().filter(o => o !== b && overlap(o, r));
+    say(cl.length ? `Nejde – místo zabírá blok ${name(cl[0].type)}` : "Nejde – okraj displeje");
+    return;
+  }
+  Object.assign(b, { x: r.x, y: r.y, w: r.w, h: r.h }); commit(true); say(`${name(b.type)}: ${fmtPos(b)}`);
+  document.querySelector(`.gbox[data-id="${b.id}"]`)?.focus({ preventScroll: true });   // rámečky se překreslily
 }
 
 let zoom = "fit";
@@ -820,7 +984,7 @@ $("#perr").onclick = () => scheduleRender(true);
 function refresh(soft) {
   renderStatus();
   if (!soft) renderList();
-  drawBoxes();
+  drawBoxes(); updateSelbar();
   const dirty = snap() !== saved;
   $("#savebar").classList.toggle("show", dirty);
   $("#tabLayout").classList.toggle("dot", dirty);
@@ -925,7 +1089,6 @@ $("#worst").onchange = () => scheduleRender(true);
 $("#gridBtn").onclick = () => {
   const on = !document.body.classList.contains("grid-on");
   document.body.classList.toggle("grid-on", on); $("#gridBtn").setAttribute("aria-pressed", on);
-  if (on && zoom !== "1") document.querySelector('[data-z="1"]').click();
 };
 $("#discard").onclick = () => {
   if (hpos > 3 && !confirm("Zahodit všechny neuložené změny?")) return;
@@ -986,7 +1149,7 @@ async function loadEntities() {
     if (res.error) banner("err", "Uložené rozvržení je poškozené (" + res.error + "), načteno výchozí. Starší verze najdeš v historii.");
     if (!res.saved) unsavedBanner = banner("warn", "Rozvržení zatím není uložené – odvozuje se z nastavení add-onu. Po prvním uložení platí jen tento editor.");
     document.addEventListener("pointerdown", e => {   // klik mimo bloky v náhledu zruší výběr
-      if (e.target.closest("#screen") && !e.target.closest(".gbox") && openId) { openId = null; refresh(true); renderList(); }
+      if (e.target.closest("#screen") && !e.target.closest(".gbox") && openId) select(null);
     });
     fit(); refresh(); scheduleRender(true);
   } catch (e) {

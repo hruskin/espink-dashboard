@@ -10,7 +10,7 @@
   </div>
   <div class="now-sub num">
     {% if w.humidity %}<span><i class="mdi mdi-water-percent"></i>{{ w.humidity }} %</span>{% endif %}
-    {% if w.rain %}<span><i class="mdi mdi-weather-pouring"></i>{{ w.rain }} mm</span>{% endif %}
+    {% if w.rain %}<span class="rain"><i class="mdi mdi-weather-pouring"></i>{{ w.rain }} mm</span>{% endif %}
   </div>
   {% if w.indoor or w.pressure %}<div class="now-sub num">
     {% if w.indoor %}<span><i class="mdi mdi-home-thermometer-outline"></i>{{ w.indoor }}°</span>{% endif %}

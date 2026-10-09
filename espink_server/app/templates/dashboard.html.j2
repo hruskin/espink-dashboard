@@ -33,7 +33,9 @@
   .now-top .mdi { font-size: 56px; }
   .temp { font-size: 46px; font-weight: 800; letter-spacing: -1.5px; line-height: 1; }
   .now-sub { font-size: 18px; font-weight: 600; margin-top: 6px; display: flex; justify-content: flex-end; gap: 10px; }
-  .now-sub .mm { font-weight: 800; }
+  .now-sub.mm { font-weight: 800; }
+  .now-sub span { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; flex: none; }
+  .now-sub .mdi { font-size: 26px; line-height: 1; margin: -3px 0; }
   .now-sub small { font-size: 15px; font-weight: 700; }
 
   /* ── Odjezdy ────────────────────────────── */
@@ -83,7 +85,8 @@
   /* ── Patička ────────────────────────────── */
   footer { height: 24px; border-top: 2px solid var(--ink); display: flex; align-items: center;
            padding: 0 16px; font-size: 14px; font-weight: 600; gap: 4px; }
-  footer .mdi { font-size: 18px; }
+  footer .mdi { font-size: 20px; }
+  footer .num { font-size: 15px; font-weight: 700; margin-left: 2px; }
   footer .sp { flex: 1; }
 </style>
 </head>
@@ -105,15 +108,15 @@
       <i class="mdi mdi-{{ w.icon }}"></i>
       <span class="temp num">{{ w.temp or '--' }}°</span>
     </div>
+    {% if w.min and w.max %}<div class="now-sub num mm">{% if w.minmax_label %}<small>{{ w.minmax_label }}</small> {% endif %}{{ w.min }}° / {{ w.max }}°</div>{% endif %}
     <div class="now-sub num">
-      {% if w.min and w.max %}<span class="mm">{% if w.minmax_label %}<small>{{ w.minmax_label }}</small> {% endif %}{{ w.min }}° / {{ w.max }}°</span>{% endif %}
-      {% if w.humidity %}<span>{{ w.humidity }} %</span>{% endif %}
+      {% if w.humidity %}<span><i class="mdi mdi-water-percent"></i>{{ w.humidity }} %</span>{% endif %}
+      {% if w.rain %}<span><i class="mdi mdi-weather-pouring"></i>{{ w.rain }} mm</span>{% endif %}
     </div>
-    <div class="now-sub num">
-      {% if w.rain %}<span><small>srážky</small> {{ w.rain }} mm</span>{% endif %}
-      {% if w.indoor %}<span><small>doma</small> {{ w.indoor }}°</span>{% endif %}
+    {% if w.indoor or w.pressure %}<div class="now-sub num">
+      {% if w.indoor %}<span><i class="mdi mdi-home-thermometer-outline"></i>{{ w.indoor }}°</span>{% endif %}
       {% if w.pressure %}<span>{{ w.pressure }} hPa</span>{% endif %}
-    </div>
+    </div>{% endif %}
   </div>
 </header>
 
@@ -173,8 +176,8 @@
   <span>Aktualizováno {{ updated }}</span>
   <span class="sp"></span>
   {% if v.device.wifi_icon %}<i class="mdi mdi-{{ v.device.wifi_icon }}"></i> slabá WiFi{% endif %}
-  {% if v.device.battery_icon %}<i class="mdi mdi-{{ v.device.battery_icon }} red"></i>
-  <span class="num red">Baterie {{ v.device.battery }} %</span>{% endif %}
+  {% if v.device.battery is not none %}<i class="mdi mdi-{{ v.device.battery_icon }} {{ 'red' if v.device.battery_low }}"></i>
+  <span class="num {{ 'red' if v.device.battery_low }}">{{ v.device.battery }} %</span>{% endif %}
 </footer>
 </body>
 </html>

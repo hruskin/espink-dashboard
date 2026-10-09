@@ -40,6 +40,34 @@ def load(path: str | None = None) -> dict:
     return opts
 
 
+INT_KEYS = {"rotate", "render_interval", "departures_count", "walk_minutes", "event_days"}
+
+
+def sanitize(new: dict, current: dict) -> dict:
+    """Převezme z formuláře jen známé klíče se správnými typy (finální validaci dělá Supervisor)."""
+    out = dict(current)
+    for key, default in DEFAULTS.items():
+        if key not in new:
+            continue
+        v = new[key]
+        if key in INT_KEYS:
+            v = int(v)
+        elif key == "calendars":
+            v = [
+                {k: c[k] for k in ("entity", "label", "red") if c.get(k)}
+                for c in v if isinstance(c, dict) and str(c.get("entity", "")).strip()
+            ]
+        elif key == "schedule":
+            v = [str(r).strip() for r in v if str(r).strip()]
+            bad = [r for r in v if not _RULE.match(r)]
+            if bad:
+                raise ValueError(f"neplatné pravidlo rozvrhu: {bad[0]}")
+        else:
+            v = str(v).strip()
+        out[key] = v
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Rozvrh probouzení: "[D-D ]HH:MM-HH:MM=sekundy", dny 1=Po … 7=Ne.
 # První vyhovující okno vyhrává; mimo všechna okna zařízení spí do začátku

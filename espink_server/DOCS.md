@@ -29,13 +29,18 @@ Firmware s touto adresou připravíte podle `firmware/README.md`.
 
 ## Konfigurace
 
+Nejpohodlnější je stránka **Nastavení** ve webovém rozhraní add-onu (odkaz pod náhledem).
+U entit nabízí našeptávač z Home Assistantu a pod polem ukáže název entity, nebo
+upozorní, že entita neexistuje. Uložení se zapíše do konfigurace add-onu a projeví
+se hned, bez restartu. Stejné volby jsou i na záložce *Konfigurace* add-onu:
+
 | Volba | Význam |
 |---|---|
 | `rotate` | Otočení obrazu pro panel (90/270). Je-li obraz vzhůru nohama, přepněte 90 ↔ 270. |
 | `image_format` | `z2` (kompaktní, výchozí) nebo `png`. |
 | `render_interval` | Jak často add-on kontroluje data (s). |
 | `meteo_*`, `indoor_temperature` | Senzory meteostanice. Prázdná hodnota = nezobrazovat. |
-| `weather` | Entita počasí pro ikonu a denní předpověď. |
+| `weather` | Zdroj počasí: entita `weather.*` pro ikonu a předpověď (denní, nebo dopočtená z hodinové). |
 | `departures`, `disruptions` | Senzory integrace [ha-pid-odjezdy](https://github.com/hruskin/ha-pid-odjezdy). Linky a nástupiště filtrujte přímo v integraci. |
 | `departures_count` | Počet zobrazených odjezdů (0 = sekci skrýt). |
 | `walk_minutes` | Nezobrazovat spoje, které už nestihnete. |

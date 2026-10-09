@@ -78,6 +78,23 @@ class HomeAssistant:
         print(f"[ha] předpověď {entity_id} nedostupná ({'; '.join(errors) or 'prázdná'})")
         return []
 
+    async def entities(self) -> list[dict]:
+        """Seznam entit pro našeptávač v nastavení (id, název, jednotka)."""
+        states = await self._get("/states")
+        return sorted(
+            ({"id": s["entity_id"], "name": s["attributes"].get("friendly_name", ""),
+              "unit": s["attributes"].get("unit_of_measurement", "")} for s in states),
+            key=lambda e: e["id"],
+        )
+
+    async def save_addon_options(self, opts: dict) -> None:
+        """Uloží konfiguraci add-onu přes Supervisor (validuje ji podle schématu)."""
+        url = self.base.removesuffix("/core/api") + "/addons/self/options"
+        async with self.session.post(url, headers=self.headers, json={"options": opts}, timeout=TIMEOUT) as r:
+            body = await r.json(content_type=None)
+            if r.status != 200 or body.get("result") != "ok":
+                raise RuntimeError(body.get("message") or f"HTTP {r.status}")
+
     async def set_state(self, entity_id: str, state, attributes: dict) -> None:
         try:
             await self._post(f"/states/{entity_id}", {"state": state, "attributes": attributes})

@@ -330,18 +330,20 @@ def _device(device: dict) -> dict:
         wifi = "wifi-strength-2"
     else:
         wifi = "wifi-strength-1"
-    if pct is None:
+    # zaokrouhleno na 5 %, aby šum měření nevyvolával překreslení
+    rounded = None if pct is None else int(round(pct / 5) * 5)
+    if rounded is None:
         bat_icon = "battery-unknown"
+    elif rounded < 10:
+        bat_icon = "battery-alert-variant-outline"
+    elif rounded >= 95:
+        bat_icon = "battery"
     else:
-        bat_icon = "battery" if pct >= 95 else f"battery-{max(10, (pct + 5) // 10 * 10)}"
-        if pct < 10:
-            bat_icon = "battery-alert-variant-outline"
-    low = pct is not None and pct < 20
+        bat_icon = f"battery-{rounded // 10 * 10}"
     return {
-        # Baterie se ukazuje jen když dochází (jinak je v HA) – zaokrouhleno na 5 %,
-        # aby šum měření nevyvolával překreslení
-        "battery": int(round(pct / 5) * 5) if low else None,
-        "battery_icon": bat_icon if low else None,
+        "battery": rounded,
+        "battery_icon": bat_icon,
+        "battery_low": rounded is not None and rounded < 20,
         "wifi_icon": wifi if rssi is not None and rssi < -80 else None,
     }
 

@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ESPink – nastavení</title>
+<style>
+  :root { --bg: #f4f4f4; --card: #fff; --ink: #111; --muted: #666; --line: #ddd; --accent: #03a9f4; --err: #c62828; --ok: #2e7d32; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111; --card: #1c1c1c; --ink: #eee; --muted: #aaa; --line: #333; --accent: #4fc3f7; --err: #ef5350; --ok: #66bb6a; }
+  }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; background: var(--bg); color: var(--ink); }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  nav { display: flex; gap: 16px; align-items: baseline; margin-bottom: 12px; }
+  nav h1 { font-size: 20px; margin: 0; flex: 1; }
+  a { color: var(--accent); }
+  fieldset { background: var(--card); border: 1px solid var(--line); border-radius: 8px; margin: 0 0 16px; padding: 12px 16px 16px; }
+  legend { font-weight: 700; padding: 0 6px; }
+  label { display: block; margin-top: 10px; font-size: 14px; color: var(--muted); }
+  label .hint { font-size: 12px; }
+  input, select, textarea { width: 100%; padding: 8px; font-size: 15px; border: 1px solid var(--line); border-radius: 6px;
+                            background: var(--bg); color: var(--ink); margin-top: 4px; font-family: inherit; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  input.unknown { border-color: var(--err); }
+  .name { font-size: 12px; color: var(--muted); min-height: 15px; margin-top: 2px; }
+  .row { display: grid; grid-template-columns: 1fr 140px 70px 36px; gap: 8px; align-items: center; margin-top: 8px; }
+  .row input { margin: 0; }
+  .row label { margin: 0; display: flex; gap: 4px; align-items: center; color: var(--ink); }
+  .row input[type=checkbox] { width: auto; margin: 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+  button { padding: 8px 14px; font-size: 15px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
+  button.primary { background: var(--accent); color: #000; border-color: transparent; font-weight: 600; }
+  .bar { position: sticky; bottom: 0; background: var(--bg); padding: 12px 0; display: flex; gap: 12px; align-items: center; }
+  #msg.err { color: var(--err); } #msg.ok { color: var(--ok); }
+  @media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } .row { grid-template-columns: 1fr 90px 60px 36px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav><h1>Nastavení ESPink</h1><a href="./">← Náhled</a></nav>
+  <form id="f" autocomplete="off"></form>
+  <div class="bar"><button class="primary" id="save">Uložit</button><span id="msg"></span></div>
+</div>
+
+<datalist id="dl-weather"></datalist>
+<datalist id="dl-sensor"></datalist>
+<datalist id="dl-calendar"></datalist>
+
+<script>
+// Popis formuláře: [sekce, [[klíč, popisek, typ/doména, nápověda]]]
+const SECTIONS = [
+  ["Počasí", [
+    ["weather", "Zdroj počasí (ikona a předpověď)", "weather", "entita weather.* – denní předpověď, případně dopočtená z hodinové"],
+    ["meteo_temperature", "Teplota venku", "sensor"],
+    ["meteo_humidity", "Vlhkost venku", "sensor"],
+    ["meteo_rain_today", "Srážky dnes", "sensor"],
+    ["meteo_pressure", "Tlak", "sensor", "nepovinné"],
+    ["indoor_temperature", "Teplota doma", "sensor", "nepovinné"],
+  ]],
+  ["Odjezdy", [
+    ["departures", "Odjezdová tabule", "sensor", "senzor …_odjezdy z integrace ha-pid-odjezdy"],
+    ["disruptions", "Výluky", "sensor", "senzor …_vyluky"],
+    ["departures_count", "Počet odjezdů", "int", "0 = sekci skrýt"],
+    ["walk_minutes", "Cesta na zastávku (min)", "int", "nezobrazovat spoje, které už nestihnete"],
+  ]],
+  ["Kalendáře", [
+    ["calendars", "", "calendars"],
+    ["nameday_calendar", "Jmenné svátky", "calendar"],
+    ["holiday_calendar", "Státní svátky", "calendar"],
+    ["event_days", "Počet dní dopředu", "int"],
+  ]],
+  ["Displej a baterie", [
+    ["schedule", "Rozvrh probouzení", "lines", "jedno pravidlo na řádek: [dny ]HH:MM-HH:MM=sekundy, dny 1=Po…7=Ne"],
+    ["rotate", "Otočení obrazu", "select:0,90,180,270", "obraz vzhůru nohama → 90 ↔ 270"],
+    ["image_format", "Formát pro zařízení", "select:z2,png"],
+    ["render_interval", "Kontrola dat (s)", "int"],
+    ["battery_sensor", "Senzor baterie (zapisuje add-on)", "text"],
+  ]],
+];
+
+let opts = {}, names = {};
+const form = document.getElementById("f");
+const el = (tag, attrs = {}, ...kids) => {
+  const e = Object.assign(document.createElement(tag), attrs);
+  kids.forEach(k => e.append(k));
+  return e;
+};
+
+function entityInput(key, domain, value) {
+  const inp = el("input", { name: key, value: value || "", placeholder: domain + ".…", spellcheck: false });
+  inp.setAttribute("list", "dl-" + domain);
+  inp.dataset.domain = domain;
+  const name = el("div", { className: "name" });
+  const upd = () => {
+    const v = inp.value.trim();
+    name.textContent = v ? (names[v] ?? "⚠ entita v HA neexistuje") : "";
+    inp.classList.toggle("unknown", !!v && !(v in names));
+  };
+  inp.addEventListener("input", upd);
+  upd();
+  return [inp, name];
+}
+
+function calendarRow(c = {}) {
+  const [inp, name] = entityInput("cal_entity", "calendar", c.entity);
+  const row = el("div", { className: "row" },
+    el("div", {}, inp, name),
+    el("input", { name: "cal_label", value: c.label || "", placeholder: "štítek" }),
+    el("label", {}, el("input", { type: "checkbox", name: "cal_red", checked: !!c.red }), "červeně"),
+    el("button", { type: "button", textContent: "✕", title: "Odebrat", onclick: () => row.remove() }));
+  return row;
+}
+
+function build() {
+  form.replaceChildren();
+  for (const [title, fields] of SECTIONS) {
+    const fs = el("fieldset", {}, el("legend", { textContent: title }));
+    for (const [key, label, type, hint] of fields) {
+      const lab = el("label", { textContent: label });
+      if (hint) lab.append(el("div", { className: "hint", textContent: hint }));
+      const v = opts[key];
+      if (["weather", "sensor", "calendar"].includes(type)) {
+        lab.append(...entityInput(key, type, v));
+      } else if (type === "calendars") {
+        const box = el("div", { id: "cals" });
+        (v || []).forEach(c => box.append(calendarRow(c)));
+        fs.append(box, el("button", { type: "button", textContent: "+ Přidat kalendář",
+                                      style: "margin-top:8px", onclick: () => box.append(calendarRow()) }));
+        continue;
+      } else if (type === "int") {
+        lab.append(el("input", { name: key, type: "number", value: v ?? "" }));
+      } else if (type === "lines") {
+        lab.append(el("textarea", { name: key, rows: 4, value: (v || []).join("\n") }));
+      } else if (type.startsWith("select:")) {
+        const s = el("select", { name: key });
+        type.slice(7).split(",").forEach(o => s.append(el("option", { value: o, textContent: o, selected: String(v) === o })));
+        lab.append(s);
+      } else {
+        lab.append(el("input", { name: key, value: v ?? "" }));
+      }
+      fs.append(lab);
+    }
+    form.append(fs);
+  }
+}
+
+function collect() {
+  const out = {};
+  for (const [, fields] of SECTIONS) for (const [key, , type] of fields) {
+    if (type === "calendars") {
+      out.calendars = [...document.querySelectorAll("#cals .row")].map(r => {
+        const c = { entity: r.querySelector("[name=cal_entity]").value.trim() };
+        const label = r.querySelector("[name=cal_label]").value.trim();
+        if (label) c.label = label;
+        if (r.querySelector("[name=cal_red]").checked) c.red = true;
+        return c;
+      }).filter(c => c.entity);
+      continue;
+    }
+    const f = form.elements[key];
+    if (type === "int") out[key] = parseInt(f.value, 10) || 0;
+    else if (type === "lines") out[key] = f.value.split("\n").map(s => s.trim()).filter(Boolean);
+    else if (key === "rotate") out[key] = parseInt(f.value, 10);
+    else out[key] = f.value.trim();
+  }
+  return out;
+}
+
+async function load() {
+  const [o, ents] = await Promise.all([
+    fetch("options.json").then(r => r.json()),
+    fetch("entities.json").then(r => r.ok ? r.json() : []).catch(() => []),
+  ]);
+  opts = o;
+  for (const e of ents) {
+    names[e.id] = e.name + (e.unit ? ` (${e.unit})` : "");
+    const dom = e.id.split(".")[0];
+    const dl = document.getElementById("dl-" + dom);
+    if (dl) dl.append(el("option", { value: e.id, textContent: e.name }));
+  }
+  build();
+}
+
+document.getElementById("save").onclick = async () => {
+  const msg = document.getElementById("msg");
+  msg.className = ""; msg.textContent = "Ukládám…";
+  try {
+    const r = await fetch("settings", { method: "POST", headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify(collect()) });
+    const b = await r.json();
+    if (!r.ok) throw new Error(b.error || r.status);
+    opts = b.options;
+    msg.className = "ok"; msg.textContent = "Uloženo, náhled se překreslil.";
+  } catch (e) {
+    msg.className = "err"; msg.textContent = "Chyba: " + e.message;
+  }
+};
+
+load();
+</script>
+</body>
+</html>

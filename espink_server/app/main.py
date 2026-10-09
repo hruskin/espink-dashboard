@@ -175,7 +175,7 @@ class Server:
 <div class="wrap"><img id="p" src="preview.png?{self.content_ts}" alt="Náhled displeje">
 <div><table>{rows}</table>
 <form method="post" action="refresh"><button>Překreslit hned</button></form>
-<p><a href="view.json">Model zobrazení (JSON)</a></p></div></div>
+<p><a href="settings"><b>Nastavení</b></a> · <a href="view.json">Model zobrazení (JSON)</a></p></div></div>
 <script>setTimeout(()=>location.reload(),30000)</script></body></html>"""
         return web.Response(text=page, content_type="text/html")
 
@@ -187,6 +187,40 @@ class Server:
     async def handle_view(self, request: web.Request) -> web.Response:
         return web.json_response({"view": self.view, "device": self.device, "hash": self.view_hash},
                                  dumps=lambda o: json.dumps(o, ensure_ascii=False, indent=2, default=str))
+
+    # ── nastavení s našeptávačem ─────────────────────────────────────────
+    async def handle_settings_page(self, request: web.Request) -> web.Response:
+        return web.FileResponse(render.APP_DIR / "templates" / "settings.html",
+                                headers={"Cache-Control": "no-store"})
+
+    async def handle_options(self, request: web.Request) -> web.Response:
+        return web.json_response(self.opts)
+
+    async def handle_entities(self, request: web.Request) -> web.Response:
+        if MOCK:
+            raw = mock.raw(self.opts, now_local())
+            ids = list(raw["states"]) + list(raw["events"]) + ["sensor.temperature_10", "weather.home"]
+            return web.json_response([{"id": i, "name": i.split(".")[1].replace("_", " "), "unit": ""} for i in sorted(set(ids))])
+        try:
+            return web.json_response(await self.ha.entities())
+        except Exception as e:  # noqa: BLE001
+            return web.json_response({"error": str(e)}, status=502)
+
+    async def handle_settings_save(self, request: web.Request) -> web.Response:
+        try:
+            new = options.sanitize(await request.json(), self.opts)
+            if self.ha.base.startswith("http://supervisor"):
+                await self.ha.save_addon_options(new)
+            else:  # vývoj mimo HA
+                with open(os.environ.get("OPTIONS_PATH", "options.json"), "w", encoding="utf-8") as f:
+                    json.dump(new, f, ensure_ascii=False, indent=2)
+        except Exception as e:  # noqa: BLE001
+            return web.json_response({"error": str(e)}, status=400)
+        self.opts = new
+        self.schedule = options.Schedule.parse(new["schedule"])
+        await self.rebuild(force=True)
+        print("[settings] konfigurace uložena")
+        return web.json_response({"options": self.opts, "error": self.last_error or None})
 
     async def handle_refresh(self, request: web.Request) -> web.Response:
         await self.rebuild(force=True)
@@ -219,6 +253,10 @@ async def main() -> None:
             web.get("/preview.png", srv.handle_preview),
             web.get("/view.json", srv.handle_view),
             web.post("/refresh", srv.handle_refresh),
+            web.get("/settings", srv.handle_settings_page),
+            web.post("/settings", srv.handle_settings_save),
+            web.get("/options.json", srv.handle_options),
+            web.get("/entities.json", srv.handle_entities),
         ])
         runner = web.AppRunner(app, access_log=None)
         await runner.setup()

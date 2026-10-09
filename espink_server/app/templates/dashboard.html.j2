@@ -24,21 +24,22 @@
   .hrow { display: flex; }
   /* upozornění přes celou šířku dole v hlavičce */
   .hline { position: absolute; left: 16px; right: 16px; bottom: 3px; height: 24px; font-size: 19px; font-weight: 800; }
-  .date { display: flex; align-items: flex-start; flex: 1; min-width: 0; }
-  .daynum { font-size: 96px; font-weight: 800; line-height: 0.95; letter-spacing: -4px; margin-right: 12px; }
-  .datetext { padding-top: 6px; min-width: 0; }
-  .weekday { font-size: 32px; font-weight: 800; line-height: 1.05; }
-  .month { font-size: 18px; font-weight: 600; margin-top: 3px; }
-  .nameday { font-size: 18px; font-weight: 600; margin-top: 8px; }
+  .date { display: flex; align-items: flex-start; flex: 1; min-width: 0; overflow: hidden; margin-right: 6px; }
+  .daynum { font-size: 98px; font-weight: 400; line-height: 0.74; letter-spacing: -7px; margin: 12px 12px 0 -4px; flex: none; }
+  .datetext { padding-top: 4px; min-width: 0; }
+  .weekday { font-size: 28px; font-weight: 800; line-height: 1.05; white-space: nowrap; }
+  .month { font-size: 18px; font-weight: 600; margin-top: 3px; white-space: nowrap; }
+  .nameday { font-size: 17px; font-weight: 600; margin-top: 8px; letter-spacing: -0.2px; }
+  .nameday .mdi { font-size: 20px; margin-right: 1px; }
   .now { width: 212px; text-align: right; overflow: hidden; }
   .now-top { display: flex; justify-content: flex-end; align-items: center; gap: 4px; height: 54px; margin-bottom: 2px; }
   .now-top .mdi { font-size: 50px; line-height: 1; flex: none; }
-  .minmax { display: flex; flex-direction: column; align-items: flex-end; line-height: 20px; font-size: 18px; margin-right: 2px; flex: none; }
+  .minmax { display: flex; flex-direction: column; align-items: flex-end; line-height: 20px; font-size: 17px; margin-right: 2px; flex: none; letter-spacing: -0.5px; }
   .minmax .hi { font-weight: 800; }
   .minmax .lo { font-weight: 600; }
   .minmax small { font-size: 12px; font-weight: 800; line-height: 13px; text-transform: uppercase; }
   .temp { font-size: 46px; font-weight: 800; letter-spacing: -1.5px; line-height: 1; white-space: nowrap; }
-  .temp.long { font-size: 38px; letter-spacing: -1px; }
+  .temp.long { font-size: 36px; letter-spacing: -1.5px; }
   .now-sub { font-size: 18px; font-weight: 600; height: 24px; display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
   .now-sub.mm { font-weight: 800; }
   .now-sub span { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; flex: none; }
@@ -112,8 +113,8 @@
     <div class="daynum num {{ 'red' if h.holiday }}">{{ h.day }}</div>
     <div class="datetext">
       <div class="weekday {{ 'red' if h.holiday }}">{{ h.weekday }}</div>
-      <div class="month">{{ h.month }} · {{ h.week }}</div>
-      {% if h.nameday %}<div class="nameday ellipsis">{{ h.nameday if 'svátek' in h.nameday|lower else 'Svátek: ' ~ h.nameday }}</div>{% endif %}
+      <div class="month">{{ h.month }}</div>
+      {% if h.nameday %}<div class="nameday ellipsis"><i class="mdi mdi-flower-tulip-outline"></i>{{ h.nameday }}</div>{% endif %}
     </div>
   </div>
   <div class="now">
@@ -198,6 +199,7 @@
 <footer>
   <i class="mdi mdi-update"></i><span>{{ updated }}</span>
   {% if next_wake %}<i class="mdi mdi-timer-sand fi"></i><span>za {{ next_wake }}</span>{% endif %}
+  <i class="mdi mdi-calendar-week fi"></i><span>{{ h.week }}</span>
   <span class="sp"></span>
   {% if v.device.wifi_icon %}<i class="mdi mdi-{{ v.device.wifi_icon }}"></i> slabá WiFi{% endif %}
   {% if v.device.battery is not none %}<i class="mdi mdi-{{ v.device.battery_icon }} {{ 'red' if v.device.battery_low }}"></i>

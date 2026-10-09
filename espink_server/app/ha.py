@@ -29,6 +29,17 @@ class HomeAssistant:
             r.raise_for_status()
             return await r.json()
 
+    async def ping(self) -> None:
+        """Ověří, že API HA odpovídá – jinak nemá smysl kreslit prázdný dashboard."""
+        try:
+            await self._get("/")
+        except Exception as e:  # noqa: BLE001
+            hint = ""
+            if self.base.startswith("http://supervisor"):
+                hint = (" – pokud má HA zapnuté HTTPS, nastavte v terminálu HA"
+                        " `ha core options --ssl=true` a restartujte add-on")
+            raise RuntimeError(f"Home Assistant API nedostupné ({type(e).__name__}: {e}){hint}") from e
+
     async def state(self, entity_id: str) -> dict | None:
         if not entity_id:
             return None
@@ -76,6 +87,7 @@ async def collect(ha: HomeAssistant, opts: dict, now: datetime) -> dict:
                   "indoor_temperature", "weather", "departures", "disruptions")
         if opts.get(k)
     ]
+    await ha.ping()
     day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     end = day_start + timedelta(days=opts["event_days"] + 1)
     cal_ids = [c["entity"] for c in opts["calendars"]]

@@ -43,6 +43,7 @@ EVENTS_HEIGHT = 800 - HEADER_H - DEPS_H - FORECAST_H - FOOTER_H - EVENTS_PAD  # 
 DAY_HEADER_H = 34
 EVENT_ROW_H = 29
 MORE_ROW_H = 22
+SEP_H = 1  # tenká čára mezi dny v agendě
 # Události se načítají až tak daleko dopředu; za hranicí event_days se přidávají
 # jen celé dny, které se ještě vejdou (aby sekce nezůstala prázdná)
 LOOKAHEAD_DAYS = 31
@@ -82,6 +83,13 @@ def parse_dt(value: str, tz) -> datetime | None:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=tz)
     return dt.astimezone(tz)
+
+
+def short_day_label(d: date, today: date) -> str:
+    """Popisek dne do sloupce agendy: „Zítra“, jinak „So 18.“."""
+    if d == today + timedelta(days=1):
+        return "Zítra"
+    return f"{DAYS_SHORT[d.weekday()]} {d.day}."
 
 
 def day_label(d: date, today: date) -> str:
@@ -288,24 +296,32 @@ def _events(raw: dict, opts: dict, now: datetime, tz, holidays: dict[date, str],
             if key not in seen:
                 seen.add(key)
                 uniq.append({k: v for k, v in it.items() if k != "sort"})
+        is_today = d == today
+        if d in holidays and not is_today:  # dnešní svátek je v hlavičce
+            uniq.insert(0, {"summary": holidays[d], "label": "", "red": True, "icon": None,
+                            "time": "", "allday": True})
+        if not uniq and not is_today:
+            continue
+        # Agenda: Dnes má pruh, ostatní dny jen řádky oddělené tenkou čárou
+        # čára jen mezi dvěma bloky řádků (stejně jako CSS .aday + .aday)
+        head = DAY_HEADER_H if is_today else (SEP_H if days and days[-1]["rows"] else 0)
         if d > guaranteed:
             # navíc jen celé dny, které se vejdou (i s případným „+N dalších“)
-            if used + DAY_HEADER_H + len(uniq) * EVENT_ROW_H + (MORE_ROW_H if hidden else 0) > EVENTS_HEIGHT:
+            if used + head + len(uniq) * EVENT_ROW_H + (MORE_ROW_H if hidden else 0) > EVENTS_HEIGHT:
                 break
-        elif d != today and used + DAY_HEADER_H + EVENT_ROW_H > EVENTS_HEIGHT:
+        elif not is_today and used + head + EVENT_ROW_H > EVENTS_HEIGHT:
             hidden += len(uniq)
             continue
-        used += DAY_HEADER_H
+        used += head
         room = (EVENTS_HEIGHT - used) // EVENT_ROW_H
         shown = uniq[:room]
         used += len(shown) * EVENT_ROW_H
         hidden += len(uniq) - len(shown)
         days.append({
-            "label": day_label(d, today),
+            "label": short_day_label(d, today),
             "date": f"{d.day}. {d.month}.",
-            "today": d == today,
+            "today": is_today,
             "holiday_day": d in holidays,
-            "holiday": holidays.get(d) if d != today else None,
             "rows": shown,
         })
     # „+N dalších“ potřebuje vlastní řádek – uvolnit místo poslední události, je-li třeba

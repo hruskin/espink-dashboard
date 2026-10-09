@@ -66,12 +66,17 @@
   /* ── Události ───────────────────────────── */
   .events { flex: 1; padding: 6px 16px 0; overflow: hidden; }
   .day { display: flex; align-items: baseline; height: 34px; padding: 6px 8px 0; margin: 0 -8px; gap: 8px; }
+  /* agenda: dny oddělené tenkou čarou (1 px = SEP_H v modelu) */
+  .aday + .aday { border-top: 1px solid var(--ink); }
+  .ev .dl { width: 58px; flex: none; font-size: 17px; font-weight: 800; white-space: nowrap; }
+  .ev.red .dl { color: var(--ink); }
+  .aday.red .dl { color: var(--red); }
   .day .label { font-size: 20px; font-weight: 800; }
   .day .ddate { font-size: 16px; font-weight: 600; }
   .day .hol { margin-left: auto; font-size: 15px; font-weight: 700; }
   .day.today { background: var(--ink); color: var(--paper); border-radius: 5px; height: 30px; padding-top: 3px; margin-bottom: 4px; }
-  .ev { display: flex; align-items: baseline; height: 29px; gap: 10px; }
-  .ev .t { width: 58px; flex: none; font-size: 18px; font-weight: 700; }
+  .ev { display: flex; align-items: baseline; height: 29px; gap: 8px; }
+  .ev .t { width: 50px; flex: none; font-size: 18px; font-weight: 700; }
   .ev .s { font-size: 21px; font-weight: 500; flex: 1; min-width: 0; }
   .ev .ci { width: 24px; flex: none; font-size: 23px; text-align: center; margin: 0 -4px 0 -2px; align-self: center; }
   .ev .ci::before { line-height: 1; }
@@ -156,19 +161,23 @@
 
 <section class="events">
   {% for day in v.events.days %}
-  <div class="day {{ 'today' if day.today }} {{ 'red' if day.holiday_day and not day.today }}">
-    <span class="label">{{ day.label }}</span><span class="ddate">{{ day.date }}</span>
-    {% if day.holiday %}<span class="hol ellipsis">{{ day.holiday }}</span>
-    {% elif day.today and not day.rows %}<span class="hol">nic dalšího</span>{% endif %}
+  {% if day.today %}
+  <div class="day today">
+    <span class="label">Dnes</span><span class="ddate">{{ day.date }}</span>
+    {% if not day.rows %}<span class="hol">nic dalšího</span>{% endif %}
   </div>
+  {% endif %}
+  {% if day.rows %}<div class="aday {{ 'red' if day.holiday_day }}">
   {% for e in day.rows %}
   <div class="ev {{ 'red' if e.red }} {{ 'allday' if e.allday }}">
+    <span class="dl">{{ day.label if loop.first and not day.today }}</span>
     <span class="t num">{{ e.time }}</span>
     {% if v.events.icons %}<i class="ci mdi {{ 'mdi-' ~ e.icon if e.icon }}"></i>{% endif %}
     <span class="s cond ellipsis">{{ e.summary }}</span>
     {% if e.label %}<span class="tag">{{ e.label }}</span>{% endif %}
   </div>
   {% endfor %}
+  </div>{% endif %}
   {% endfor %}
   {% if v.events.empty %}<div class="msg">Žádné události v příštích {{ v.events.range }} dnech</div>{% endif %}
   {% if v.events.hidden %}<div class="more">+ {{ v.events.hidden }} další{{ 'ch' if v.events.hidden >= 5 }} …</div>{% endif %}

@@ -1,0 +1,19 @@
+{# aktuální počasí – v záhlaví i v bloku Počasí teď; w = model._weather #}
+<div class="now">
+  <div class="now-top">
+    <i class="mdi mdi-{{ w.icon }}"></i>
+    {% if w.min and w.max %}<span class="minmax num">
+      {% if w.minmax_label %}<small>{{ w.minmax_label }}</small>{% endif %}
+      <span class="hi">{{ w.max }}°</span><span class="lo">{{ w.min }}°</span>
+    </span>{% endif %}
+    <span class="temp num {{ 'long' if (w.temp or '')|length > 4 }}">{{ w.temp or '--' }}°</span>
+  </div>
+  <div class="now-sub num">
+    {% if w.humidity %}<span><i class="mdi mdi-water-percent"></i>{{ w.humidity }} %</span>{% endif %}
+    {% if w.rain %}<span><i class="mdi mdi-weather-pouring"></i>{{ w.rain }} mm</span>{% endif %}
+  </div>
+  {% if w.indoor or w.pressure %}<div class="now-sub num">
+    {% if w.indoor %}<span><i class="mdi mdi-home-thermometer-outline"></i>{{ w.indoor }}°</span>{% endif %}
+    {% if w.pressure %}<span><i class="mdi mdi-gauge"></i>{{ w.pressure }} hPa</span>{% endif %}
+  </div>{% endif %}
+</div>

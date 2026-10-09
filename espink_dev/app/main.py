@@ -381,10 +381,16 @@ class Server:
             except Exception as e:  # noqa: BLE001
                 return web.json_response({"error": f"{type(e).__name__}: {e}"}, status=502)
         return web.Response(body=png, content_type="image/png", headers={
-            "Cache-Control": "no-store", "X-Geometry": json.dumps(model.geometry(view))})
+            "Cache-Control": "no-store"})
 
     async def handle_history(self, request: web.Request) -> web.Response:
-        return web.json_response(layout_mod.history(), headers={"Cache-Control": "no-store"})
+        items = []
+        for it in layout_mod.history():  # starší verze (i bloky pod sebou) převést na aktuální tvar
+            try:
+                items.append({"rev": it.get("rev", 0), "layout": layout_mod.sanitize(it["layout"])})
+            except (ValueError, TypeError, KeyError):
+                continue
+        return web.json_response(items, headers={"Cache-Control": "no-store"})
 
     async def handle_refresh(self, request: web.Request) -> web.Response:
         if request.content_type != "application/json":  # ochrana proti CSRF

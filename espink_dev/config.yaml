@@ -1,5 +1,5 @@
 name: ESPink Server DEV
-version: "0.5.0-dev3"
+version: "0.6.0-dev1"
 slug: espink_server_dev
 description: Vývojová verze s editorem rozvržení – lokální server protokolu Živý obraz – kreslí dashboard z dat Home Assistantu pro e-paper ESPink
 arch:

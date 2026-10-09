@@ -1,3 +1,5 @@
+<div class="vbox">
 {% if b.icon %}<i class="mdi mdi-{{ b.icon }}"></i>{% endif %}
 <span class="vl cond ellipsis">{{ b.label }}</span>
 <span class="vv num {{ 'red' if b.red }}">{{ b.value }}{% if b.unit %}<small>{{ ' ' ~ b.unit }}</small>{% endif %}</span>
+</div>

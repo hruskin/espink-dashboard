@@ -13,7 +13,7 @@
   :root { --ink: #000; --paper: #fff; --red: #e00000; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 480px; height: 800px; overflow: hidden; background: var(--paper); color: var(--ink); }
-  body { font-family: "Inter", "NotoEmoji", sans-serif; font-weight: 500; display: flex; flex-direction: column; }
+  body { font-family: "Inter", "NotoEmoji", sans-serif; font-weight: 500; position: relative; }
   .red { color: var(--red); }
   .cond { font-family: "RobotoCondensed", "NotoEmoji", sans-serif; }
   .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -21,7 +21,9 @@
   .mdi::before { line-height: 1; }
 
   /* Bloky jdou pod sebou; výšku a čáru nad blokem nastavuje model (layout.py) */
-  .blk { flex: none; overflow: hidden; border-top-style: solid; border-top-color: var(--ink); }
+  /* Bloky leží na mřížce (layout.py): poloha a velikost inline, čára nahoře a vlevo.
+     container-type: obsah se může přizpůsobit velikosti svého bloku (@container, cqw/cqh) */
+  .blk { position: absolute; overflow: hidden; border: 0 solid var(--ink); container-type: size; }
 
   /* ── Záhlaví ────────────────────────────── */
   .blk.header { padding: 8px 16px 0; position: relative; }
@@ -36,6 +38,11 @@
   .nameday { font-size: 17px; font-weight: 600; margin-top: 8px; letter-spacing: -0.2px; }
   .nameday .mdi { font-size: 20px; margin-right: 1px; }
   .now { width: 212px; text-align: right; overflow: hidden; }
+  /* samostatný blok Počasí teď */
+  .blk.weather_now { display: flex; align-items: center; justify-content: center; padding: 0 12px; }
+  .blk.weather_now .now { width: 100%; }
+  .blk.weather_now .now-top, .blk.weather_now .now-sub { justify-content: center; }
+  @container (max-width: 180px) { .blk.weather_now .minmax { display: none; } .blk.weather_now .temp { font-size: 36px; } }
   .now-top { display: flex; justify-content: flex-end; align-items: center; gap: 4px; height: 54px; margin-bottom: 2px; }
   .now-top .mdi { font-size: 50px; line-height: 1; flex: none; }
   .minmax { display: flex; flex-direction: column; align-items: flex-end; line-height: 20px; font-size: 17px; margin-right: 2px; flex: none; letter-spacing: -0.5px; }
@@ -69,7 +76,7 @@
   .msg { font-size: 19px; font-weight: 600; padding-top: 8px; }
 
   /* ── Události ───────────────────────────── */
-  .blk.agenda { flex: 1; padding: 6px 16px 0; }
+  .blk.agenda { padding: 6px 16px 0; }
   .day { display: flex; align-items: baseline; height: 34px; padding: 6px 8px 0; margin: 0 -8px; gap: 8px; }
   /* agenda: dny oddělené tenkou čarou (1 px = SEP_H v modelu) */
   .aday + .aday { border-top: 1px solid var(--ink); }
@@ -101,13 +108,45 @@
   .fday .fp { font-size: 15px; font-weight: 700; }
 
   /* ── Hodnota entity (velikosti s/m/l = VALUE_H v layout.py) ── */
-  .blk.value { display: flex; align-items: center; gap: 8px; padding: 0 16px; }
-  .value .vl { flex: 1; min-width: 0; font-weight: 600; }
-  .value .vv { font-weight: 800; white-space: nowrap; letter-spacing: -0.5px; }
-  .value .vv small { font-size: 0.6em; font-weight: 700; letter-spacing: 0; }
-  .value.sz-s .mdi { font-size: 24px; } .value.sz-s .vl { font-size: 19px; } .value.sz-s .vv { font-size: 24px; }
-  .value.sz-m .mdi { font-size: 34px; } .value.sz-m .vl { font-size: 23px; } .value.sz-m .vv { font-size: 36px; }
-  .value.sz-l .mdi { font-size: 56px; } .value.sz-l .vl { font-size: 28px; } .value.sz-l .vv { font-size: 64px; letter-spacing: -2px; }
+  /* písmo podle velikosti bloku: široký blok = ikona · popisek · hodnota v řádku,
+     užší = ikona s popiskem nahoře a velká hodnota pod nimi */
+  /* @container smí měnit jen potomky kontejneru, proto vnitřní .vbox */
+  .blk.value { padding: 0 12px; }
+  .vbox { display: flex; align-items: center; gap: 8px; width: 100%; height: 100%; }
+  .value .mdi { flex: none; font-size: clamp(16px, 60cqh, 64px); }
+  .value .vl { flex: 1; min-width: 0; font-weight: 600; font-size: clamp(14px, 34cqh, 30px); }
+  .value .vv { flex: none; font-weight: 800; white-space: nowrap; letter-spacing: -0.5px; font-size: clamp(16px, min(66cqh, 13cqw), 80px); }
+  .value .vv small { font-size: 0.55em; font-weight: 700; letter-spacing: 0; }
+  @container (max-width: 359px) {
+    .vbox { flex-wrap: wrap; align-content: center; column-gap: 4px; row-gap: 0; }
+    .value .mdi { font-size: clamp(14px, 26cqh, 28px); }
+    .value .vl { font-size: clamp(12px, 24cqh, 22px); }
+    .value .vv { width: 100%; text-align: center; line-height: 1; font-size: clamp(14px, min(50cqh, 24cqw), 80px); }
+  }
+
+  /* úzké bloky (mřížka): méně detailů místo přetékání */
+  @container (max-width: 330px) {
+    .departures .sec-title .right, .departures .plat { display: none; }
+    .dep { gap: 5px; }
+    .dep .time { font-size: 21px; width: 58px; }
+    .dep .delay { font-size: 16px; width: 26px; }
+    .route { font-size: 15px; width: 40px; height: 22px; line-height: 22px; }
+    .dep .head { font-size: 18px; }
+    .agenda .tag { display: none; }
+    .ev { gap: 5px; }
+    .ev .dl { width: 46px; font-size: 14px; }
+    .ev .t { width: 44px; font-size: 16px; }
+    .ev .s { font-size: 18px; }
+    .fday .fl small { display: none; }
+    .fday .ft { font-size: 16px; }
+  }
+  @container (max-width: 420px) {
+    .header .now { width: 150px; }
+    .header .minmax { display: none; }
+    .header .temp { font-size: 38px; }
+    .header .now-sub { font-size: 16px; gap: 6px; }
+  }
+  @container (max-width: 320px) { .header .now { display: none; } }
 
   /* ── Text (výška řádku = TEXT_LINE_H v layout.py) ── */
   .blk.text { padding: 4px 16px; }
@@ -129,7 +168,7 @@
 </head>
 <body>
 {% for b in v.blocks %}
-<section class="blk {{ b.type }} {{ 'sz-' ~ b.size if b.size }}" style="{% if b.height is not none %}height: {{ b.height + b.line }}px; {% endif %}border-top-width: {{ b.line }}px">
+<section class="blk {{ b.type }} {{ 'sz-' ~ b.size if b.size }}" style="left: {{ b.left }}px; top: {{ b.top }}px; width: {{ b.width }}px; height: {{ b.height }}px; border-top-width: {{ b.line_top }}px; border-left-width: {{ b.line_left }}px">
 {% include "blocks/" ~ b.type ~ ".html.j2" %}
 </section>
 {% endfor %}

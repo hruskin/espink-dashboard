@@ -174,7 +174,7 @@ def short_headsign(h: str) -> str:
     return h.replace(",", ", ")
 
 
-def _departures(raw: dict, b: dict, now: datetime, tz) -> dict:
+def _departures(raw: dict, b: dict, now: datetime, tz, rows: int) -> dict:
     s = raw["states"].get(b["entity"])
     block = {"stop": "", "rows": [], "error": None, "disruptions": None}
     if not b["entity"]:
@@ -194,7 +194,7 @@ def _departures(raw: dict, b: dict, now: datetime, tz) -> dict:
             first = first.get("text") or first.get("display_text") or ""
         block["disruptions"] = {"count": int(fnum(dis["state"])), "text": str(first)[:160] or "Výluka"}
     # řádek s textem výluky zabere místo jednoho odjezdu
-    count = max(1, b["count"] - (1 if block["disruptions"] else 0))
+    count = max(1, rows - (1 if block["disruptions"] else 0))
 
     limit = (now + timedelta(minutes=b.get("walk_minutes", 0))).replace(second=0, microsecond=0)
     for d in a.get("departures", []):
@@ -409,7 +409,7 @@ def _value(raw: dict, b: dict) -> dict:
 
 
 def _text(b: dict) -> dict:
-    lines = b["text"].split("\n")[:b["lines"]]
+    lines = b["text"].split("\n")[:30]
     return {"lines": lines, "size": b["size"], "align": b["align"], "bold": b["bold"], "red": b["red"]}
 
 
@@ -440,9 +440,9 @@ def _template(raw: dict, b: dict, now: datetime) -> dict:
 
 def _header(raw: dict, b: dict, layout: dict, now: datetime, tz) -> dict:
     today = now.date()
-    red_cals = [c for x in layout_mod.visible(layout) if x["type"] == "agenda" for c in x["calendars"]] if b["alert"] else []
+    # upozornění bere červené kalendáře z bloku Události (i skrytého)
+    red_cals = [c for x in layout["blocks"] if x["type"] == "agenda" for c in x["calendars"]] if b["alert"] else []
     holiday = _special_days(raw, b.get("holiday_calendar"), tz).get(today)
-    alert = _alert(raw, red_cals, now, tz)
     # Červeně jen státní svátek – víkend by ředil význam červené
     return {
         "day": now.day,
@@ -450,64 +450,52 @@ def _header(raw: dict, b: dict, layout: dict, now: datetime, tz) -> dict:
         "month": MONTHS_GEN[now.month - 1],
         "nameday": _special_days(raw, b.get("nameday_calendar"), tz).get(today),
         "holiday": holiday,
-        "alert": alert,
-        "weather": _weather(raw, b, now, tz),
-        "height": layout_mod.HEADER_H if alert or holiday else layout_mod.HEADER_COMPACT_H,
+        "alert": _alert(raw, red_cals, now, tz),
+        "weather": _weather(raw, b, now, tz) if b["show_weather"] else None,
     }
 
 
 def build(raw: dict, layout: dict, device: dict, now: datetime, worst: bool = False) -> dict:
-    """Model zobrazení: seznam bloků s hotovými daty a výškami v px.
-    worst=True (jen náhled v editoru) vynutí upozornění v záhlaví a výluku v odjezdech,
-    tedy nejmenší místo pro události."""
+    """Model zobrazení: bloky s hotovými daty a obdélníkem v px; obsah se přizpůsobí obdélníku.
+    worst=True (jen náhled v editoru) vynutí upozornění v záhlaví a výluku v odjezdech."""
     tz = now.tzinfo
-    blocks, fill = [], None
+    blocks = []
     for b in layout_mod.visible(layout):
         t = b["type"]
-        vb = {"type": t, "id": b["id"], "line": layout_mod.line_px(b, len(blocks))}
+        left, top, width, height = layout_mod.rect_px(b)
+        lt, ll = layout_mod.LINES[b["line_top"]], layout_mod.LINES[b["line_left"]]
+        inner_h = height - lt
+        vb = {"type": t, "id": b["id"], "left": left, "top": top, "width": width, "height": height,
+              "line_top": lt, "line_left": ll, "inner_w": width - ll, "inner_h": inner_h}
         if t == "header":
             vb.update(_header(raw, b, layout, now, tz))
             if worst and not vb["alert"]:
-                vb.update(alert="Zítra: Ukázkové upozornění", height=layout_mod.HEADER_H)
+                vb["alert"] = "Zítra: Ukázkové upozornění"
+            # bez spodního řádku (upozornění/svátek) obsah svisle vycentrovat (106 px = datum + jmeniny)
+            vb["pad_top"] = 8 if vb["alert"] or vb["holiday"] else max(8, (inner_h - 106) // 2)
+        elif t == "weather_now":
+            vb["weather"] = _weather(raw, b, now, tz)
         elif t == "departures":
-            vb.update(_departures(raw, b, now, tz), height=layout_mod.fixed_height(b))
-            if worst and not vb["disruptions"]:
+            rows = max(0, (inner_h - layout_mod.DEPS_BASE_H) // layout_mod.DEP_ROW_H)
+            vb.update(_departures(raw, b, now, tz, rows))
+            if worst and not vb["disruptions"] and rows:
                 vb["disruptions"] = {"count": 1, "text": "Ukázková výluka"}
-                vb["rows"] = vb["rows"][:max(1, b["count"] - 1)]
+                vb["rows"] = vb["rows"][:max(1, rows - 1)]
         elif t == "forecast":
-            vb.update(days=_forecast(raw, b, now, tz), height=layout_mod.FORECAST_H)
-            if not vb["days"]:  # bez předpovědi blok zmizí a místo dostane agenda
-                continue
+            vb["days"] = _forecast(raw, b, now, tz)
         elif t == "footer":
             vb.update({k: b[k] for k in ("updated", "next", "week", "battery")},
-                      week_label=f"{now.isocalendar().week}. týden", height=layout_mod.FOOTER_H)
+                      week_label=f"{now.isocalendar().week}. týden")
         elif t == "text":
-            vb.update(_text(b), height=layout_mod.fixed_height(b))
+            vb.update(_text(b))
         elif t == "template":
-            vb.update(_template(raw, b, now), height=b["height"])
+            vb.update(_template(raw, b, now))
         elif t == "value":
-            vb.update(_value(raw, b), size=b["size"], height=layout_mod.fixed_height(b))
+            vb.update(_value(raw, b))
         elif t == "agenda":
-            fill = (len(blocks), b)
-            vb["height"] = None
+            vb.update(_events(raw, b, now, tz, inner_h - EVENTS_PAD))
         blocks.append(vb)
-    if fill:
-        idx, b = fill
-        used = sum(x["height"] + x["line"] for x in blocks if x["height"] is not None)
-        budget = layout_mod.SCREEN_H - used - blocks[idx]["line"] - EVENTS_PAD
-        blocks[idx].update(_events(raw, b, now, tz, budget))
-        blocks[idx]["fill_h"] = layout_mod.SCREEN_H - used - blocks[idx]["line"]
     return {"blocks": blocks, "device": _device(device)}
-
-
-def geometry(view: dict) -> list[dict]:
-    """Svislá poloha bloků v px (pro zvýraznění bloků nad náhledem v editoru)."""
-    y, out = 0, []
-    for b in view["blocks"]:
-        h = b["line"] + (b["height"] if b["height"] is not None else b.get("fill_h", 0))
-        out.append({"id": b["id"], "y": y, "h": h})
-        y += h
-    return out
 
 
 def digest(view: dict) -> str:

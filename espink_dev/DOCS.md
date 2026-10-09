@@ -6,21 +6,25 @@
 > rozvržení není uložené z editoru, odvozuje se z konfigurace níže, takže dashboard
 > vypadá stejně jako ve stabilní verzi.
 >
-> **Editor** (panel ESPink DEV → Rozvržení): bloky vlevo (přetažení za úchyt nebo
-> šipky, skrytí okem, „Přidat blok“), vpravo náhled neuloženého návrhu vykreslený
-> stejně jako pro desku. Ukazatel výšky hlídá, aby se bloky vešly. Po prvním uložení
-> platí pro obsah jen editor (entity v Systém → nastavení se pak už nepoužijí).
-> Baterii v náhledu bere DEV verze ze senzoru, který plní stabilní add-on.
+> **Editor** (panel ESPink DEV → Rozvržení): displej je mřížka 12 sloupců po 40 px,
+> svisle po 4 px. Bloky se tahají přímo v náhledu a roztahují za úchyty (šipky posouvají
+> vybraný blok, Shift+šipky mění velikost); přesné souřadnice jdou zadat v panelu.
+> Překryvy editor nedovolí, volná místa jsou šrafovaná. Obsah se přizpůsobí velikosti
+> bloku – Události a Odjezdy podle výšky spočítají, kolik řádků se vejde, úzké bloky
+> skryjí méně důležité detaily. „Seřadit pod sebe“ srovná bloky na celou šířku.
+> Náhled vykresluje server stejně jako pro desku. Po prvním uložení platí pro obsah jen
+> editor (entity v Systém → nastavení se pak už nepoužijí). Baterii v náhledu bere DEV
+> verze ze senzoru, který plní stabilní add-on. Starší rozvržení (bloky pod sebou) se
+> převede automaticky.
 >
-> Bloky: Záhlaví, Odjezdy, Události (vyplní zbytek), Předpověď, Patička, Hodnota entity
-> (velikost, ikona, červeně pod/nad mezí), Text a Šablona (Jinja v sandboxu + HTML;
-> `states()`, `state_attr()`, `is_state()`, `now`, filtr `|num(1)`). Dál: duplikace bloku,
-> náhled „nejhorší případ“ (vynucené upozornění a výluka), mřížka 10/50 px, výběr ikon,
-> export/import JSON, historie posledních 15 uložených verzí, ochrana proti přepsání
-> změn z jiné karty.
+> Bloky: Záhlaví (s počasím nebo bez), Počasí teď, Odjezdy, Události, Předpověď,
+> Patička, Hodnota entity (ikona, červeně pod/nad mezí), Text a Šablona (Jinja
+> v sandboxu + HTML; `states()`, `state_attr()`, `is_state()`, `now`, filtr `|num(1)`).
+> Dál: duplikace, náhled „nejhorší případ“, mřížka 10/50 px, výběr ikon, export/import
+> JSON, historie posledních 15 uložených verzí, ochrana proti přepsání z jiné karty.
 >
-> API (jen přes Ingress): `GET layout.json`, `POST layout/preview` (PNG + hlavička
-> X-Geometry s polohou bloků), `POST layout` (uložení).
+> API (jen přes Ingress): `GET layout.json`, `POST layout/preview` (PNG),
+> `POST layout` (uložení), `GET layout/history.json`.
 
 Lokální náhrada serveru [Živý obraz](https://zivyobraz.eu) pro e-paper ESPink.
 Add-on sbírá data z Home Assistantu (kalendáře, odjezdy, meteostanice, předpověď),

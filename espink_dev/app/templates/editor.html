@@ -185,6 +185,27 @@
   .hist li span { flex: 1; }
   .hist small { color: var(--muted); display: block; }
   .dlg-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+  .tools { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+  #boxes { position: absolute; inset: 0; }
+  .gbox { position: absolute; border: 1px dashed rgba(3,169,244,.55); cursor: move; touch-action: none; }
+  .gbox:hover { background: rgba(3,169,244,.06); border-style: solid; }
+  .gbox.sel { border: 2px solid var(--primary); background: rgba(3,169,244,.07); z-index: 2; }
+  .gbox.bad { border: 2px solid var(--err); background: rgba(219,68,55,.2); z-index: 3; }
+  .glabel { position: absolute; left: 0; top: 0; background: var(--primary); color: #fff; font-size: 11px; padding: 0 5px;
+            border-radius: 0 0 3px 0; display: none; pointer-events: none; white-space: nowrap; }
+  .gbox:hover .glabel, .gbox.sel .glabel { display: block; }
+  .gbox.bad .glabel { background: var(--err); display: block; }
+  .hd { position: absolute; width: 12px; height: 12px; background: #fff; border: 2px solid var(--primary); border-radius: 3px; display: none; }
+  .gbox.sel .hd { display: block; }
+  .hd-n { top: -7px; left: calc(50% - 6px); cursor: ns-resize; } .hd-s { bottom: -7px; left: calc(50% - 6px); cursor: ns-resize; }
+  .hd-e { right: -7px; top: calc(50% - 6px); cursor: ew-resize; } .hd-w { left: -7px; top: calc(50% - 6px); cursor: ew-resize; }
+  .hd-ne { top: -7px; right: -7px; cursor: nesw-resize; } .hd-sw { bottom: -7px; left: -7px; cursor: nesw-resize; }
+  .hd-nw { top: -7px; left: -7px; cursor: nwse-resize; } .hd-se { bottom: -7px; right: -7px; cursor: nwse-resize; }
+  .free { position: absolute; pointer-events: none; background: repeating-linear-gradient(45deg, rgba(255,166,0,.4) 0 3px, transparent 3px 8px); }
+  .coords { position: absolute; right: 4px; bottom: 4px; z-index: 5; background: rgba(0,0,0,.75); color: #fff; font-size: 11px;
+            padding: 1px 6px; border-radius: 3px; font-variant-numeric: tabular-nums; pointer-events: none; }
+  .pos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0 8px; }
+  .lines2 { display: flex; gap: 16px; flex-wrap: wrap; }
 </style>
 </head>
 <body data-pane="blocks">
@@ -206,9 +227,11 @@
 <main>
   <section id="editCol" aria-label="Bloky">
     <div class="card budget">
-      <div class="budget-head"><span>Výška displeje</span><span id="budgetSum"></span></div>
-      <div class="bar" id="bar"></div>
+      <div class="budget-head"><span>Mřížka 12 sloupců po 40 px, krok 4 px</span><span id="cover"></span></div>
       <div class="budget-msg" id="budgetMsg" aria-live="polite"></div>
+      <div class="tools">
+        <button class="txtbtn" id="stackBtn" title="Viditelné bloky srovná pod sebe na celou šířku (v pořadí shora)"><i class="mdi mdi-view-sequential-outline"></i>Seřadit pod sebe</button>
+      </div>
     </div>
     <ul class="blocks" id="blocks"><li class="skel"></li><li class="skel"></li><li class="skel"></li><li class="skel"></li></ul>
     <div class="add">
@@ -232,7 +255,7 @@
       <div class="stage">
         <div class="frame"><div class="screen busy" id="screen" style="--s:.75">
           <img id="pimg" alt="Náhled displeje" width="480" height="800">
-          <div id="bands"></div><div class="spin"></div>
+          <div id="boxes"></div><div class="spin"></div><div class="coords" id="coords" hidden></div>
           <div class="perr" id="perr"></div>
         </div></div>
       </div>
@@ -265,8 +288,9 @@
 // ───────── Typy bloků (popisy pro UI; parametry a výšky posílá server) ─────────
 const TYPES = {
   header:     { icon: "page-layout-header", desc: "Datum, jmeniny, svátek, upozornění, počasí teď" },
-  departures: { icon: "bus", desc: "Odjezdová tabule a výluky" },
-  agenda:     { icon: "calendar-text", desc: "Kalendáře – vyplní zbývající místo" },
+  departures: { icon: "bus", desc: "Odjezdová tabule a výluky – počet spojů podle výšky" },
+  agenda:     { icon: "calendar-text", desc: "Kalendáře – počet událostí podle výšky" },
+  weather_now: { icon: "thermometer", desc: "Aktuální počasí samostatně (ikona, teplota, vlhkost…)" },
   forecast:   { icon: "weather-partly-cloudy", desc: "Předpověď na několik dní" },
   footer:     { icon: "page-layout-footer", desc: "Čas aktualizace, další obnovení, týden, baterie" },
   value:      { icon: "numeric", desc: "Jedna hodnota s ikonou a popiskem (lze přidat víckrát)" },
@@ -286,9 +310,10 @@ const say = t => { $("#live").textContent = t; };
 const name = t => SCHEMA.types[t].title;
 const snap = () => JSON.stringify(blocks);
 
-// layout.json (ploché bloky) ↔ editor ({id, type, line, hidden, p})
-const fromServer = l => l.blocks.map(({ id, type, line, hidden, ...p }) => ({ id, type, line, hidden: !!hidden, p }));
-const toServer = () => ({ rev, blocks: blocks.map(b => ({ id: b.id, type: b.type, line: b.line, hidden: b.hidden, ...b.p })) });
+// layout.json (ploché bloky) ↔ editor ({id, type, hidden, x, y, w, h, line_top, line_left, p})
+const fromServer = l => l.blocks.map(({ id, type, hidden, x, y, w, h, line_top, line_left, ...p }) =>
+  ({ id, type, hidden: !!hidden, x, y, w, h, line_top, line_left, p }));
+const toServer = () => ({ rev, blocks: blocks.map(({ p, ...g }) => ({ ...g, ...p })) });
 
 // ───────── Historie (undo/redo) ─────────
 function commit() {
@@ -299,62 +324,56 @@ function commit() {
 }
 function travel(d) { if (hpos + d < 0 || hpos + d >= hist.length) return; hpos += d; blocks = JSON.parse(hist[hpos]); refresh(); }
 
-// ───────── Výšky (stejná pravidla jako layout.py) ─────────
-function blockH(b) {               // [nejmenší, největší] výška obsahu; null = vyplní zbytek
-  switch (b.type) {
-    case "header": return (b.p.alert || b.p.holiday_calendar) ? D.header : [D.header[0], D.header[0]];
-    case "departures": { const h = D.departures[0] + b.p.count * D.departures[1]; return [h, h]; }
-    case "forecast": return [D.forecast, D.forecast];
-    case "footer": return [D.footer, D.footer];
-    case "value": return [D.value[b.p.size], D.value[b.p.size]];
-    case "text": { const h = D.text_pad + b.p.lines * D.text_line[b.p.size]; return [h, h]; }
-    case "template": return [b.p.height, b.p.height];
-    default: return null;
-  }
-}
-function geometry(worst) {
-  const vis = blocks.filter(b => !b.hidden);
-  let fixed = 0, fill = null;
-  const out = vis.map((b, i) => {
-    const line = i === 0 ? 0 : D.lines[b.line], h = blockH(b);
-    if (!h) { fill = b; fixed += line; return { b, line, h: null }; }
-    const v = h[worst ? 1 : 0] + line; fixed += v; return { b, line, h: v };
-  });
-  const rest = D.screen - fixed;
-  out.forEach(g => { if (g.h === null) g.h = Math.max(rest, 0) + g.line; });
-  return { out, fixed, rest, fill };
-}
-const rowsFor = px => Math.max(0, Math.floor((px - D.agenda_pad - D.day_header) / D.event_row) + 1);
+// ───────── Mřížka (stejná pravidla jako layout.py) ─────────
+const overlap = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+const shown = () => blocks.filter(b => !b.hidden);
+const clashes = b => b.hidden ? [] : shown().filter(o => o !== b && overlap(o, b));
+const inside = r => r.x >= 0 && r.w >= 1 && r.x + r.w <= D.cols && r.y >= 0 && r.h >= D.step && r.y + r.h <= D.h;
+const fits = (r, except) => inside(r) && !shown().some(o => o !== except && o.id !== r.id && overlap(o, r));
+const minOf = t => SCHEMA.types[t].min;
+const tooSmall = b => b.w < minOf(b.type)[0] || b.h < minOf(b.type)[1];
+const fmtPos = b => `sl. ${b.x + 1}–${b.x + b.w} · y ${b.y} · ${b.w * D.col_w}×${b.h} px`;
 
-function renderBudget() {
-  const best = geometry(false), worst = geometry(true), bar = $("#bar"), msg = $("#budgetMsg");
-  bar.replaceChildren();
-  const need = worst.fixed + (worst.fill ? D.agenda_min : 0), total = Math.max(D.screen, need);
-  worst.out.forEach((g, i) => {
-    const fill = !blockH(g.b);
-    const d = el("div", { title: `${name(g.b.type)}: ${fill ? "zbytek" : g.h + " px"}`, textContent: name(g.b.type) });
-    d.style.width = (Math.max(g.h, fill ? D.agenda_min : 0) / total * 100) + "%";
-    if (fill) d.className = "fill"; else d.style.background = i % 2 ? "var(--seg-a)" : "var(--seg-b)";
-    d.onclick = () => openBlock(g.b.id);
-    bar.append(d);
-  });
-  if (need > D.screen) {
-    const d = el("div", { className: "over", textContent: "+" + (need - D.screen) }); d.style.width = ((need - D.screen) / total * 100) + "%"; bar.append(d);
+function findSpot(type, w, h) {     // první volné místo shora; zkusí i menší rozměr až po minimum
+  const [mw, mh] = minOf(type);
+  for (const hh of [...new Set([h, Math.max(mh, Math.round(h / 2 / D.step) * D.step), mh])])
+    for (let ww = w; ww >= Math.min(mw, w); ww--)
+      for (let y = 0; y + hh <= D.h; y += D.step)
+        for (let x = 0; x + ww <= D.cols; x++)
+          if (fits({ x, y, w: ww, h: hh })) return { x, y, w: ww, h: hh };
+  return null;
+}
+function freeRects() {               // volná místa: po sloupcích svisle, pak sloučit sousední sloupce
+  const cols = [];
+  for (let c = 0; c < D.cols; c++) {
+    const busy = shown().filter(b => c >= b.x && c < b.x + b.w).sort((a, b) => a.y - b.y);
+    let y = 0; const runs = [];
+    for (const b of busy) { if (b.y > y) runs.push([y, b.y - y]); y = Math.max(y, b.y + b.h); }
+    if (y < D.h) runs.push([y, D.h - y]);
+    cols.push(runs);
   }
-  $("#budgetSum").textContent = `pevné bloky ${best.fixed === worst.fixed ? worst.fixed : best.fixed + "–" + worst.fixed} / ${D.screen} px`;
-  let cls, txt, block = false;
-  if (!worst.fill) { cls = worst.rest > 0 ? "warn" : "ok"; txt = worst.rest > 0 ? `Bez bloku Události zůstane dole ${worst.rest} px prázdných.` : "Bloky přesně vyplňují displej."; }
-  else if (worst.rest < D.agenda_min) {
-    block = true; cls = "err";
-    txt = `Pevné bloky zabírají ${worst.fixed} px – o ${D.agenda_min - worst.rest} px víc, než se vejde i s nejmenšími Událostmi. Zmenšete počet spojů nebo odeberte blok.`;
-  } else if (worst.rest < 130) { cls = "warn"; txt = `Na Události zbývá jen ${worst.rest} px ≈ ${rowsFor(worst.rest)} řádky.`; }
-  else { cls = "ok"; txt = best.rest === worst.rest ? `Události: ${worst.rest} px ≈ ${rowsFor(worst.rest)} řádků`
-           : `Události: ${worst.rest}–${best.rest} px ≈ ${rowsFor(worst.rest)}–${rowsFor(best.rest)} řádků (podle upozornění v záhlaví)`; }
+  const out = [];
+  cols.forEach((runs, c) => runs.forEach(([y, h]) => {
+    const prev = out.find(r => r.y === y && r.h === h && r.x + r.w === c);
+    if (prev) prev.w++; else out.push({ x: c, y, w: 1, h });
+  }));
+  return out;
+}
+function renderStatus() {            // vrací true, když návrh nejde uložit (překryv)
+  const vis = shown(), area = D.cols * D.col_w * D.h;
+  const used = vis.reduce((s, b) => s + b.w * D.col_w * b.h, 0);
+  const bad = vis.filter(b => clashes(b).length), small = vis.filter(tooSmall);
+  $("#cover").textContent = `pokryto ${Math.min(100, Math.round(used / area * 100))} %`;
+  const msg = $("#budgetMsg");
+  let cls = "ok", txt = "Bloky tahej v náhledu, roztahuj za úchyty; šipky posouvají vybraný blok (Shift+šipky mění velikost).";
+  if (bad.length) { cls = "err"; txt = `Bloky ${[...new Set(bad.map(b => name(b.type)))].join(", ")} se překrývají – posuň je, jinak nejde uložit.`; }
+  else if (small.length) { cls = "warn"; txt = `${small.map(b => name(b.type)).join(", ")}: menší než doporučeno – obsah se nemusí vejít.`; }
+  else if (used < area) txt = "Volná místa jsou v náhledu šrafovaná. " + txt;
   msg.className = "budget-msg " + cls;
   msg.replaceChildren(icon(cls === "ok" ? "check-circle" : cls === "err" ? "alert-circle" : "alert"), el("span", { textContent: txt }));
-  $("#save").disabled = block;
-  $("#save").title = block ? "Nelze uložit: bloky se nevejdou na displej" : "";
-  return block;
+  $("#save").disabled = bad.length > 0;
+  $("#save").title = bad.length ? "Nelze uložit: bloky se překrývají" : "";
+  return bad.length > 0;
 }
 
 // ───────── Formuláře ─────────
@@ -457,19 +476,25 @@ function calRows(b) {
   return box;
 }
 
+const weatherFields = b => [
+  entityField("Počasí (ikona, min/max)", b, "weather", "weather"),
+  el("div", { className: "grid2" }, entityField("Venkovní teplota", b, "temperature", "sensor", "jinak z entity počasí"),
+    entityField("Vlhkost", b, "humidity", "sensor", "jinak z entity počasí"),
+    entityField("Srážky dnes", b, "rain", "sensor"), entityField("Tlak", b, "pressure", "sensor"), entityField("Teplota doma", b, "indoor", "sensor"))];
+
 function params(b) {
   switch (b.type) {
     case "header": return [
       el("div", { className: "grid2" }, entityField("Kalendář jmenin", b, "nameday_calendar", "calendar"), entityField("Státní svátky", b, "holiday_calendar", "calendar")),
       chk("Upozornění z červených kalendářů (dnes/zítra)", b, "alert"),
-      entityField("Počasí (ikona, min/max)", b, "weather", "weather"),
-      el("div", { className: "grid2" }, entityField("Venkovní teplota", b, "temperature", "sensor", "jinak z entity počasí"),
-        entityField("Vlhkost", b, "humidity", "sensor", "jinak z entity počasí"),
-        entityField("Srážky dnes", b, "rain", "sensor"), entityField("Tlak", b, "pressure", "sensor"), entityField("Teplota doma", b, "indoor", "sensor"))];
+      chk("Aktuální počasí vpravo", b, "show_weather"),
+      ...(b.p.show_weather ? weatherFields(b) : [])];
+    case "weather_now": return weatherFields(b);
     case "departures": return [
       entityField("Odjezdová tabule", b, "entity", "sensor", "senzor …_odjezdy z ha-pid-odjezdy"),
       entityField("Výluky", b, "disruptions", "sensor", "při výluce se zobrazí o 1 spoj méně"),
-      el("div", { className: "grid2" }, numField("Počet spojů", b, "count"), numField("Cesta na zastávku", b, "walk_minutes", "min"))];
+      el("div", { className: "grid2" }, numField("Cesta na zastávku", b, "walk_minutes", "min")),
+      el("div", { className: "help", textContent: "Počet spojů se řídí výškou bloku (30 px na spoj)." })];
     case "agenda": return [calRows(b), el("div", { className: "grid2" }, numField("Dní dopředu (vždy)", b, "days"),
       entityField("Státní svátky jako řádek", b, "holiday_calendar", "calendar"))];
     case "forecast": return [el("div", { className: "grid2" }, entityField("Počasí", b, "weather", "weather"), numField("Počet dní", b, "days"))];
@@ -481,7 +506,6 @@ function params(b) {
         el("div", { className: "grid2" },
           textField("Popisek", b, "label", e ? e.name : "název z HA"),
           iconField("Ikona", b.p, "icon", "z HA"),
-          selectField("Velikost", b, "size", Object.fromEntries(Object.entries(SIZES).map(([k, t]) => [k, `${t} (${D.value[k]} px)`]))),
           numField("Desetinná místa", b, "decimals"),
           textField("Červeně pod", b, "red_below", "např. 18"),
           textField("Červeně nad", b, "red_above", "např. 1200"))];
@@ -489,8 +513,7 @@ function params(b) {
     case "text": return [
       areaField("Text (každý řádek zvlášť)", b, "text", "", "Wi-Fi: Hosté / heslo"),
       el("div", { className: "grid2" },
-        selectField("Velikost", b, "size", Object.fromEntries(Object.entries(SIZES).map(([k, t]) => [k, `${t} (řádek ${D.text_line[k]} px)`]))),
-        numField("Počet řádků", b, "lines"),
+        selectField("Velikost písma", b, "size", Object.fromEntries(Object.entries(SIZES).map(([k, t]) => [k, t]))),
         selectField("Zarovnání", b, "align", { left: "vlevo", center: "na střed" }),
         el("div", {}, chk("Tučně", b, "bold"), chk("Červeně", b, "red")))];
     case "template": return [
@@ -498,8 +521,7 @@ function params(b) {
         "Funkce <code>states('sensor.x')</code>, <code>state_attr('sensor.x', 'attr')</code>, <code>is_state('…', 'on')</code>, <code>now</code>; " +
         "filtr <code>|num(1)</code> zformátuje číslo česky (11,6). " +
         "Třídy <code>red</code>, <code>num</code>, <code>cond</code>, <code>ellipsis</code>, ikony <code>&lt;i class=\"mdi mdi-bus\"&gt;</code>. " +
-        "Běží v sandboxu; skripty a síť jsou při vykreslení zakázané. Chyba se ukáže červeně v náhledu." })),
-      numField("Výška", b, "height", "px")];
+        "Běží v sandboxu; skripty a síť jsou při vykreslení zakázané. Chyba se ukáže červeně v náhledu." }))];
   }
   return [];
 }
@@ -508,13 +530,14 @@ function entName(id, strip) { return id ? ((ENT && ENT[id] && ENT[id].name) || i
 function summary(b) {
   const p = b.p;
   switch (b.type) {
-    case "header": return [p.alert && "upozornění", p.weather && "počasí", p.indoor && "teplota doma"].filter(Boolean).join(" · ") || "datum";
-    case "departures": return `${entName(p.entity, / odjezdy$/i)} · ${p.count} spojů`;
+    case "header": return [p.alert && "upozornění", p.show_weather && "počasí"].filter(Boolean).join(" · ") || "datum";
+    case "weather_now": return entName(p.temperature || p.weather);
+    case "departures": return entName(p.entity, / odjezdy$/i);
     case "agenda": return `${p.calendars.length} kalendářů · ${p.days} dní`;
     case "forecast": return `${entName(p.weather)} · ${p.days} dny`;
-    case "value": return `${entName(b.p.entity)} · ${SIZES[b.p.size].toLowerCase()}`;
+    case "value": return entName(b.p.entity);
     case "text": return (b.p.text.split("\n")[0] || "prázdný").slice(0, 40);
-    case "template": return `${b.p.code.length} znaků · ${b.p.height} px`;
+    case "template": return `${b.p.code.length} znaků`;
     case "footer": return Object.entries({ updated: "aktualizace", next: "obnovení", week: "týden", battery: "baterie" }).filter(([k]) => p[k]).map(([, v]) => v).join(", ") || "prázdná";
   }
   return "";
@@ -524,64 +547,80 @@ const invalid = b => !!ENT && (ENT_KEYS.some(k => typeof b.p[k] === "string" && 
                                || (b.p.calendars || []).some(c => !known(c.entity)));
 
 // ───────── Seznam bloků ─────────
+function posFields(b) {
+  const f = (label, key, toUser, fromUser, min, max, step) => {
+    const i = el("input", { type: "number", value: toUser(b[key]), min, max, step });
+    i.onchange = () => {
+      const r = { ...b, [key]: fromUser(+i.value) };
+      if (!fits(r, b)) { toast(inside(r) ? "Tam už je jiný blok." : "Blok by přesáhl displej."); i.value = toUser(b[key]); return; }
+      b[key] = r[key]; commit();
+    };
+    return el("label", { className: "f" }, el("span", { textContent: label }), i);
+  };
+  return el("div", { className: "pos" },
+    f("Sloupec", "x", v => v + 1, v => v - 1, 1, D.cols, 1),
+    f("Šířka (sl.)", "w", v => v, v => v, 1, D.cols, 1),
+    f("Shora (px)", "y", v => v, v => Math.round(v / D.step) * D.step, 0, D.h - D.step, D.step),
+    f("Výška (px)", "h", v => v, v => Math.round(v / D.step) * D.step, D.step, D.h, D.step));
+}
+function lineSeg(b, key, label) {
+  const seg = el("div", { className: "segbtn", role: "group" });
+  seg.setAttribute("aria-label", label);
+  [["none", "žádná"], ["thin", "tenká"], ["thick", "silná"]].forEach(([v, l]) => {
+    const x = el("button", { textContent: l }); x.setAttribute("aria-pressed", b[key] === v); x.onclick = () => { b[key] = v; commit(); }; seg.append(x); });
+  return el("div", { className: "f" }, el("span", { textContent: label }), seg);
+}
 function renderList() {
-  const ul = $("#blocks"), g = geometry(true).out;
+  const ul = $("#blocks");
   ul.replaceChildren();
-  const visIdx = blocks.filter(b => !b.hidden);
-  blocks.forEach((b, i) => {
-    const t = TYPES[b.type], open = openId === b.id, h = blockH(b);
-    const grip = el("button", { className: "grip", title: "Přetáhnout (nebo Alt+↑/↓)" }, icon("drag-vertical"));
-    grip.setAttribute("aria-label", "Přesunout " + name(b.type));
+  const order = [...blocks].sort((a, b) => a.hidden - b.hidden || a.y - b.y || a.x - b.x);
+  for (const b of order) {
+    const t = TYPES[b.type], open = openId === b.id;
     const tog = el("button", { className: "btoggle" },
-      el("b", {}, name(b.type), invalid(b) ? el("span", { className: "badge" }, "⚠ entita") : null, b.hidden ? el("span", { className: "badge muted", textContent: "skrytý" }) : null),
+      el("b", {}, name(b.type), invalid(b) ? el("span", { className: "badge" }, "⚠ entita") : null,
+        clashes(b).length ? el("span", { className: "badge" }, "překryv") : null,
+        b.hidden ? el("span", { className: "badge muted", textContent: "skrytý" }) : null),
       el("small", { textContent: summary(b) }));
     tog.setAttribute("aria-expanded", open);
-    tog.onclick = () => { openId = open ? null : b.id; renderList(); };
-    const hEl = el("span", { className: "bh", textContent: b.hidden ? "—" : !h ? "zbytek" : (h[0] === h[1] ? h[0] : h.join("–")) + " px" });
+    tog.onclick = () => { openId = open ? null : b.id; refresh(true); renderList(); };
+    const hEl = el("span", { className: "bh", textContent: b.hidden ? "—" : `${b.w * D.col_w}×${b.h}` });
     const eye = el("button", { className: "icon-btn", title: b.hidden ? "Zobrazit" : "Skrýt" }, icon(b.hidden ? "eye-off" : "eye"));
     eye.setAttribute("aria-pressed", b.hidden);
-    eye.onclick = () => { b.hidden = !b.hidden; commit(); };
+    eye.onclick = () => toggleHidden(b);
     const li = el("li", { className: "card blk" + (open ? " open" : "") + (b.hidden ? " hidden-blk" : "") },
-      el("div", { className: "bhead" }, grip, el("div", { className: "bicon" }, icon(t.icon)), tog, hEl, eye));
+      el("div", { className: "bhead" }, el("div", { className: "bicon" }, icon(t.icon)), tog, hEl, eye));
     li.dataset.id = b.id;
     li.onmouseenter = () => hl(b.id, true); li.onmouseleave = () => hl(b.id, false);
-    grip.onmousedown = () => li.draggable = true;
-    li.ondragstart = e => { li.classList.add("dragging"); e.dataTransfer.setData("text/plain", b.id); };
-    li.ondragend = () => { li.draggable = false; li.classList.remove("dragging"); document.querySelectorAll(".drop-before").forEach(x => x.classList.remove("drop-before")); };
-    li.ondragover = e => { e.preventDefault(); li.classList.add("drop-before"); };
-    li.ondragleave = () => li.classList.remove("drop-before");
-    li.ondrop = e => { e.preventDefault(); move(e.dataTransfer.getData("text/plain"), i); };
-    li.onkeydown = e => { if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) { e.preventDefault(); move(b.id, i + (e.key === "ArrowUp" ? -1 : 2)); } };
     if (open) {
-      const body = el("div", { className: "bbody" }, ...params(b));
-      if (visIdx[0] !== b) {
-        const seg = el("div", { className: "segbtn", role: "group" });
-        seg.setAttribute("aria-label", "Čára nad blokem");
-        [["none", "žádná"], ["thin", "tenká"], ["thick", "silná"]].forEach(([v, l]) => {
-          const x = el("button", { textContent: l }); x.setAttribute("aria-pressed", b.line === v); x.onclick = () => { b.line = v; commit(); }; seg.append(x); });
-        body.append(el("div", { className: "f" }, el("span", { textContent: "Čára nad blokem" }), seg));
-      }
-      const up = el("button", { className: "icon-btn", title: "Posunout nahoru", disabled: i === 0 }, icon("chevron-up")); up.onclick = () => move(b.id, i - 1);
-      const dn = el("button", { className: "icon-btn", title: "Posunout dolů", disabled: i === blocks.length - 1 }, icon("chevron-down")); dn.onclick = () => move(b.id, i + 2);
-      const del = el("button", { className: "txtbtn danger" }, icon("delete-outline"), "Odebrat blok"); del.onclick = () => remove(b.id);
-      const dup = b.type === "agenda" ? null : el("button", { className: "txtbtn", title: "Vložit kopii pod tento blok" }, icon("content-copy"), "Duplikovat");
+      const body = el("div", { className: "bbody" }, posFields(b),
+        el("div", { className: "lines2" }, lineSeg(b, "line_top", "Čára nahoře"), lineSeg(b, "line_left", "Čára vlevo")),
+        ...params(b));
+      const full = el("button", { className: "txtbtn", title: "Roztáhnout přes celou šířku displeje" }, icon("arrow-expand-horizontal"), "Celá šířka");
+      full.onclick = () => { const r = { ...b, x: 0, w: D.cols }; if (fits(r, b)) { b.x = 0; b.w = D.cols; commit(); } else toast("Vedle je jiný blok – nejdřív ho posuň."); };
+      const del = el("button", { className: "txtbtn danger" }, icon("delete-outline"), "Odebrat"); del.onclick = () => remove(b.id);
+      const dup = b.type === "agenda" ? null : el("button", { className: "txtbtn", title: "Vložit kopii na volné místo" }, icon("content-copy"), "Duplikovat");
       if (dup) dup.onclick = () => {
-        const c = JSON.parse(JSON.stringify(b)); c.id = Math.random().toString(16).slice(2, 10);
-        blocks.splice(i + 1, 0, c); openId = c.id; commit(); toast(`Blok ${name(b.type)} zduplikován`);
+        const spot = findSpot(b.type, b.w, b.h);
+        if (!spot) { toast("Pro kopii není na displeji volné místo."); return; }
+        const c = JSON.parse(JSON.stringify(b)); Object.assign(c, spot, { id: Math.random().toString(16).slice(2, 10) });
+        blocks.push(c); openId = c.id; commit(); toast(`Blok ${name(b.type)} zduplikován`);
       };
-      body.append(el("div", { className: "bfoot" }, up, dn, el("span", { className: "sp" }), dup, del));
+      body.append(el("div", { className: "bfoot" }, full, dup, el("span", { className: "sp" }), del));
       li.append(body);
     }
     ul.append(li);
-  });
+  }
 }
-
-function move(id, to) {
-  const from = blocks.findIndex(b => b.id === id); if (from < 0) return;
-  const [b] = blocks.splice(from, 1); if (to > from) to--; to = Math.max(0, Math.min(blocks.length, to));
-  blocks.splice(to, 0, b); commit();
-  say(`${name(b.type)} přesunuto na pozici ${to + 1} z ${blocks.length}`);
-  requestAnimationFrame(() => document.querySelector(`li[data-id="${id}"] .grip`)?.focus());
+function toggleHidden(b) {
+  if (b.hidden) {
+    b.hidden = false;
+    if (clashes(b).length || !inside(b)) {
+      const spot = findSpot(b.type, b.w, b.h);
+      if (!spot) { b.hidden = true; toast("Pro blok není volné místo – nejdřív uvolni displej."); return; }
+      Object.assign(b, spot);
+    }
+  } else b.hidden = true;
+  commit();
 }
 function remove(id) {
   const i = blocks.findIndex(b => b.id === id), b = blocks[i];
@@ -589,9 +628,20 @@ function remove(id) {
   toast(`Blok ${name(b.type)} odebrán`, () => { blocks.splice(i, 0, b); commit(); });
 }
 function openBlock(id) {
-  openId = id; renderList(); setPane("blocks");
+  openId = id; refresh(true); renderList(); setPane("blocks");
   document.querySelector(`li[data-id="${id}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
+$("#stackBtn").onclick = () => {
+  const vis = shown().sort((a, b) => a.y - b.y || a.x - b.x);
+  let total = vis.reduce((s, b) => s + b.h, 0);
+  const ag = vis.find(b => b.type === "agenda");
+  const before = snap();
+  if (total > D.h && ag) { const cut = Math.min(total - D.h, ag.h - minOf("agenda")[1]); ag.h -= cut; total -= cut; }
+  if (total > D.h) { blocks = JSON.parse(before); toast(`Pod sebe se bloky nevejdou (${total} px z ${D.h}) – některé zmenši nebo skryj.`); return; }
+  let y = 0;
+  for (const b of vis) { b.x = 0; b.w = D.cols; b.y = y; y += b.h; }
+  commit(); toast("Bloky seřazeny pod sebe." + (y < D.h ? ` Dole zbývá ${D.h - y} px.` : ""));
+};
 
 // ───────── Přidat blok ─────────
 function guess(domain, re) {           // předvyplnit, je-li v HA jediná vhodná entita
@@ -603,8 +653,12 @@ function newBlock(type) {
   const p = {};
   for (const [k, d] of Object.entries(SCHEMA.types[type].params)) p[k] = JSON.parse(JSON.stringify(d.default));
   if ("weather" in p) p.weather = guess("weather");
+  const hdr = blocks.find(b => b.type === "header");
+  if (type === "weather_now" && hdr) for (const k of ["weather", "temperature", "humidity", "rain", "pressure", "indoor"]) p[k] = hdr.p[k] || p[k];
+  if (type === "forecast" && hdr && hdr.p.weather) p.weather = hdr.p.weather;
   if (type === "departures") { p.entity = guess("sensor", /_odjezdy$/); p.disruptions = guess("sensor", /_vyluky$/); }
-  return { id: Math.random().toString(16).slice(2, 10), type, line: "thin", hidden: false, p };
+  const [w, h] = SCHEMA.types[type].size;
+  return { id: Math.random().toString(16).slice(2, 10), type, hidden: false, x: 0, y: 0, w, h, line_top: "none", line_left: "none", p };
 }
 function renderMenu() {
   const m = $("#addMenu"); m.replaceChildren();
@@ -614,9 +668,11 @@ function renderMenu() {
     const btn = el("button", { role: "menuitem", disabled: dis }, el("div", { className: "bicon" }, icon(t.icon)),
       el("div", {}, el("b", { textContent: name(k) }), el("small", { textContent: dis ? "Může být jen jednou" : t.desc })));
     btn.onclick = () => {
-      const nb = newBlock(k);
-      const fi = blocks.findIndex(b => b.type === "footer");
-      blocks.splice(fi < 0 ? blocks.length : fi, 0, nb); openId = nb.id; closeMenu(); commit();
+      closeMenu();
+      const nb = newBlock(k), spot = findSpot(k, nb.w, nb.h);
+      if (!spot) { toast(`Pro blok ${name(k)} není volné místo – zmenši, posuň nebo skryj jiný blok.`); return; }
+      Object.assign(nb, spot); blocks.push(nb); openId = nb.id; commit();
+      toast(`${name(k)} vložen na volné místo (${fmtPos(nb)}).`);
       requestAnimationFrame(() => document.querySelector(`li[data-id="${nb.id}"] .bbody input`)?.focus());
     };
     m.append(btn);
@@ -627,7 +683,7 @@ $("#addBtn").onclick = e => { e.stopPropagation(); const m = $("#addMenu"); rend
 document.addEventListener("click", e => { if (!e.target.closest(".add")) closeMenu(); });
 
 // ───────── Náhled: server vykreslí neuložený návrh stejně jako pro desku ─────────
-let timer, ctrl, geo = [], lastUrl = null;
+let timer, ctrl, lastUrl = null;
 function scheduleRender(now) {
   clearTimeout(timer);
   $("#screen").classList.add("busy");
@@ -636,9 +692,9 @@ function scheduleRender(now) {
   timer = setTimeout(draw, now ? 0 : 700);
 }
 async function draw() {
-  if (renderBudget()) {             // nevejde se – server by návrh stejně odmítl
+  if (renderStatus()) {             // překryv – server by návrh stejně odmítl
     $("#screen").classList.remove("busy");
-    $("#pstat").textContent = "Náhled pozastaven – bloky se nevejdou";
+    $("#pstat").textContent = "Náhled pozastaven – bloky se překrývají";
     return;
   }
   ctrl?.abort(); ctrl = new AbortController();
@@ -647,14 +703,12 @@ async function draw() {
     const r = await fetch("layout/preview" + ($("#worst").checked ? "?worst=1" : ""), { method: "POST", headers: { "Content-Type": "application/json" },
                                               body: JSON.stringify(toServer()), signal: ctrl.signal });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "HTTP " + r.status);
-    geo = JSON.parse(r.headers.get("X-Geometry") || "[]");
     const url = URL.createObjectURL(await r.blob());
     $("#pimg").src = url; if (lastUrl) URL.revokeObjectURL(lastUrl); lastUrl = url;
     scr.classList.remove("busy", "failed");
     const dirty = snap() !== saved;
     $("#pstat").textContent = "Vykresleno " + new Date().toLocaleTimeString("cs-CZ") + (dirty ? " · neuložený návrh" : " · uložené rozvržení");
-    $("#pimg").alt = `Náhled displeje, ${geo.length} bloků`;
-    drawBands();
+    $("#pimg").alt = `Náhled displeje, ${shown().length} bloků`;
   } catch (e) {
     if (e.name === "AbortError") return;
     scr.classList.remove("busy"); scr.classList.add("failed");
@@ -662,23 +716,80 @@ async function draw() {
     $("#pstat").textContent = "Chyba – zobrazen poslední úspěšný náhled";
   }
 }
-function drawBands() {
-  const box = $("#bands"); box.replaceChildren();
-  const s = parseFloat(getComputedStyle($("#screen")).getPropertyValue("--s"));
-  for (const g of geo) {
-    const b = blocks.find(x => x.id === g.id); if (!b) continue;
-    const d = el("div", { className: "band", title: "Upravit: " + name(b.type) }, el("span", { textContent: name(b.type) }));
-    d.dataset.id = g.id; d.style.top = g.y * s + "px"; d.style.height = g.h * s + "px";
-    d.onclick = () => openBlock(g.id);
+const scale = () => parseFloat(getComputedStyle($("#screen")).getPropertyValue("--s")) || 1;
+function place(d, r, s) {
+  Object.assign(d.style, { left: r.x * D.col_w * s + "px", top: r.y * s + "px", width: r.w * D.col_w * s + "px", height: r.h * s + "px" });
+}
+function drawBoxes() {
+  const box = $("#boxes"); if (!SCHEMA) return;
+  const s = scale(); box.replaceChildren();
+  for (const f of freeRects()) { const d = el("div", { className: "free" }); place(d, f, s); box.append(d); }
+  for (const b of shown()) {
+    const d = el("div", { className: "gbox" + (b.id === openId ? " sel" : "") + (clashes(b).length ? " bad" : ""),
+                          tabIndex: 0, title: name(b.type) + " – " + fmtPos(b) },
+                 el("span", { className: "glabel", textContent: name(b.type) }));
+    d.setAttribute("role", "button"); d.setAttribute("aria-label", `${name(b.type)}, ${fmtPos(b)}`);
+    for (const k of ["n", "s", "e", "w", "ne", "nw", "se", "sw"]) { const h = el("i", { className: "hd hd-" + k }); h.dataset.h = k; d.append(h); }
+    d.dataset.id = b.id; place(d, b, s);
+    d.onpointerdown = e => startDrag(e, b, d, e.target.dataset.h || "move");
+    d.onkeydown = e => keyMove(e, b);
     box.append(d);
   }
 }
-function hl(id, on) { document.querySelector(`.band[data-id="${id}"]`)?.classList.toggle("hl", on); }
+function hl(id, on) { document.querySelector(`.gbox[data-id="${id}"]`)?.classList.toggle("hl", on); }
+
+// Tažení a změna velikosti: přichytává se ke sloupcům (40 px) a svisle po 4 px
+function startDrag(e, b, d, mode) {
+  if (e.button !== 0) return;
+  e.preventDefault(); e.stopPropagation();
+  d.setPointerCapture(e.pointerId);
+  const s = scale(), sx = e.clientX, sy = e.clientY, o = { x: b.x, y: b.y, w: b.w, h: b.h };
+  const [mw, mh] = [1, D.step];   // tvrdé minimum; doporučené minimum jen varuje
+  let moved = false;
+  if (openId !== b.id) { openId = b.id; renderList(); document.querySelectorAll(".gbox.sel").forEach(x => x.classList.remove("sel")); d.classList.add("sel"); }
+  const coords = $("#coords");
+  d.onpointermove = ev => {
+    const dc = Math.round((ev.clientX - sx) / s / D.col_w), dy = Math.round((ev.clientY - sy) / s / D.step) * D.step;
+    if (!moved && Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) < 4) return;
+    moved = true;
+    const r = { ...o };
+    if (mode === "move") {
+      r.x = Math.max(0, Math.min(D.cols - o.w, o.x + dc)); r.y = Math.max(0, Math.min(D.h - o.h, o.y + dy));
+    } else {
+      if (mode.includes("e")) r.w = Math.max(mw, Math.min(D.cols - o.x, o.w + dc));
+      if (mode.includes("s")) r.h = Math.max(mh, Math.min(D.h - o.y, o.h + dy));
+      if (mode.includes("w")) { const nx = Math.max(0, Math.min(o.x + o.w - mw, o.x + dc)); r.w = o.w + o.x - nx; r.x = nx; }
+      if (mode.includes("n")) { const ny = Math.max(0, Math.min(o.y + o.h - mh, o.y + dy)); r.h = o.h + o.y - ny; r.y = ny; }
+    }
+    Object.assign(b, r); place(d, r, s);
+    d.classList.toggle("bad", clashes(b).length > 0);
+    coords.hidden = false; coords.textContent = fmtPos(b) + (clashes(b).length ? " · překryv!" : "");
+  };
+  d.onpointerup = () => {
+    d.onpointermove = d.onpointerup = null; coords.hidden = true;
+    if (!moved) { openBlock(b.id); drawBoxes(); return; }
+    if (clashes(b).length) {
+      const other = clashes(b).map(x => name(x.type)).join(", ");
+      Object.assign(b, o); drawBoxes(); toast(`Tam už je ${other} – blok vrácen zpět.`); return;
+    }
+    commit(); say(`${name(b.type)}: ${fmtPos(b)}`);
+  };
+}
+function keyMove(e, b) {
+  const k = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+  if (!k) { if (e.key === "Enter") openBlock(b.id); return; }
+  e.preventDefault();
+  const step = e.altKey ? 10 * D.step : D.step, r = { ...b };
+  if (e.shiftKey) { r.w += k[0]; r.h += k[1] * step; } else { r.x += k[0]; r.y += k[1] * step; }
+  if (r.w < 1 || r.h < D.step || !fits(r, b)) return;
+  Object.assign(b, { x: r.x, y: r.y, w: r.w, h: r.h }); commit(); say(`${name(b.type)}: ${fmtPos(b)}`);
+  requestAnimationFrame(() => document.querySelector(`.gbox[data-id="${b.id}"]`)?.focus());
+}
 
 let zoom = "fit";
 function fit() {
   const s = zoom === "1" ? 1 : Math.min(1, (innerHeight - 56 - 150) / 800, (($("#previewCol").clientWidth || innerWidth) - 64) / 480);
-  $("#screen").style.setProperty("--s", Math.max(.35, s).toFixed(3)); drawBands();
+  $("#screen").style.setProperty("--s", Math.max(.35, s).toFixed(3)); drawBoxes();
 }
 document.querySelectorAll("[data-z]").forEach(b => b.onclick = () => {
   zoom = b.dataset.z; document.querySelectorAll("[data-z]").forEach(x => x.setAttribute("aria-pressed", x === b)); fit(); });
@@ -688,8 +799,9 @@ $("#perr").onclick = () => scheduleRender(true);
 
 // ───────── Stav, uložení ─────────
 function refresh(soft) {
-  renderBudget();
+  renderStatus();
   if (!soft) renderList();
+  drawBoxes();
   const dirty = snap() !== saved;
   $("#savebar").classList.toggle("show", dirty);
   $("#tabLayout").classList.toggle("dot", dirty);
@@ -713,7 +825,7 @@ async function doSave(force) {
           : n ? `Uloženo, ${n} ${n > 1 ? "bloky mají" : "blok má"} neplatnou entitu.` : "Uloženo. Displej se změní při příštím probuzení desky.");
   } catch (e) {
     toast("Nelze uložit: " + e.message);
-  } finally { renderBudget(); }
+  } finally { renderStatus(); }
 }
 let conflictLayout = null;
 $("#save").onclick = () => doSave(false);
@@ -739,8 +851,14 @@ $("#importFile").onchange = async e => {
     const unknown = data.blocks.find(b => !SCHEMA.types[b.type]);
     if (unknown) throw new Error("neznámý typ bloku " + unknown.type);
     // doplnit chybějící parametry výchozími hodnotami (starší export)
-    blocks = data.blocks.map(x => { const nb = newBlock(x.type); const { id, type, line, hidden, ...p } = x;
-      return { id: id || nb.id, type, line: line || "none", hidden: !!hidden, p: { ...nb.p, ...p } }; });
+    // chybějící parametry doplnit výchozími; starší export bez polohy srovnat pod sebe
+    let y = 0;
+    blocks = data.blocks.map(x => {
+      const nb = newBlock(x.type), { id, type, hidden, x: gx, y: gy, w, h, line_top, line_left, line, count, lines, height, size, ...p } = x;
+      const g = h ? { x: gx || 0, y: gy || 0, w: w || nb.w, h } : { x: 0, y: (y += nb.h) - nb.h, w: D.cols, h: nb.h };
+      if (size && x.type === "text") p.size = size;
+      return { ...nb, ...g, id: id || nb.id, hidden: !!hidden, line_top: line_top || line || "none", line_left: line_left || "none", p: { ...nb.p, ...p } };
+    });
     openId = null; commit(); toast("Importováno do návrhu – zkontroluj náhled a ulož.");
   } catch (err) { toast("Import selhal: " + err.message); }
 };
@@ -843,11 +961,14 @@ async function loadEntities() {
 (async function init() {
   try {
     const [res] = await Promise.all([fetch("layout.json").then(r => r.json()), loadEntities()]);
-    SCHEMA = res.schema; D = SCHEMA.dims;
+    SCHEMA = res.schema; D = SCHEMA.grid;
     rev = res.layout.rev || 0;
     blocks = fromServer(res.layout); saved = snap(); hist = [saved]; hpos = 0;
     if (res.error) banner("err", "Uložené rozvržení je poškozené (" + res.error + "), načteno výchozí. Starší verze najdeš v historii.");
     if (!res.saved) unsavedBanner = banner("warn", "Rozvržení zatím není uložené – odvozuje se z nastavení add-onu. Po prvním uložení platí jen tento editor.");
+    document.addEventListener("pointerdown", e => {   // klik mimo bloky v náhledu zruší výběr
+      if (e.target.closest("#screen") && !e.target.closest(".gbox") && openId) { openId = null; refresh(true); renderList(); }
+    });
     fit(); refresh(); scheduleRender(true);
   } catch (e) {
     banner("err", "Editor se nepodařilo načíst: " + e.message, () => location.reload());

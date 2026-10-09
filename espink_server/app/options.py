@@ -54,7 +54,7 @@ def sanitize(new: dict, current: dict) -> dict:
             v = int(v)
         elif key == "calendars":
             v = [
-                {k: c[k] for k in ("entity", "label", "red") if c.get(k)}
+                {k: c[k] for k in ("entity", "label", "icon", "red") if c.get(k)}
                 for c in v if isinstance(c, dict) and str(c.get("entity", "")).strip()
             ]
         elif key == "schedule":

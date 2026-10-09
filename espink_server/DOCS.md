@@ -44,7 +44,7 @@ se hned, bez restartu. Stejné volby jsou i na záložce *Konfigurace* add-onu:
 | `departures`, `disruptions` | Senzory integrace [ha-pid-odjezdy](https://github.com/hruskin/ha-pid-odjezdy). Linky a nástupiště filtrujte přímo v integraci. |
 | `departures_count` | Počet zobrazených odjezdů (0 = sekci skrýt). |
 | `walk_minutes` | Nezobrazovat spoje, které už nestihnete. |
-| `calendars` | Seznam kalendářů: `entity`, volitelně `label` (štítek u události) a `red: true` (zvýraznit červeně). |
+| `calendars` | Seznam kalendářů: `entity`, volitelně `label` (štítek u události), `icon` (např. `mdi:soccer`; jinak ikona entity z HA) a `red: true` (zvýraznit červeně). |
 | `nameday_calendar`, `holiday_calendar` | Svátek a státní svátky v hlavičce dne. |
 | `event_days` | Kolik dní dopředu ukazovat události. |
 | `schedule` | Rozvrh probouzení, viz níže. |

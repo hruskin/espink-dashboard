@@ -140,7 +140,7 @@ async def collect(ha: HomeAssistant, opts: dict, now: datetime) -> dict:
         for k in ("meteo_temperature", "meteo_humidity", "meteo_rain_today", "meteo_pressure",
                   "indoor_temperature", "weather", "departures", "disruptions")
         if opts.get(k)
-    ]
+    ] + [c["entity"] for c in opts["calendars"]]  # kvůli atributu icon
     await ha.ping()
     day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     end = day_start + timedelta(days=opts["event_days"] + 1)

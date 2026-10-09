@@ -236,19 +236,30 @@ def _special_days(raw: dict, cal_id: str, tz) -> dict[date, str]:
     return out
 
 
+def calendar_icons(raw: dict, opts: dict) -> dict[str, str]:
+    """Ikona kalendáře: vlastní z nastavení, jinak atribut icon entity v HA („mdi:soccer“ -> „soccer“)."""
+    out = {}
+    for cal in opts["calendars"]:
+        icon = cal.get("icon") or raw["states"].get(cal["entity"], {}).get("attributes", {}).get("icon") or ""
+        if icon.startswith("mdi:"):
+            out[cal["entity"]] = icon[4:]
+    return out
+
+
 def _events(raw: dict, opts: dict, now: datetime, tz, holidays: dict[date, str],
             budget: int = EVENTS_HEIGHT) -> dict:
     EVENTS_HEIGHT = budget  # noqa: N806 – lokální rozpočet
     today = now.date()
     last = today + timedelta(days=opts["event_days"] - 1)
     per_day: dict[date, list] = {}
+    icons = calendar_icons(raw, opts)
     for cal in opts["calendars"]:
         for ev in raw["events"].get(cal["entity"], []):
             n = _normalize_event(ev, tz)
             if not n:
                 continue
             base = {"summary": n["summary"].strip() or "(bez názvu)", "label": cal.get("label") or "",
-                    "red": bool(cal.get("red"))}
+                    "red": bool(cal.get("red")), "icon": icons.get(cal["entity"])}
             if n["all_day"]:
                 d = max(n["start"], today)
                 while d < n["end"] and d <= last:
@@ -295,7 +306,7 @@ def _events(raw: dict, opts: dict, now: datetime, tz, holidays: dict[date, str],
         hidden += 1
         if not days[-1]["rows"]:
             days.pop()
-    return {"days": days, "hidden": hidden, "range": opts["event_days"]}
+    return {"days": days, "hidden": hidden, "range": opts["event_days"], "icons": bool(icons)}
 
 
 def _alert(raw: dict, opts: dict, now: datetime, tz) -> str | None:

@@ -66,6 +66,8 @@
   .ev { display: flex; align-items: baseline; height: 29px; gap: 10px; }
   .ev .t { width: 58px; flex: none; font-size: 18px; font-weight: 700; }
   .ev .s { font-size: 21px; font-weight: 500; flex: 1; min-width: 0; }
+  .ev .ci { width: 24px; flex: none; font-size: 23px; text-align: center; margin: 0 -4px 0 -2px; align-self: center; }
+  .ev .ci::before { line-height: 1; }
   .ev.red .s, .ev.allday .s { font-weight: 700; }
   .tag { font-size: 15px; font-weight: 700; border: 2px solid currentColor; border-radius: 4px; padding: 0 6px;
          line-height: 20px; flex: none; position: relative; top: -2px; }
@@ -149,6 +151,7 @@
   {% for e in day.rows %}
   <div class="ev {{ 'red' if e.red }} {{ 'allday' if e.allday }}">
     <span class="t num">{{ e.time }}</span>
+    {% if v.events.icons %}<i class="ci mdi {{ 'mdi-' ~ e.icon if e.icon }}"></i>{% endif %}
     <span class="s cond ellipsis">{{ e.summary }}</span>
     {% if e.label %}<span class="tag">{{ e.label }}</span>{% endif %}
   </div>

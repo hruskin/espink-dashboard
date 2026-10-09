@@ -35,6 +35,10 @@ def raw(opts: dict, now: datetime) -> dict:
         opts["departures"]: {"state": now.isoformat(), "attributes": {"stop_name": "Křížkový Újezdec", "departures": deps}},
         opts["disruptions"]: {"state": "1", "attributes": {"infotexts": [{"text": "Omezení provozu linky 335"}]}},
     }
+    for cal, icon in [("calendar.rodina", "mdi:home-heart"), ("calendar.skolka", "mdi:school"),
+                      ("calendar.plavani", "mdi:swim"), ("calendar.narozeniny_2", "mdi:cake-variant"),
+                      ("calendar.svoz_popelnice", "mdi:trash-can"), ("calendar.martin_hruska", "mdi:account")]:
+        states[cal] = {"state": "off", "attributes": {"icon": icon}}
     forecast = []
     for i, (cond, hi, lo, pr) in enumerate([("partlycloudy", 14, 4, 0), ("rainy", 12, 6, 4.2),
                                             ("cloudy", 11, 5, 0.3), ("sunny", 16, 3, 0), ("pouring", 9, 6, 12)]):

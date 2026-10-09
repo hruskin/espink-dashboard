@@ -1,5 +1,5 @@
 name: ESPink Server
-version: "0.2.4"
+version: "0.2.5"
 slug: espink_server
 description: Lokální server protokolu Živý obraz – kreslí dashboard z dat Home Assistantu pro e-paper ESPink
 arch:

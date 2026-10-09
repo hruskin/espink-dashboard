@@ -158,7 +158,8 @@
   {% for day in v.events.days %}
   <div class="day {{ 'today' if day.today }} {{ 'red' if day.holiday_day and not day.today }}">
     <span class="label">{{ day.label }}</span><span class="ddate">{{ day.date }}</span>
-    {% if day.holiday %}<span class="hol ellipsis">{{ day.holiday }}</span>{% endif %}
+    {% if day.holiday %}<span class="hol ellipsis">{{ day.holiday }}</span>
+    {% elif day.today and not day.rows %}<span class="hol">nic dalšího</span>{% endif %}
   </div>
   {% for e in day.rows %}
   <div class="ev {{ 'red' if e.red }} {{ 'allday' if e.allday }}">
@@ -168,9 +169,8 @@
     {% if e.label %}<span class="tag">{{ e.label }}</span>{% endif %}
   </div>
   {% endfor %}
-  {% else %}
-  <div class="msg">Žádné události v příštích {{ v.events.range }} dnech</div>
   {% endfor %}
+  {% if v.events.empty %}<div class="msg">Žádné události v příštích {{ v.events.range }} dnech</div>{% endif %}
   {% if v.events.hidden %}<div class="more">+ {{ v.events.hidden }} další{{ 'ch' if v.events.hidden >= 5 }} …</div>{% endif %}
 </section>
 

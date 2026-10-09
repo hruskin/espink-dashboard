@@ -43,6 +43,9 @@ EVENTS_HEIGHT = 800 - HEADER_H - DEPS_H - FORECAST_H - FOOTER_H - EVENTS_PAD  # 
 DAY_HEADER_H = 34
 EVENT_ROW_H = 29
 MORE_ROW_H = 22
+# Události se načítají až tak daleko dopředu; za hranicí event_days se přidávají
+# jen celé dny, které se ještě vejdou (aby sekce nezůstala prázdná)
+LOOKAHEAD_DAYS = 31
 
 
 def battery_percent(volts: float | None) -> int | None:
@@ -250,8 +253,9 @@ def _events(raw: dict, opts: dict, now: datetime, tz, holidays: dict[date, str],
             budget: int = EVENTS_HEIGHT) -> dict:
     EVENTS_HEIGHT = budget  # noqa: N806 – lokální rozpočet
     today = now.date()
-    last = today + timedelta(days=opts["event_days"] - 1)
-    per_day: dict[date, list] = {}
+    guaranteed = today + timedelta(days=opts["event_days"] - 1)
+    last = today + timedelta(days=max(opts["event_days"], LOOKAHEAD_DAYS) - 1)
+    per_day: dict[date, list] = {today: []}  # „Dnes“ vždy jako kotva přehledu
     icons = calendar_icons(raw, opts)
     for cal in opts["calendars"]:
         for ev in raw["events"].get(cal["entity"], []):
@@ -284,7 +288,11 @@ def _events(raw: dict, opts: dict, now: datetime, tz, holidays: dict[date, str],
             if key not in seen:
                 seen.add(key)
                 uniq.append({k: v for k, v in it.items() if k != "sort"})
-        if used + DAY_HEADER_H + EVENT_ROW_H > EVENTS_HEIGHT:
+        if d > guaranteed:
+            # navíc jen celé dny, které se vejdou (i s případným „+N dalších“)
+            if used + DAY_HEADER_H + len(uniq) * EVENT_ROW_H + (MORE_ROW_H if hidden else 0) > EVENTS_HEIGHT:
+                break
+        elif d != today and used + DAY_HEADER_H + EVENT_ROW_H > EVENTS_HEIGHT:
             hidden += len(uniq)
             continue
         used += DAY_HEADER_H
@@ -304,9 +312,10 @@ def _events(raw: dict, opts: dict, now: datetime, tz, holidays: dict[date, str],
     if hidden and used + MORE_ROW_H > EVENTS_HEIGHT and days and days[-1]["rows"]:
         days[-1]["rows"].pop()
         hidden += 1
-        if not days[-1]["rows"]:
+        if not days[-1]["rows"] and not days[-1]["today"]:
             days.pop()
-    return {"days": days, "hidden": hidden, "range": opts["event_days"], "icons": bool(icons)}
+    empty = len(days) == 1 and not days[0]["rows"]
+    return {"days": days, "hidden": hidden, "range": opts["event_days"], "icons": bool(icons), "empty": empty}
 
 
 def _alert(raw: dict, opts: dict, now: datetime, tz) -> str | None:

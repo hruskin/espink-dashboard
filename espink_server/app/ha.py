@@ -143,7 +143,7 @@ async def collect(ha: HomeAssistant, opts: dict, now: datetime) -> dict:
     ] + [c["entity"] for c in opts["calendars"]]  # kvůli atributu icon
     await ha.ping()
     day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    end = day_start + timedelta(days=opts["event_days"] + 1)
+    end = day_start + timedelta(days=max(opts["event_days"], 31) + 1)  # viz model.LOOKAHEAD_DAYS
     cal_ids = [c["entity"] for c in opts["calendars"]]
     for k in ("nameday_calendar", "holiday_calendar"):
         if opts.get(k):

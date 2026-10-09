@@ -46,7 +46,7 @@ se hned, bez restartu. Stejné volby jsou i na záložce *Konfigurace* add-onu:
 | `walk_minutes` | Nezobrazovat spoje, které už nestihnete. |
 | `calendars` | Seznam kalendářů: `entity`, volitelně `label` (štítek u události), `icon` (např. `mdi:soccer`; jinak ikona entity z HA) a `red: true` (zvýraznit červeně). |
 | `nameday_calendar`, `holiday_calendar` | Svátek a státní svátky v hlavičce dne. |
-| `event_days` | Kolik dní dopředu ukazovat události. |
+| `event_days` | Kolik dní dopředu ukazovat události vždy; pokud zbývá místo, přidají se další dny (až 31). |
 | `schedule` | Rozvrh probouzení, viz níže. |
 
 ### Rozvrh probouzení

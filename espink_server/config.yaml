@@ -19,8 +19,8 @@ options:
   rotate: 90
   image_format: z2
   render_interval: 60
-  meteo_temperature: sensor.zahrada_meteo_meteo_teplota
-  meteo_humidity: sensor.zahrada_meteo_meteo_vlhkost
+  meteo_temperature: sensor.temperature_10
+  meteo_humidity: sensor.humidity_11
   meteo_rain_today: sensor.zahrada_meteo_denni_uhrn_srazek
   weather: weather.chmu_home_predpoved
   departures: sensor.odjezdova_tabule_krizkovy_ujezdec_odjezdy

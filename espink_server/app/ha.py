@@ -11,9 +11,12 @@ TIMEOUT = aiohttp.ClientTimeout(total=15)
 class HomeAssistant:
     def __init__(self, session: aiohttp.ClientSession):
         self.session = session
-        if os.environ.get("SUPERVISOR_TOKEN"):
+        if os.environ.get("SUPERVISOR_TOKEN") or os.path.exists("/data/options.json"):
+            # V add-onu vždy přes Supervisor; chybějící token je chyba, ne důvod jít jinudy
             self.base = "http://supervisor/core/api"
-            token = os.environ["SUPERVISOR_TOKEN"]
+            token = os.environ.get("SUPERVISOR_TOKEN", "")
+            if not token:
+                print("[ha] VAROVÁNÍ: chybí SUPERVISOR_TOKEN")
         else:
             self.base = os.environ.get("HA_URL", "http://homeassistant.local:8123").rstrip("/") + "/api"
             token = os.environ.get("HA_TOKEN", "")

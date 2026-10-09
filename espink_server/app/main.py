@@ -12,6 +12,7 @@ import json
 import os
 import time
 from datetime import datetime
+from pathlib import Path
 
 import aiohttp
 from aiohttp import web
@@ -21,6 +22,18 @@ import mock
 import model
 import options
 import render
+
+def load_container_env() -> None:
+    """s6-overlay nepředá CMD proměnné kontejneru (SUPERVISOR_TOKEN, TZ) – načíst je ručně."""
+    env_dir = Path("/run/s6/container_environment")
+    if env_dir.is_dir():
+        for f in env_dir.iterdir():
+            if f.is_file():
+                os.environ.setdefault(f.name, f.read_text())
+    time.tzset()
+
+
+load_container_env()
 
 INGRESS_IP = "172.30.32.2"
 DEV = os.environ.get("DEV") == "1"
@@ -210,7 +223,8 @@ async def main() -> None:
         runner = web.AppRunner(app, access_log=None)
         await runner.setup()
         await web.TCPSite(runner, "0.0.0.0", args.port).start()
-        print(f"[server] naslouchám na :{args.port} (DEV={DEV}, MOCK={MOCK})")
+        print(f"[server] naslouchám na :{args.port} (DEV={DEV}, MOCK={MOCK}), HA API: {srv.ha.base},"
+              f" časové pásmo: {now_local().tzname()}")
         await srv.loop()
 
 

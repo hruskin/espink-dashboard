@@ -20,7 +20,7 @@
   .mdi::before { line-height: 1; }
 
   /* ── Hlavička ───────────────────────────── */
-  header { height: 138px; padding: 10px 16px 0; display: flex; border-bottom: 3px solid var(--ink); }
+  header { height: 138px; padding: 8px 16px 0; display: flex; border-bottom: 3px solid var(--ink); }
   .date { display: flex; align-items: flex-start; flex: 1; min-width: 0; }
   .daynum { font-size: 96px; font-weight: 800; line-height: 0.95; letter-spacing: -4px; margin-right: 12px; }
   .datetext { padding-top: 6px; min-width: 0; }
@@ -28,11 +28,11 @@
   .month { font-size: 18px; font-weight: 600; margin-top: 3px; }
   .nameday { font-size: 18px; font-weight: 600; margin-top: 8px; }
   .holiday, .alert { font-size: 19px; font-weight: 800; margin-top: 2px; }
-  .now { width: 158px; text-align: right; }
-  .now-top { display: flex; justify-content: flex-end; align-items: center; gap: 2px; }
-  .now-top .mdi { font-size: 56px; }
+  .now { width: 196px; text-align: right; overflow: hidden; }
+  .now-top { display: flex; justify-content: flex-end; align-items: center; gap: 2px; height: 46px; }
+  .now-top .mdi { font-size: 46px; line-height: 1; }
   .temp { font-size: 46px; font-weight: 800; letter-spacing: -1.5px; line-height: 1; }
-  .now-sub { font-size: 18px; font-weight: 600; margin-top: 6px; display: flex; justify-content: flex-end; gap: 10px; }
+  .now-sub { font-size: 18px; font-weight: 600; height: 25px; margin-top: 1px; display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
   .now-sub.mm { font-weight: 800; }
   .now-sub span { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; flex: none; }
   .now-sub .mdi { font-size: 26px; line-height: 1; margin: -3px 0; }
@@ -115,7 +115,7 @@
     </div>
     {% if w.indoor or w.pressure %}<div class="now-sub num">
       {% if w.indoor %}<span><i class="mdi mdi-home-thermometer-outline"></i>{{ w.indoor }}°</span>{% endif %}
-      {% if w.pressure %}<span>{{ w.pressure }} hPa</span>{% endif %}
+      {% if w.pressure %}<span><i class="mdi mdi-gauge"></i>{{ w.pressure }} hPa</span>{% endif %}
     </div>{% endif %}
   </div>
 </header>

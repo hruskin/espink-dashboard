@@ -100,6 +100,24 @@
   .fday .ft .lo { font-weight: 600; }
   .fday .fp { font-size: 15px; font-weight: 700; }
 
+  /* ── Hodnota entity (velikosti s/m/l = VALUE_H v layout.py) ── */
+  .blk.value { display: flex; align-items: center; gap: 8px; padding: 0 16px; }
+  .value .vl { flex: 1; min-width: 0; font-weight: 600; }
+  .value .vv { font-weight: 800; white-space: nowrap; letter-spacing: -0.5px; }
+  .value .vv small { font-size: 0.6em; font-weight: 700; letter-spacing: 0; }
+  .value.sz-s .mdi { font-size: 24px; } .value.sz-s .vl { font-size: 19px; } .value.sz-s .vv { font-size: 24px; }
+  .value.sz-m .mdi { font-size: 34px; } .value.sz-m .vl { font-size: 23px; } .value.sz-m .vv { font-size: 36px; }
+  .value.sz-l .mdi { font-size: 56px; } .value.sz-l .vl { font-size: 28px; } .value.sz-l .vv { font-size: 64px; letter-spacing: -2px; }
+
+  /* ── Text (výška řádku = TEXT_LINE_H v layout.py) ── */
+  .blk.text { padding: 4px 16px; }
+  .text.sz-s .txt div { font-size: 19px; line-height: 24px; height: 24px; }
+  .text.sz-m .txt div { font-size: 26px; line-height: 32px; height: 32px; }
+  .text.sz-l .txt div { font-size: 44px; line-height: 52px; height: 52px; }
+  /* ── Šablona: vlastní HTML, k dispozici třídy red/num/cond/ellipsis a ikony mdi ── */
+  .blk.template { padding: 4px 16px; font-size: 20px; }
+  .tplerr { font-size: 15px; font-weight: 700; }
+
   /* ── Patička ────────────────────────────── */
   .blk.footer { display: flex; align-items: center; padding: 0 16px; font-size: 14px; font-weight: 600; gap: 4px; }
   .footer .mdi { font-size: 20px; }
@@ -111,7 +129,7 @@
 </head>
 <body>
 {% for b in v.blocks %}
-<section class="blk {{ b.type }}" style="{% if b.height is not none %}height: {{ b.height + b.line }}px; {% endif %}border-top-width: {{ b.line }}px">
+<section class="blk {{ b.type }} {{ 'sz-' ~ b.size if b.size }}" style="{% if b.height is not none %}height: {{ b.height + b.line }}px; {% endif %}border-top-width: {{ b.line }}px">
 {% include "blocks/" ~ b.type ~ ".html.j2" %}
 </section>
 {% endfor %}

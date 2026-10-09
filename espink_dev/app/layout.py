@@ -7,11 +7,15 @@ model podle toho spočítá, kolik událostí se vejde.
 import copy
 import json
 import os
+import re
+import time
 import uuid
 
 from options import ENTITY_RE
 
 SCREEN_H = 800
+# entity zmíněné v šabloně v uvozovkách: states('sensor.x')
+TEMPLATE_ENTITY_RE = re.compile(r"""['"]([a-z_]+\.[a-z0-9_]+)['"]""")
 LINES = {"none": 0, "thin": 1, "thick": 2}
 
 # Parametry: typ -> (výchozí hodnota, validátor)
@@ -64,12 +68,45 @@ BLOCK_TYPES: dict[str, dict] = {
             "battery": (True, "bool"),
         },
     },
+    "value": {
+        "title": "Hodnota entity",
+        "params": {
+            "entity": ("", "entity"),
+            "label": ("", "text"),          # prázdné = název entity v HA
+            "icon": ("", "text"),           # mdi:… ; prázdné = ikona entity v HA
+            "size": ("m", ("enum", "s", "m", "l")),
+            "decimals": (1, ("int", 0, 3)),
+            "red_below": ("", "number"),    # červeně, když je hodnota pod/nad mezí
+            "red_above": ("", "number"),
+        },
+    },
+    "text": {
+        "title": "Text",
+        "params": {
+            "text": ("", "longtext"),       # řádky oddělené Enterem
+            "size": ("m", ("enum", "s", "m", "l")),
+            "lines": (1, ("int", 1, 6)),
+            "align": ("left", ("enum", "left", "center")),
+            "bold": (False, "bool"),
+            "red": (False, "bool"),
+        },
+    },
+    "template": {
+        "title": "Šablona",
+        "params": {
+            "code": ("", "longtext"),       # Jinja (sandbox) + HTML; states(), state_attr(), is_state()
+            "height": (48, ("int", 16, 400)),
+        },
+    },
 }
 
 # Výšky obsahu bloků v px (bez čáry) – musí sedět s CSS v šabloně
 HEADER_H, HEADER_COMPACT_H = 136, 114
 FORECAST_H, FOOTER_H = 104, 23
 DEPS_BASE_H, DEP_ROW_H = 36, 30
+VALUE_H = {"s": 40, "m": 56, "l": 88}
+TEXT_LINE_H = {"s": 24, "m": 32, "l": 52}
+TEXT_PAD = 8
 # nejmenší smysluplná agenda: odsazení + pruh „Dnes“ + jedna událost
 AGENDA_MIN_H = 6 + 34 + 29
 
@@ -85,6 +122,12 @@ def fixed_height(block: dict) -> int | None:
         return FORECAST_H
     if t == "footer":
         return FOOTER_H
+    if t == "value":
+        return VALUE_H[block["size"]]
+    if t == "text":
+        return TEXT_PAD + block["lines"] * TEXT_LINE_H[block["size"]]
+    if t == "template":
+        return block["height"]
     return None
 
 
@@ -105,6 +148,22 @@ def _check(value, kind, default):
         return v
     if kind == "bool":
         return bool(value)
+    if kind == "text":
+        return str(value or "").strip()[:60]
+    if kind == "longtext":
+        v = str(value or "")
+        if len(v) > 4000:
+            raise ValueError("text je delší než 4000 znaků")
+        return v.replace("\r\n", "\n")
+    if kind == "number":
+        v = str(value if value is not None else "").strip().replace(",", ".")
+        if v:
+            float(v)  # ValueError = neplatné číslo
+        return v
+    if isinstance(kind, tuple) and kind[0] == "enum":
+        if value not in kind[1:]:
+            raise ValueError(f"neplatná volba: {value}")
+        return value
     if kind == "calendars":
         out = []
         for c in value or []:
@@ -148,7 +207,7 @@ def sanitize(layout: dict) -> dict:
     used = sum((fixed_height(b) or AGENDA_MIN_H) + line_px(b, i) for i, b in enumerate(shown))
     if used > SCREEN_H:
         raise ValueError(f"bloky se nevejdou na displej ({used} px z {SCREEN_H} px)")
-    return {"version": 1, "blocks": blocks}
+    return {"version": 1, "rev": int(layout.get("rev") or 0), "blocks": blocks}
 
 
 def from_options(opts: dict) -> dict:
@@ -178,23 +237,50 @@ def path() -> str:
     return os.environ.get("LAYOUT_PATH", "/data/layout.json")
 
 
-def load(opts: dict) -> tuple[dict, bool]:
-    """Vrátí (rozvržení, uložené?). Bez layout.json se odvodí z konfigurace."""
+def load(opts: dict) -> tuple[dict, bool, str]:
+    """Vrátí (rozvržení, uložené?, chyba). Bez layout.json se odvodí z konfigurace."""
     try:
         with open(path(), encoding="utf-8") as f:
-            return sanitize(json.load(f)), True
+            return sanitize(json.load(f)), True, ""
     except FileNotFoundError:
         pass
-    except (ValueError, json.JSONDecodeError) as e:
+    except (ValueError, TypeError, json.JSONDecodeError) as e:
         print(f"[layout] {path()} je neplatný ({e}); použito výchozí rozvržení")
-    return from_options(opts), False
+        return from_options(opts), False, str(e)
+    return from_options(opts), False, ""
 
 
-def save(layout: dict) -> None:
-    tmp = path() + ".tmp"
+HISTORY_MAX = 15
+
+
+def history_path() -> str:
+    return os.path.join(os.path.dirname(path()) or ".", "layout-history.json")
+
+
+def history() -> list[dict]:
+    try:
+        with open(history_path(), encoding="utf-8") as f:
+            items = json.load(f)
+        return items if isinstance(items, list) else []
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def _write(file: str, data) -> None:
+    tmp = file + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(layout, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, path())
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, file)
+
+
+def save(layout: dict, previous: dict | None) -> dict:
+    """Uloží rozvržení s novou revizí; předchozí uloženou verzi přidá do historie."""
+    new = dict(layout, rev=int(time.time() * 1000))
+    if previous:
+        items = [{"rev": previous.get("rev", 0), "layout": previous}] + history()
+        _write(history_path(), items[:HISTORY_MAX])
+    _write(path(), new)
+    return new
 
 
 def needs(layout: dict) -> dict:
@@ -223,6 +309,11 @@ def needs(layout: dict) -> dict:
             add(cals, b["holiday_calendar"])
         elif t == "forecast":
             add(forecasts, b["weather"])
+        elif t == "value":
+            add(states, b["entity"])
+        elif t == "template":
+            for e in TEMPLATE_ENTITY_RE.findall(b["code"]):
+                add(states, e)
     if any(b["type"] == "header" and b["alert"] for b in visible(layout)):
         for b in visible(layout):
             if b["type"] == "agenda":
@@ -240,6 +331,7 @@ def schema() -> dict:
                                  for k, (d, kind) in s["params"].items()}}
                   for t, s in BLOCK_TYPES.items()},
         "dims": {"screen": SCREEN_H, "lines": LINES, "header": [HEADER_COMPACT_H, HEADER_H],
-                 "departures": [DEPS_BASE_H, DEP_ROW_H], "forecast": FORECAST_H, "footer": FOOTER_H,
+                 "departures": [DEPS_BASE_H, DEP_ROW_H], "forecast": FORECAST_H, "footer": FOOTER_H, "value": VALUE_H,
+                 "text_line": TEXT_LINE_H, "text_pad": TEXT_PAD,
                  "agenda_min": AGENDA_MIN_H, "agenda_pad": 6, "day_header": 34, "event_row": 29},
     }

@@ -61,7 +61,7 @@ def now_local() -> datetime:
 class Server:
     def __init__(self, opts: dict):
         self.opts = opts
-        self.layout, self.layout_saved = layout_mod.load(opts)
+        self.layout, self.layout_saved, self.layout_error = layout_mod.load(opts)
         self.draft_lock = asyncio.Lock()
         self.schedule = options.Schedule.parse(opts["schedule"])
         self.lock = asyncio.Lock()
@@ -105,10 +105,10 @@ class Server:
                 self.last_error = f"{now:%H:%M:%S} {type(e).__name__}: {e}"
                 print(f"[render] chyba: {self.last_error}")
 
-    async def build_view(self, layout: dict, now: datetime) -> dict:
+    async def build_view(self, layout: dict, now: datetime, worst: bool = False) -> dict:
         needs = layout_mod.needs(layout)
         raw = mock.raw(needs, now) if MOCK else await ha_mod.collect(self.ha, needs, now)
-        return model.build(raw, layout, self.device or await self.device_from_sensor(), now)
+        return model.build(raw, layout, self.device or await self.device_from_sensor(), now, worst)
 
     async def device_from_sensor(self) -> dict:
         """Deska se k tomuto serveru zatím nehlásila (DEV vedle stabilního add-onu) –
@@ -341,7 +341,7 @@ class Server:
     # ── rozvržení (editor) ───────────────────────────────────────────────
     async def handle_layout(self, request: web.Request) -> web.Response:
         return web.json_response({"layout": self.layout, "saved": self.layout_saved,
-                                  "schema": layout_mod.schema(), "device": self.device},
+                                  "error": self.layout_error, "schema": layout_mod.schema()},
                                  headers={"Cache-Control": "no-store"})
 
     async def read_layout(self, request: web.Request) -> dict:
@@ -355,11 +355,15 @@ class Server:
 
     async def handle_layout_save(self, request: web.Request) -> web.Response:
         new = await self.read_layout(request)
+        # Ochrana proti přepsání změn z jiné karty: návrh musí vycházet z aktuální revize
+        if new["rev"] != self.layout.get("rev", 0) and request.query.get("force") != "1":
+            return web.json_response({"error": "Rozvržení bylo mezitím uloženo jinde.", "conflict": True,
+                                      "layout": self.layout}, status=409)
         try:
-            layout_mod.save(new)
+            new = layout_mod.save(new, self.layout if self.layout_saved else None)
         except OSError as e:
             return web.json_response({"error": f"nelze uložit: {e}"}, status=500)
-        self.layout, self.layout_saved = new, True
+        self.layout, self.layout_saved, self.layout_error = new, True, ""
         await self.rebuild(force=True)
         print("[layout] rozvržení uloženo")
         return web.json_response({"layout": new, "error": self.last_error or None})
@@ -370,7 +374,7 @@ class Server:
         async with self.draft_lock:  # Chromium je drahý – náhledy jeden po druhém
             now = now_local()
             try:
-                view = await self.build_view(draft, now)
+                view = await self.build_view(draft, now, worst=request.query.get("worst") == "1")
                 png, _ = await render.render(view, f"{now.day}. {now.month}. {now:%H:%M}",
                                              self.opts["rotate"], "png",
                                              after(now, self.schedule.sleep_seconds(now)))
@@ -378,6 +382,9 @@ class Server:
                 return web.json_response({"error": f"{type(e).__name__}: {e}"}, status=502)
         return web.Response(body=png, content_type="image/png", headers={
             "Cache-Control": "no-store", "X-Geometry": json.dumps(model.geometry(view))})
+
+    async def handle_history(self, request: web.Request) -> web.Response:
+        return web.json_response(layout_mod.history(), headers={"Cache-Control": "no-store"})
 
     async def handle_refresh(self, request: web.Request) -> web.Response:
         if request.content_type != "application/json":  # ochrana proti CSRF
@@ -422,6 +429,7 @@ async def main() -> None:
             web.static("/static", render.STATIC_DIR),
             web.post("/layout", srv.handle_layout_save),
             web.post("/layout/preview", srv.handle_layout_preview),
+            web.get("/layout/history.json", srv.handle_history),
         ])
         runner = web.AppRunner(app, access_log=None)
         await runner.setup()

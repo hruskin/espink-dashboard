@@ -99,7 +99,7 @@
   .segbtn button { border: 0; background: none; padding: 6px 12px; border-right: 1px solid var(--line); }
   .segbtn button:last-child { border-right: 0; }
   .segbtn button[aria-pressed=true] { background: var(--primary); color: var(--on-primary); }
-  .calrow { display: grid; grid-template-columns: 1fr 70px 90px auto 32px; gap: 6px; align-items: start; margin-bottom: 6px; }
+  .calrow { display: grid; grid-template-columns: 1fr 70px 48px auto 32px; gap: 6px; align-items: start; margin-bottom: 6px; }
   .calrow input { padding: 7px 8px !important; }
   .bfoot { display: flex; gap: 4px; align-items: center; border-top: 1px dashed var(--line); padding-top: 10px; margin-top: 4px; }
   .bfoot .sp { flex: 1; }
@@ -158,12 +158,45 @@
   .screen.busy img { opacity: .6; }
   .tabs a.dot::after { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--primary); margin-left: 6px; }
   .seg button.dot::after { content: " •"; }
+  .appbar .actions { margin-left: auto; display: flex; gap: 2px; }
+  textarea.code { width: 100%; min-height: 120px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg);
+                  color: var(--ink); font: 13px/1.45 ui-monospace, "JetBrains Mono", monospace; resize: vertical; }
+  .f textarea:focus { outline: 2px solid var(--primary); border-color: transparent; }
+  .help { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .help code { background: var(--hover); padding: 0 3px; border-radius: 3px; }
+  .withbtn { display: flex; gap: 4px; align-items: center; }
+  .withbtn input { flex: 1; min-width: 0; }
+  .grid-on .screen::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+    background-image: linear-gradient(rgba(3,169,244,.35) 1px, transparent 1px), linear-gradient(90deg, rgba(3,169,244,.35) 1px, transparent 1px),
+                      linear-gradient(rgba(3,169,244,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(3,169,244,.12) 1px, transparent 1px);
+    background-size: calc(50px * var(--s)) calc(50px * var(--s)), calc(50px * var(--s)) calc(50px * var(--s)),
+                     calc(10px * var(--s)) calc(10px * var(--s)), calc(10px * var(--s)) calc(10px * var(--s)); }
+  .worst { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .worst input { accent-color: var(--primary); }
+  .icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 4px; max-height: 50vh; overflow: auto; margin-top: 10px; }
+  .icons button { border: 1px solid var(--line); background: var(--bg); border-radius: 6px; padding: 6px 2px; display: flex; flex-direction: column;
+                  align-items: center; gap: 2px; font-size: 9px; color: var(--muted); overflow: hidden; }
+  .icons button .mdi { font-size: 26px; color: var(--ink); }
+  .icons button:hover { border-color: var(--primary); }
+  dialog { width: min(560px, calc(100vw - 32px)); max-width: none; }
+  dialog input[type=search] { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font: inherit; }
+  .hist { list-style: none; padding: 0; margin: 10px 0 0; max-height: 50vh; overflow: auto; }
+  .hist li { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .hist li span { flex: 1; }
+  .hist small { color: var(--muted); display: block; }
+  .dlg-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 </style>
 </head>
 <body data-pane="blocks">
 <header class="appbar">
   <h1>ESPink</h1>
   <nav class="tabs"><a href="./" aria-current="page" id="tabLayout">Rozvržení</a><a href="status">Stav</a><a href="settings">Systém</a></nav>
+  <div class="actions">
+    <button class="icon-btn" id="histBtn" title="Historie uložených verzí"><i class="mdi mdi-history"></i></button>
+    <button class="icon-btn" id="exportBtn" title="Exportovat rozvržení (JSON)"><i class="mdi mdi-download"></i></button>
+    <button class="icon-btn" id="importBtn" title="Importovat rozvržení ze souboru"><i class="mdi mdi-upload"></i></button>
+    <input type="file" id="importFile" accept=".json,application/json" hidden>
+  </div>
 </header>
 <div id="banners"></div>
 <div class="seg" role="group" aria-label="Zobrazení">
@@ -188,6 +221,8 @@
     <div class="card">
       <div class="ptool">
         <span class="st" id="pstat" aria-live="polite">Načítám…</span>
+        <label class="worst" title="Vynutí upozornění v záhlaví a výluku v odjezdech – nejméně místa pro události"><input type="checkbox" id="worst">Nejhorší případ</label>
+        <button class="icon-btn" id="gridBtn" title="Mřížka 10/50 px" aria-pressed="false"><i class="mdi mdi-grid"></i></button>
         <div class="segbtn" role="group" aria-label="Měřítko">
           <button aria-pressed="true" data-z="fit" title="Přizpůsobit oknu"><i class="mdi mdi-fit-to-screen-outline"></i></button>
           <button aria-pressed="false" data-z="1" title="Skutečná velikost 1:1">1:1</button>
@@ -214,6 +249,16 @@
 </div>
 <div class="toast" id="toast" role="status"><span id="toastText"></span><button id="toastAct" hidden>Vrátit</button></div>
 <div class="sr" aria-live="polite" id="live"></div>
+<dialog id="conflict"><h3 style="margin-top:0">Rozvržení bylo mezitím uloženo jinde</h3>
+  <p>V jiné kartě (nebo jiným uživatelem) byla uložena novější verze. Co s tím?</p>
+  <div class="dlg-foot"><button class="txtbtn" id="cfTheirs">Načíst uložené</button><button class="primary" id="cfMine">Přepsat mými</button></div></dialog>
+<dialog id="iconDlg"><h3 style="margin:0 0 10px">Vybrat ikonu</h3>
+  <input type="search" id="iconSearch" placeholder="Hledat anglicky: thermometer, bus, trash…" autocomplete="off">
+  <div class="icons" id="iconGrid"></div>
+  <div class="dlg-foot"><button class="txtbtn" id="iconNone">Bez vlastní ikony</button><button class="txtbtn" onclick="iconDlg.close()">Zavřít</button></div></dialog>
+<dialog id="histDlg"><h3 style="margin:0">Uložené verze</h3>
+  <ul class="hist" id="histList"></ul>
+  <div class="dlg-foot"><button class="txtbtn" onclick="histDlg.close()">Zavřít</button></div></dialog>
 
 <script>
 "use strict";
@@ -224,10 +269,14 @@ const TYPES = {
   agenda:     { icon: "calendar-text", desc: "Kalendáře – vyplní zbývající místo" },
   forecast:   { icon: "weather-partly-cloudy", desc: "Předpověď na několik dní" },
   footer:     { icon: "page-layout-footer", desc: "Čas aktualizace, další obnovení, týden, baterie" },
+  value:      { icon: "numeric", desc: "Jedna hodnota s ikonou a popiskem (lze přidat víckrát)" },
+  text:       { icon: "format-text", desc: "Pevný text, např. vzkaz nebo heslo k Wi-Fi" },
+  template:   { icon: "code-braces", desc: "Vlastní Jinja/HTML – pro pokročilé" },
 };
+const SIZES = { s: "Malá", m: "Střední", l: "Velká" };
 let SCHEMA = null, D = null;          // popis bloků a rozměry ze serveru
 let ENT = null;                       // id → {name, state, unit}; null = HA nedostupné
-let unsavedBanner = null;
+let unsavedBanner = null, rev = 0;
 let blocks = [], saved = "[]", hist = [], hpos = 0, openId = null;
 
 const $ = s => document.querySelector(s);
@@ -239,7 +288,7 @@ const snap = () => JSON.stringify(blocks);
 
 // layout.json (ploché bloky) ↔ editor ({id, type, line, hidden, p})
 const fromServer = l => l.blocks.map(({ id, type, line, hidden, ...p }) => ({ id, type, line, hidden: !!hidden, p }));
-const toServer = () => ({ blocks: blocks.map(b => ({ id: b.id, type: b.type, line: b.line, hidden: b.hidden, ...b.p })) });
+const toServer = () => ({ rev, blocks: blocks.map(b => ({ id: b.id, type: b.type, line: b.line, hidden: b.hidden, ...b.p })) });
 
 // ───────── Historie (undo/redo) ─────────
 function commit() {
@@ -257,6 +306,9 @@ function blockH(b) {               // [nejmenší, největší] výška obsahu; 
     case "departures": { const h = D.departures[0] + b.p.count * D.departures[1]; return [h, h]; }
     case "forecast": return [D.forecast, D.forecast];
     case "footer": return [D.footer, D.footer];
+    case "value": return [D.value[b.p.size], D.value[b.p.size]];
+    case "text": { const h = D.text_pad + b.p.lines * D.text_line[b.p.size]; return [h, h]; }
+    case "template": return [b.p.height, b.p.height];
     default: return null;
   }
 }
@@ -322,7 +374,7 @@ function fmtState(e) {               // „11.5735855102539“ → „11,6 °C�
 }
 function entityField(label, b, key, domain, hint) {
   const id = `f${b.id}-${key}`;
-  const inp = el("input", { type: "text", value: b.p[key] || "", placeholder: domain + ".…", spellcheck: false, id });
+  const inp = el("input", { type: "text", value: b.p[key] || "", placeholder: domain === "all" ? "sensor.…, binary_sensor.…" : domain + ".…", spellcheck: false, id });
   inp.setAttribute("list", "dl-" + domain);
   const info = el("div", { className: "ent", id: id + "i" });
   inp.setAttribute("aria-describedby", id + "i");
@@ -338,6 +390,41 @@ const numField = (label, b, key, hint) => {
   i.oninput = () => { const v = Math.max(min, Math.min(max, parseInt(i.value, 10) || min)); b.p[key] = v; refresh(true); };
   i.onchange = () => { i.value = b.p[key]; hist[hpos] === snap() ? refresh() : commit(); };
   return el("label", { className: "f" }, el("span", { textContent: label + (hint ? " – " + hint : "") }), i);
+};
+const textField = (label, b, key, ph) => {
+  const i = el("input", { type: "text", value: b.p[key] || "", placeholder: ph || "" });
+  i.onchange = () => { b.p[key] = i.value.trim(); commit(); };
+  return el("label", { className: "f" }, el("span", { textContent: label }), i);
+};
+function iconField(label, obj, key, ph, dropEmpty) {   // obj = b.p nebo položka kalendáře
+  const set = v => { obj[key] = v; if (!v && dropEmpty) delete obj[key]; commit(); };
+  const i = el("input", { type: "text", value: obj[key] || "", placeholder: ph || "mdi:…" });
+  i.onchange = () => set(i.value.trim());
+  const prev = el("i", { className: "mdi mdi-" + String(obj[key] || "").replace(/^mdi:/, ""), style: "font-size:24px;width:28px;text-align:center" });
+  const pick = el("button", { className: "icon-btn", title: "Vybrat ikonu", type: "button" }, icon("magnify"));
+  pick.onclick = e => { e.preventDefault(); pickIcon(set); };
+  if (!label) {                       // kompaktní varianta do řádku kalendáře: jen tlačítko s ikonou
+    const name = String(obj[key] || "").replace(/^mdi:/, "");
+    const btn = el("button", { className: "txtbtn", type: "button", title: name ? "Ikona " + name + " (změnit)" : "Ikona z HA (změnit)",
+                               style: "padding:6px 4px;width:100%;justify-content:center" },
+                   name ? icon(name) : el("span", { textContent: ph, style: "font-size:12px" }));
+    btn.onclick = e => { e.preventDefault(); pickIcon(set); };
+    return btn;
+  }
+  const row = el("div", { className: "withbtn" }, prev, i, pick);
+  return label ? el("label", { className: "f" }, el("span", { textContent: label }), row) : row;
+}
+const areaField = (label, b, key, cls, ph, help) => {
+  const t = el("textarea", { className: "code " + (cls || ""), value: b.p[key] || "", placeholder: ph || "", spellcheck: false });
+  if (!cls) t.style.font = "inherit";
+  t.onchange = () => { b.p[key] = t.value; commit(); };
+  return el("label", { className: "f" }, el("span", { textContent: label }), t, help || null);
+};
+const selectField = (label, b, key, options) => {
+  const sel = el("select");
+  for (const [v, t] of Object.entries(options)) sel.append(el("option", { value: v, textContent: t, selected: b.p[key] === v }));
+  sel.onchange = () => { b.p[key] = sel.value; commit(); };
+  return el("label", { className: "f" }, el("span", { textContent: label }), sel);
 };
 const chk = (label, b, key) => {
   const i = el("input", { type: "checkbox", checked: !!b.p[key] });
@@ -355,8 +442,7 @@ function calRows(b) {
     ent.onchange = () => { c.entity = ent.value.trim(); commit(); };
     const lab = el("input", { type: "text", value: c.label || "", placeholder: "—" }); lab.setAttribute("aria-label", "Štítek");
     lab.onchange = () => { c.label = lab.value.trim(); if (!c.label) delete c.label; commit(); };
-    const ic = el("input", { type: "text", value: c.icon || "", placeholder: "z HA" }); ic.setAttribute("aria-label", "Ikona (mdi:…)");
-    ic.onchange = () => { c.icon = ic.value.trim(); if (!c.icon) delete c.icon; commit(); };
+    const ic = iconField("", c, "icon", "z HA", true);
     const red = el("input", { type: "checkbox", checked: !!c.red, style: "width:18px;height:18px;margin-top:8px;accent-color:#db4437" });
     red.setAttribute("aria-label", "Červeně (a upozornění v záhlaví)");
     red.onchange = () => { if (red.checked) c.red = true; else delete c.red; commit(); };
@@ -389,6 +475,31 @@ function params(b) {
     case "forecast": return [el("div", { className: "grid2" }, entityField("Počasí", b, "weather", "weather"), numField("Počet dní", b, "days"))];
     case "footer": return [el("div", { className: "grid2" }, chk("Čas aktualizace", b, "updated"), chk("Další obnovení", b, "next"),
       chk("Číslo týdne", b, "week"), chk("Baterie", b, "battery"))];
+    case "value": {
+      const e = ENT && ENT[b.p.entity];
+      return [entityField("Entita", b, "entity", "all"),
+        el("div", { className: "grid2" },
+          textField("Popisek", b, "label", e ? e.name : "název z HA"),
+          iconField("Ikona", b.p, "icon", "z HA"),
+          selectField("Velikost", b, "size", Object.fromEntries(Object.entries(SIZES).map(([k, t]) => [k, `${t} (${D.value[k]} px)`]))),
+          numField("Desetinná místa", b, "decimals"),
+          textField("Červeně pod", b, "red_below", "např. 18"),
+          textField("Červeně nad", b, "red_above", "např. 1200"))];
+    }
+    case "text": return [
+      areaField("Text (každý řádek zvlášť)", b, "text", "", "Wi-Fi: Hosté / heslo"),
+      el("div", { className: "grid2" },
+        selectField("Velikost", b, "size", Object.fromEntries(Object.entries(SIZES).map(([k, t]) => [k, `${t} (řádek ${D.text_line[k]} px)`]))),
+        numField("Počet řádků", b, "lines"),
+        selectField("Zarovnání", b, "align", { left: "vlevo", center: "na střed" }),
+        el("div", {}, chk("Tučně", b, "bold"), chk("Červeně", b, "red")))];
+    case "template": return [
+      areaField("Šablona (Jinja + HTML)", b, "code", "", "", el("div", { className: "help", innerHTML:
+        "Funkce <code>states('sensor.x')</code>, <code>state_attr('sensor.x', 'attr')</code>, <code>is_state('…', 'on')</code>, <code>now</code>; " +
+        "filtr <code>|num(1)</code> zformátuje číslo česky (11,6). " +
+        "Třídy <code>red</code>, <code>num</code>, <code>cond</code>, <code>ellipsis</code>, ikony <code>&lt;i class=\"mdi mdi-bus\"&gt;</code>. " +
+        "Běží v sandboxu; skripty a síť jsou při vykreslení zakázané. Chyba se ukáže červeně v náhledu." })),
+      numField("Výška", b, "height", "px")];
   }
   return [];
 }
@@ -401,11 +512,15 @@ function summary(b) {
     case "departures": return `${entName(p.entity, / odjezdy$/i)} · ${p.count} spojů`;
     case "agenda": return `${p.calendars.length} kalendářů · ${p.days} dní`;
     case "forecast": return `${entName(p.weather)} · ${p.days} dny`;
+    case "value": return `${entName(b.p.entity)} · ${SIZES[b.p.size].toLowerCase()}`;
+    case "text": return (b.p.text.split("\n")[0] || "prázdný").slice(0, 40);
+    case "template": return `${b.p.code.length} znaků · ${b.p.height} px`;
     case "footer": return Object.entries({ updated: "aktualizace", next: "obnovení", week: "týden", battery: "baterie" }).filter(([k]) => p[k]).map(([, v]) => v).join(", ") || "prázdná";
   }
   return "";
 }
-const invalid = b => !!ENT && (Object.values(b.p).some(v => typeof v === "string" && v.includes(".") && !known(v))
+const ENT_KEYS = Object.freeze(["entity", "disruptions", "weather", "temperature", "humidity", "rain", "pressure", "indoor", "nameday_calendar", "holiday_calendar"]);
+const invalid = b => !!ENT && (ENT_KEYS.some(k => typeof b.p[k] === "string" && !known(b.p[k]))
                                || (b.p.calendars || []).some(c => !known(c.entity)));
 
 // ───────── Seznam bloků ─────────
@@ -449,7 +564,12 @@ function renderList() {
       const up = el("button", { className: "icon-btn", title: "Posunout nahoru", disabled: i === 0 }, icon("chevron-up")); up.onclick = () => move(b.id, i - 1);
       const dn = el("button", { className: "icon-btn", title: "Posunout dolů", disabled: i === blocks.length - 1 }, icon("chevron-down")); dn.onclick = () => move(b.id, i + 2);
       const del = el("button", { className: "txtbtn danger" }, icon("delete-outline"), "Odebrat blok"); del.onclick = () => remove(b.id);
-      body.append(el("div", { className: "bfoot" }, up, dn, el("span", { className: "sp" }), del));
+      const dup = b.type === "agenda" ? null : el("button", { className: "txtbtn", title: "Vložit kopii pod tento blok" }, icon("content-copy"), "Duplikovat");
+      if (dup) dup.onclick = () => {
+        const c = JSON.parse(JSON.stringify(b)); c.id = Math.random().toString(16).slice(2, 10);
+        blocks.splice(i + 1, 0, c); openId = c.id; commit(); toast(`Blok ${name(b.type)} zduplikován`);
+      };
+      body.append(el("div", { className: "bfoot" }, up, dn, el("span", { className: "sp" }), dup, del));
       li.append(body);
     }
     ul.append(li);
@@ -501,7 +621,6 @@ function renderMenu() {
     };
     m.append(btn);
   }
-  m.append(el("div", { className: "later", textContent: "Připravujeme: Hodnota entity, Text, Šablona" }));
 }
 const closeMenu = () => { $("#addMenu").hidden = true; $("#addBtn").setAttribute("aria-expanded", false); };
 $("#addBtn").onclick = e => { e.stopPropagation(); const m = $("#addMenu"); renderMenu(); m.hidden = !m.hidden; $("#addBtn").setAttribute("aria-expanded", !m.hidden); };
@@ -525,7 +644,7 @@ async function draw() {
   ctrl?.abort(); ctrl = new AbortController();
   const scr = $("#screen");
   try {
-    const r = await fetch("layout/preview", { method: "POST", headers: { "Content-Type": "application/json" },
+    const r = await fetch("layout/preview" + ($("#worst").checked ? "?worst=1" : ""), { method: "POST", headers: { "Content-Type": "application/json" },
                                               body: JSON.stringify(toServer()), signal: ctrl.signal });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "HTTP " + r.status);
     geo = JSON.parse(r.headers.get("X-Geometry") || "[]");
@@ -579,13 +698,14 @@ function refresh(soft) {
   $("#undo").disabled = hpos === 0; $("#redo").disabled = hpos === hist.length - 1;
   scheduleRender();
 }
-async function doSave() {
+async function doSave(force) {
   $("#save").disabled = true;
   try {
-    const r = await fetch("layout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toServer()) });
+    const r = await fetch("layout" + (force ? "?force=1" : ""), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toServer()) });
     const res = await r.json().catch(() => ({}));
+    if (r.status === 409 && res.conflict) { conflictLayout = res.layout; $("#conflict").showModal(); return; }
     if (!r.ok) throw new Error(res.error || "HTTP " + r.status);
-    blocks = fromServer(res.layout); saved = snap(); hist = [saved]; hpos = 0;
+    rev = res.layout.rev; blocks = fromServer(res.layout); saved = snap(); hist = [saved]; hpos = 0;
     unsavedBanner?.remove(); unsavedBanner = null;
     refresh();
     const n = blocks.filter(invalid).length;
@@ -595,7 +715,81 @@ async function doSave() {
     toast("Nelze uložit: " + e.message);
   } finally { renderBudget(); }
 }
-$("#save").onclick = doSave;
+let conflictLayout = null;
+$("#save").onclick = () => doSave(false);
+$("#cfMine").onclick = () => { $("#conflict").close(); doSave(true); };
+$("#cfTheirs").onclick = () => {
+  $("#conflict").close(); rev = conflictLayout.rev; blocks = fromServer(conflictLayout);
+  saved = snap(); hist = [saved]; hpos = 0; openId = null; refresh(); toast("Načtena uložená verze, tvoje změny zahozeny.");
+};
+
+// ───────── Export / import / historie ─────────
+$("#exportBtn").onclick = () => {
+  const { rev: _, ...data } = toServer();
+  const a = el("a", { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })),
+                      download: `espink-rozvrzeni-${new Date().toISOString().slice(0, 10)}.json` });
+  document.body.append(a); a.click(); a.remove();
+};
+$("#importBtn").onclick = () => $("#importFile").click();
+$("#importFile").onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    if (!Array.isArray(data.blocks)) throw new Error("soubor neobsahuje seznam bloků");
+    const unknown = data.blocks.find(b => !SCHEMA.types[b.type]);
+    if (unknown) throw new Error("neznámý typ bloku " + unknown.type);
+    // doplnit chybějící parametry výchozími hodnotami (starší export)
+    blocks = data.blocks.map(x => { const nb = newBlock(x.type); const { id, type, line, hidden, ...p } = x;
+      return { id: id || nb.id, type, line: line || "none", hidden: !!hidden, p: { ...nb.p, ...p } }; });
+    openId = null; commit(); toast("Importováno do návrhu – zkontroluj náhled a ulož.");
+  } catch (err) { toast("Import selhal: " + err.message); }
+};
+$("#histBtn").onclick = async () => {
+  const ul = $("#histList"); ul.replaceChildren(el("li", { textContent: "Načítám…" })); $("#histDlg").showModal();
+  try {
+    const items = await (await fetch("layout/history.json")).json();
+    ul.replaceChildren();
+    if (!items.length) ul.append(el("li", { textContent: "Zatím žádné starší verze – vznikají při každém uložení." }));
+    for (const it of items) {
+      const when = it.rev ? new Date(it.rev).toLocaleString("cs-CZ") : "výchozí rozvržení";
+      const types = it.layout.blocks.filter(b => !b.hidden).map(b => SCHEMA.types[b.type]?.title || b.type).join(", ");
+      const load = el("button", { className: "txtbtn", textContent: "Načíst do návrhu" });
+      load.onclick = () => { blocks = fromServer(it.layout); openId = null; commit(); $("#histDlg").close(); toast(`Načtena verze z ${when} – ulož, pokud ji chceš použít.`); };
+      ul.append(el("li", {}, el("span", {}, when, el("small", { textContent: types })), load));
+    }
+  } catch (err) { ul.replaceChildren(el("li", { textContent: "Nelze načíst historii: " + err.message })); }
+};
+
+// ───────── Výběr ikony (názvy z CSS Material Design Icons) ─────────
+let ICONS = null, iconCb = null;
+async function pickIcon(cb) {
+  iconCb = cb; $("#iconDlg").showModal(); $("#iconSearch").value = ""; $("#iconSearch").focus();
+  if (!ICONS) {
+    $("#iconGrid").replaceChildren(el("span", { textContent: "Načítám ikony…" }));
+    const css = await (await fetch("static/mdi/css/materialdesignicons.min.css")).text();
+    ICONS = [...new Set([...css.matchAll(/\.mdi-([a-z0-9-]+)::before/g)].map(m => m[1]))];
+  }
+  showIcons("");
+}
+function showIcons(q) {
+  q = q.trim().toLowerCase();
+  const hits = (q ? ICONS.filter(n => n.includes(q)).sort((a, b) => b.startsWith(q) - a.startsWith(q) || a.length - b.length) : ICONS.filter(n => /^(home|thermometer|water|weather-|bus|calendar|trash|car|baby|school|cake|account|heart|flower)/.test(n))).slice(0, 120);
+  $("#iconGrid").replaceChildren(...hits.map(n => {
+    const b = el("button", { title: n, type: "button" }, icon(n), el("span", { textContent: n }));
+    b.onclick = () => { $("#iconDlg").close(); iconCb("mdi:" + n); };
+    return b;
+  }));
+  if (!hits.length) $("#iconGrid").append(el("span", { textContent: "Nic nenalezeno." }));
+}
+$("#iconSearch").oninput = e => showIcons(e.target.value);
+$("#iconNone").onclick = () => { $("#iconDlg").close(); iconCb(""); };
+
+$("#worst").onchange = () => scheduleRender(true);
+$("#gridBtn").onclick = () => {
+  const on = !document.body.classList.contains("grid-on");
+  document.body.classList.toggle("grid-on", on); $("#gridBtn").setAttribute("aria-pressed", on);
+  if (on && zoom !== "1") document.querySelector('[data-z="1"]').click();
+};
 $("#discard").onclick = () => {
   if (hpos > 3 && !confirm("Zahodit všechny neuložené změny?")) return;
   blocks = JSON.parse(saved); hist = [saved]; hpos = 0; openId = null; refresh(); toast("Změny zahozeny.");
@@ -634,9 +828,9 @@ async function loadEntities() {
     if (!r.ok || !Array.isArray(list)) throw new Error(list.error || "HTTP " + r.status);
     ENT = Object.fromEntries(list.map(e => [e.id, e]));
     document.querySelectorAll("datalist").forEach(d => d.remove());
-    for (const d of ["sensor", "weather", "calendar"]) {
+    for (const d of ["sensor", "weather", "calendar", "all"]) {
       const dl = el("datalist", { id: "dl-" + d });
-      list.filter(e => e.id.startsWith(d + ".")).forEach(e => dl.append(el("option", { value: e.id, textContent: e.name })));
+      list.filter(e => d === "all" || e.id.startsWith(d + ".")).forEach(e => dl.append(el("option", { value: e.id, textContent: e.name })));
       document.body.append(dl);
     }
   } catch (e) {
@@ -650,7 +844,9 @@ async function loadEntities() {
   try {
     const [res] = await Promise.all([fetch("layout.json").then(r => r.json()), loadEntities()]);
     SCHEMA = res.schema; D = SCHEMA.dims;
+    rev = res.layout.rev || 0;
     blocks = fromServer(res.layout); saved = snap(); hist = [saved]; hpos = 0;
+    if (res.error) banner("err", "Uložené rozvržení je poškozené (" + res.error + "), načteno výchozí. Starší verze najdeš v historii.");
     if (!res.saved) unsavedBanner = banner("warn", "Rozvržení zatím není uložené – odvozuje se z nastavení add-onu. Po prvním uložení platí jen tento editor.");
     fit(); refresh(); scheduleRender(true);
   } catch (e) {

@@ -12,6 +12,13 @@
 > platí pro obsah jen editor (entity v Systém → nastavení se pak už nepoužijí).
 > Baterii v náhledu bere DEV verze ze senzoru, který plní stabilní add-on.
 >
+> Bloky: Záhlaví, Odjezdy, Události (vyplní zbytek), Předpověď, Patička, Hodnota entity
+> (velikost, ikona, červeně pod/nad mezí), Text a Šablona (Jinja v sandboxu + HTML;
+> `states()`, `state_attr()`, `is_state()`, `now`, filtr `|num(1)`). Dál: duplikace bloku,
+> náhled „nejhorší případ“ (vynucené upozornění a výluka), mřížka 10/50 px, výběr ikon,
+> export/import JSON, historie posledních 15 uložených verzí, ochrana proti přepsání
+> změn z jiné karty.
+>
 > API (jen přes Ingress): `GET layout.json`, `POST layout/preview` (PNG + hlavička
 > X-Geometry s polohou bloků), `POST layout` (uložení).
 

@@ -7,6 +7,9 @@ import hashlib
 import json
 from datetime import date, datetime, timedelta
 
+from jinja2.sandbox import SandboxedEnvironment
+from markupsafe import Markup
+
 import layout as layout_mod
 
 DAYS = ["pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota", "neděle"]
@@ -380,6 +383,61 @@ def _device(device: dict) -> dict:
     }
 
 
+STATE_TEXT = {"on": "zapnuto", "off": "vypnuto", "open": "otevřeno", "closed": "zavřeno",
+              "home": "doma", "not_home": "pryč", "locked": "zamčeno", "unlocked": "odemčeno"}
+
+
+def _value(raw: dict, b: dict) -> dict:
+    """Jedna hodnota entity: číslo s jednotkou, nebo přeložený textový stav."""
+    s = raw["states"].get(b["entity"]) if b["entity"] else None
+    a = (s or {}).get("attributes", {})
+    icon = b["icon"] or a.get("icon") or ""
+    out = {"label": b["label"] or a.get("friendly_name") or b["entity"] or "Hodnota",
+           "icon": icon[4:] if icon.startswith("mdi:") else (icon or None),
+           "value": "—", "unit": "", "red": False}
+    if not s or s["state"] in ("unavailable", "unknown"):
+        return out
+    v = fnum(s["state"])
+    if v is None:
+        out["value"] = STATE_TEXT.get(s["state"], s["state"])[:30]
+        return out
+    out["value"] = num(v, b["decimals"])
+    out["unit"] = a.get("unit_of_measurement") or ""
+    lo, hi = fnum(b["red_below"]), fnum(b["red_above"])
+    out["red"] = (lo is not None and v < lo) or (hi is not None and v > hi)
+    return out
+
+
+def _text(b: dict) -> dict:
+    lines = b["text"].split("\n")[:b["lines"]]
+    return {"lines": lines, "size": b["size"], "align": b["align"], "bold": b["bold"], "red": b["red"]}
+
+
+# Šablona běží v sandboxu Jinja: žádný přístup k Pythonu ani souborům; výstup je HTML
+# (vykresluje se v Chromiu s CSP bez skriptů a sítě), hodnoty entit se escapují.
+_tpl_env = SandboxedEnvironment(autoescape=True)
+_tpl_env.filters["num"] = lambda v, decimals=1: num(v, decimals) or "—"  # „11,6“ jako zbytek displeje
+
+
+def _template(raw: dict, b: dict, now: datetime) -> dict:
+    states = raw["states"]
+
+    def state(eid):
+        return (states.get(eid) or {}).get("state", "unknown")
+
+    def attr(eid, name):
+        return (states.get(eid) or {}).get("attributes", {}).get(name)
+
+    if not b["code"].strip():
+        return {"html": "", "error": "Prázdná šablona"}
+    try:
+        html = _tpl_env.from_string(b["code"]).render(
+            states=state, state_attr=attr, is_state=lambda e, v: state(e) == v, now=now)
+        return {"html": Markup(html[:8000]), "error": None}
+    except Exception as e:  # noqa: BLE001 – chyba šablony nesmí shodit dashboard
+        return {"html": "", "error": f"Chyba šablony: {type(e).__name__}: {e}"[:200]}
+
+
 def _header(raw: dict, b: dict, layout: dict, now: datetime, tz) -> dict:
     today = now.date()
     red_cals = [c for x in layout_mod.visible(layout) if x["type"] == "agenda" for c in x["calendars"]] if b["alert"] else []
@@ -398,8 +456,10 @@ def _header(raw: dict, b: dict, layout: dict, now: datetime, tz) -> dict:
     }
 
 
-def build(raw: dict, layout: dict, device: dict, now: datetime) -> dict:
-    """Model zobrazení: seznam bloků s hotovými daty a výškami v px."""
+def build(raw: dict, layout: dict, device: dict, now: datetime, worst: bool = False) -> dict:
+    """Model zobrazení: seznam bloků s hotovými daty a výškami v px.
+    worst=True (jen náhled v editoru) vynutí upozornění v záhlaví a výluku v odjezdech,
+    tedy nejmenší místo pro události."""
     tz = now.tzinfo
     blocks, fill = [], None
     for b in layout_mod.visible(layout):
@@ -407,8 +467,13 @@ def build(raw: dict, layout: dict, device: dict, now: datetime) -> dict:
         vb = {"type": t, "id": b["id"], "line": layout_mod.line_px(b, len(blocks))}
         if t == "header":
             vb.update(_header(raw, b, layout, now, tz))
+            if worst and not vb["alert"]:
+                vb.update(alert="Zítra: Ukázkové upozornění", height=layout_mod.HEADER_H)
         elif t == "departures":
             vb.update(_departures(raw, b, now, tz), height=layout_mod.fixed_height(b))
+            if worst and not vb["disruptions"]:
+                vb["disruptions"] = {"count": 1, "text": "Ukázková výluka"}
+                vb["rows"] = vb["rows"][:max(1, b["count"] - 1)]
         elif t == "forecast":
             vb.update(days=_forecast(raw, b, now, tz), height=layout_mod.FORECAST_H)
             if not vb["days"]:  # bez předpovědi blok zmizí a místo dostane agenda
@@ -416,6 +481,12 @@ def build(raw: dict, layout: dict, device: dict, now: datetime) -> dict:
         elif t == "footer":
             vb.update({k: b[k] for k in ("updated", "next", "week", "battery")},
                       week_label=f"{now.isocalendar().week}. týden", height=layout_mod.FOOTER_H)
+        elif t == "text":
+            vb.update(_text(b), height=layout_mod.fixed_height(b))
+        elif t == "template":
+            vb.update(_template(raw, b, now), height=b["height"])
+        elif t == "value":
+            vb.update(_value(raw, b), size=b["size"], height=layout_mod.fixed_height(b))
         elif t == "agenda":
             fill = (len(blocks), b)
             vb["height"] = None

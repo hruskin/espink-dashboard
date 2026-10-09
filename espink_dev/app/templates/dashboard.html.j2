@@ -127,6 +127,11 @@
   .value .vl { flex: 1; min-width: 0; font-weight: 600; font-size: clamp(14px, 34cqh, 30px); }
   .value .vv { flex: none; font-weight: 800; white-space: nowrap; letter-spacing: -0.5px; font-size: clamp(16px, min(66cqh, 13cqw), 80px); }
   .vbox.nolabel { justify-content: center; flex-wrap: nowrap; }
+  /* textový stav: menší písmo, smí se zkrátit výpustkou */
+  .value .vv.vtext { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0;
+                     font-family: "RobotoCondensed", "NotoEmoji", sans-serif; font-size: clamp(14px, min(42cqh, 9cqw), 48px); }
+  .footer .f-ent .num { margin-left: 0; }
+  .footer .f-ent { max-width: 45%; overflow: hidden; }
   .value .vv small { font-size: 0.55em; font-weight: 700; letter-spacing: 0; }
   @container (max-width: 359px) {
     .vbox { flex-wrap: wrap; align-content: center; column-gap: 4px; row-gap: 0; }
@@ -135,6 +140,7 @@
     .value .vv { width: 100%; text-align: center; line-height: 1; font-size: clamp(14px, min(50cqh, 24cqw), 80px); }
     .vbox.nolabel { flex-wrap: nowrap; }
     .vbox.nolabel .vv { width: auto; font-size: clamp(14px, min(64cqh, 22cqw), 80px); }
+    .value .vv.vtext { width: 100%; font-size: clamp(12px, min(30cqh, 13cqw), 40px); }
   }
 
   /* úzké bloky (mřížka): méně detailů místo přetékání */

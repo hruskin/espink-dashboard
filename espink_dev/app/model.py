@@ -384,27 +384,93 @@ def _device(device: dict) -> dict:
 
 
 STATE_TEXT = {"on": "zapnuto", "off": "vypnuto", "open": "otevřeno", "closed": "zavřeno",
-              "home": "doma", "not_home": "pryč", "locked": "zamčeno", "unlocked": "odemčeno"}
+              "opening": "otevírá se", "closing": "zavírá se", "home": "doma", "not_home": "pryč",
+              "locked": "zamčeno", "unlocked": "odemčeno", "playing": "hraje", "paused": "pozastaveno",
+              "idle": "nečinný", "standby": "pohotovost", "cleaning": "uklízí", "docked": "v základně",
+              "returning": "vrací se", "charging": "nabíjí", "discharging": "vybíjí", "full": "nabito",
+              "heat": "topí", "cool": "chladí", "auto": "automaticky", "armed_away": "střeženo",
+              "armed_home": "střeženo doma", "disarmed": "nestřeženo", "triggered": "poplach",
+              "above_horizon": "nad obzorem", "below_horizon": "pod obzorem", "true": "ano", "false": "ne"}
+# binární senzory: význam on/off podle device_class
+BINARY_TEXT = {
+    "door": ("otevřeno", "zavřeno"), "window": ("otevřeno", "zavřeno"), "opening": ("otevřeno", "zavřeno"),
+    "garage_door": ("otevřeno", "zavřeno"), "lock": ("odemčeno", "zamčeno"),
+    "motion": ("pohyb", "klid"), "occupancy": ("obsazeno", "volno"), "presence": ("doma", "pryč"),
+    "moisture": ("mokro", "sucho"), "battery": ("slabá", "OK"), "battery_charging": ("nabíjí", "nenabíjí"),
+    "connectivity": ("připojeno", "odpojeno"), "plug": ("zapojeno", "odpojeno"), "power": ("zapnuto", "vypnuto"),
+    "problem": ("problém", "OK"), "safety": ("nebezpečí", "OK"), "smoke": ("kouř", "OK"), "gas": ("plyn", "OK"),
+    "running": ("běží", "neběží"), "update": ("aktualizace", "aktuální"), "vibration": ("vibrace", "klid"),
+}
+
+
+def format_state(s: dict | None, attribute: str = "", decimals: int = 1, maxlen: int = 60) -> dict:
+    """Stav (nebo atribut) entity pro displej: {value, unit, number, text}.
+    Čísla česky s jednotkou, časy jako „9. 10. 18:40“, známé stavy přeloženě, jinak text."""
+    out = {"value": "—", "unit": "", "number": None, "text": False}
+    if not s:
+        return out
+    a = s.get("attributes", {})
+    raw = a.get(attribute) if attribute else s.get("state")
+    if raw is None or raw in ("unavailable", "unknown", ""):
+        return out
+    if isinstance(raw, (list, tuple)):
+        raw = ", ".join(str(x) for x in raw)
+    elif isinstance(raw, dict):
+        raw = ", ".join(f"{k}: {v}" for k, v in raw.items())
+    v = fnum(raw) if not isinstance(raw, bool) else None
+    if v is not None:
+        if isinstance(raw, int):  # celočíselný atribut (jas, počet…) bez desetinných míst
+            decimals = 0
+        out.update(value=num(v, decimals), number=v,
+                   unit="" if attribute else (a.get("unit_of_measurement") or ""))
+        return out
+    text = str(raw)
+    domain = s.get("entity_id", "").split(".")[0]
+    dc = a.get("device_class")
+    if domain == "binary_sensor" and text in ("on", "off") and dc in BINARY_TEXT:
+        text = BINARY_TEXT[dc][0 if text == "on" else 1]
+    elif isinstance(raw, bool):
+        text = "ano" if raw else "ne"
+    elif text in STATE_TEXT:
+        text = STATE_TEXT[text]
+    else:
+        try:  # časový údaj (device_class timestamp, last_triggered…)
+            if len(text) >= 16 and text[4] == "-" and "T" in text:
+                dt = datetime.fromisoformat(text).astimezone()
+                text = f"{dt.day}. {dt.month}. {dt:%H:%M}"
+            elif len(text) == 10 and text[4] == "-" and text[7] == "-":
+                d = date.fromisoformat(text)
+                text = f"{d.day}. {d.month}. {d.year}"
+        except ValueError:
+            pass
+    out.update(value=text[:maxlen] + ("…" if len(text) > maxlen else ""), text=True)
+    return out
+
+
+def _icon(b: dict, s: dict | None) -> str | None:
+    icon = b.get("icon") or (s or {}).get("attributes", {}).get("icon") or ""
+    return icon[4:] if icon.startswith("mdi:") else (icon or None)
 
 
 def _value(raw: dict, b: dict) -> dict:
-    """Jedna hodnota entity: číslo s jednotkou, nebo přeložený textový stav."""
+    """Jedna hodnota entity (stav nebo atribut): číslo s jednotkou, nebo text."""
     s = raw["states"].get(b["entity"]) if b["entity"] else None
     a = (s or {}).get("attributes", {})
-    icon = b["icon"] or a.get("icon") or ""
-    out = {"label": (b["label"] or a.get("friendly_name") or b["entity"] or "Hodnota") if b["show_label"] else "",
-           "icon": icon[4:] if icon.startswith("mdi:") else (icon or None),
-           "value": "—", "unit": "", "red": False}
-    if not s or s["state"] in ("unavailable", "unknown"):
-        return out
-    v = fnum(s["state"])
-    if v is None:
-        out["value"] = STATE_TEXT.get(s["state"], s["state"])[:30]
-        return out
-    out["value"] = num(v, b["decimals"])
-    out["unit"] = a.get("unit_of_measurement") or ""
+    f = format_state(s, b["attribute"], b["decimals"])
     lo, hi = fnum(b["red_below"]), fnum(b["red_above"])
-    out["red"] = (lo is not None and v < lo) or (hi is not None and v > hi)
+    v = f["number"]
+    return {"label": (b["label"] or a.get("friendly_name") or b["entity"] or "Hodnota") if b["show_label"] else "",
+            "icon": _icon(b, s), "value": f["value"], "unit": f["unit"], "text": f["text"],
+            "red": v is not None and ((lo is not None and v < lo) or (hi is not None and v > hi))}
+
+
+def _footer_items(raw: dict, items: list) -> list:
+    out = []
+    for it in items:
+        s = raw["states"].get(it["entity"])
+        f = format_state(s, it.get("attribute", ""), it.get("decimals", 1), maxlen=40)
+        out.append({"icon": _icon(it, s), "label": it.get("label", ""), "value": f["value"],
+                    "unit": f["unit"], "side": it.get("side", "left")})
     return out
 
 
@@ -488,7 +554,7 @@ def build(raw: dict, layout: dict, device: dict, now: datetime, worst: bool = Fa
             vb["stack"] = bool(vb["days"]) and (width - ll) / len(vb["days"]) < 100
         elif t == "footer":
             vb.update({k: b[k] for k in ("updated", "next", "week", "battery")},
-                      week_label=f"{now.isocalendar().week}. týden")
+                      week_label=f"{now.isocalendar().week}. týden", items=_footer_items(raw, b["items"]))
         elif t == "text":
             vb.update(_text(b))
         elif t == "template":

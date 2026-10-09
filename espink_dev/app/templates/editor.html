@@ -226,6 +226,10 @@
             padding: 1px 6px; border-radius: 3px; font-variant-numeric: tabular-nums; pointer-events: none; }
   .pos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0 8px; }
   .lines2 { display: flex; gap: 16px; flex-wrap: wrap; }
+  /* položka patičky: entita přes celou šířku, pod ní ikona · atribut · popisek · strana · pořadí · odebrat */
+  .itemrow { display: grid; grid-template-columns: 48px 1fr 1fr 74px 32px 32px; gap: 6px; align-items: start; padding: 8px 0; border-bottom: 1px dashed var(--line); }
+  .itemrow .c1 { grid-column: 1 / -1; }
+  .itemrow input, .itemrow select { width: 100%; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font: inherit; }
 </style>
 </head>
 <body data-pane="blocks">
@@ -507,6 +511,43 @@ function calRows(b) {
   return box;
 }
 
+// Atribut entity místo stavu (např. „friendly_name“, „next_dawn“…); našeptávač z atributů entity v HA
+function attrField(obj, key, entity, compact) {
+  const id = "dla-" + Math.random().toString(16).slice(2, 8);
+  const dl = el("datalist", { id });
+  for (const a of (ENT && ENT[entity] && ENT[entity].attrs) || []) dl.append(el("option", { value: a }));
+  const i = el("input", { type: "text", value: obj[key] || "", placeholder: compact ? "atribut" : "prázdné = stav entity", spellcheck: false });
+  i.setAttribute("list", id); i.setAttribute("aria-label", "Atribut");
+  i.onchange = () => { obj[key] = i.value.trim(); if (!obj[key] && compact) delete obj[key]; commit(); };
+  return compact ? el("div", {}, i, dl) : el("label", { className: "f" }, el("span", { textContent: "Atribut (volitelně)" }), i, dl);
+}
+// Patička: libovolné entity (stav nebo atribut, ikona, popisek, vlevo/vpravo)
+function footerItems(b) {
+  const box = el("div", { className: "f" }, el("span", { textContent: "Další položky (entity)" }));
+  b.p.items.forEach((it, i) => {
+    const ent = el("input", { type: "text", value: it.entity, placeholder: "sensor.…", spellcheck: false });
+    ent.setAttribute("list", "dl-all"); ent.setAttribute("aria-label", "Entita"); ent.setAttribute("aria-invalid", !known(it.entity));
+    ent.onchange = () => { it.entity = ent.value.trim(); commit(); };
+    const nm = el("div", { className: "ent" }); entInfo(nm, it.entity, "");
+    const lab = el("input", { type: "text", value: it.label || "", placeholder: "popisek" }); lab.setAttribute("aria-label", "Popisek");
+    lab.onchange = () => { it.label = lab.value.trim(); if (!it.label) delete it.label; commit(); };
+    const side = el("select", { title: "Strana patičky" });
+    for (const [v, t] of [["left", "vlevo"], ["right", "vpravo"]]) side.append(el("option", { value: v, textContent: t, selected: it.side === v }));
+    side.onchange = () => { it.side = side.value; commit(); };
+    const up = el("button", { className: "icon-btn", title: "Posunout dřív", style: "width:32px;height:32px", disabled: i === 0 }, icon("arrow-up"));
+    up.onclick = () => { b.p.items.splice(i - 1, 0, b.p.items.splice(i, 1)[0]); commit(); };
+    const del = el("button", { className: "icon-btn", title: "Odebrat položku", style: "width:32px;height:32px" }, icon("close"));
+    del.onclick = () => { b.p.items.splice(i, 1); commit(); };
+    box.append(el("div", { className: "itemrow" },
+      el("div", { className: "c1" }, ent, nm),
+      iconField("", it, "icon", "ikona", true), attrField(it, "attribute", it.entity, true), lab, side, up, del));
+  });
+  const add = el("button", { className: "txtbtn" }, icon("plus"), "Přidat entitu");
+  add.onclick = () => { b.p.items.push({ entity: "", side: "left", decimals: 1 }); commit();
+    requestAnimationFrame(() => [...document.querySelectorAll(`li[data-id="${b.id}"] .itemrow input[list=dl-all]`)].pop()?.focus()); };
+  box.append(add, el("div", { className: "help", textContent: "Čísla s jednotkou, textové stavy přeloženě (otevřeno, doma…), časy česky. V úzké patičce se nejdřív schová týden, pak další obnovení a čas." }));
+  return box;
+}
 const weatherFields = b => [
   entityField("Počasí (ikona, min/max)", b, "weather", "weather"),
   el("div", { className: "grid2" }, entityField("Venkovní teplota", b, "temperature", "sensor", "jinak z entity počasí"),
@@ -530,10 +571,10 @@ function params(b) {
       entityField("Státní svátky jako řádek", b, "holiday_calendar", "calendar"))];
     case "forecast": return [el("div", { className: "grid2" }, entityField("Počasí", b, "weather", "weather"), numField("Počet dní", b, "days"))];
     case "footer": return [el("div", { className: "grid2" }, chk("Čas aktualizace", b, "updated"), chk("Další obnovení", b, "next"),
-      chk("Číslo týdne", b, "week"), chk("Baterie", b, "battery"))];
+      chk("Číslo týdne", b, "week"), chk("Baterie", b, "battery")), footerItems(b)];
     case "value": {
       const e = ENT && ENT[b.p.entity];
-      return [entityField("Entita", b, "entity", "all"),
+      return [entityField("Entita", b, "entity", "all"), attrField(b.p, "attribute", b.p.entity),
         el("div", { className: "grid2" },
           el("div", {}, chk("Zobrazit popisek", b, "show_label"), b.p.show_label ? textField("Popisek", b, "label", e ? e.name : "název z HA") : null),
           iconField("Ikona", b.p, "icon", "z HA"),
@@ -571,10 +612,11 @@ function summary1(b) {
     case "departures": return entName(p.entity, / odjezdy$/i);
     case "agenda": return `${p.calendars.length} kalendářů · ${p.days} dní`;
     case "forecast": return `${entName(p.weather)} · ${p.days} dny`;
-    case "value": return entName(b.p.entity);
+    case "value": return entName(b.p.entity) + (b.p.attribute ? " · " + b.p.attribute : "");
     case "text": return (b.p.text.split("\n")[0] || "prázdný").slice(0, 40);
     case "template": return `${b.p.code.length} znaků`;
-    case "footer": return Object.entries({ updated: "aktualizace", next: "obnovení", week: "týden", battery: "baterie" }).filter(([k]) => p[k]).map(([, v]) => v).join(", ") || "prázdná";
+    case "footer": return [...Object.entries({ updated: "aktualizace", next: "obnovení", week: "týden", battery: "baterie" }).filter(([k]) => p[k]).map(([, v]) => v),
+                           ...p.items.map(it => it.label || entName(it.entity))].join(", ") || "prázdná";
   }
   return "";
 }

@@ -79,6 +79,7 @@ BLOCK_TYPES: dict[str, dict] = {
             "next": (True, "bool"),
             "week": (True, "bool"),
             "battery": (True, "bool"),
+            "items": ([], "items"),         # libovolné entity: [{entity, attribute, icon, label, side, decimals}]
         },
     },
     "value": {
@@ -86,6 +87,7 @@ BLOCK_TYPES: dict[str, dict] = {
         "params": {
             "entity": ("", "entity"),
             "show_label": (True, "bool"),
+            "attribute": ("", "text"),      # prázdné = stav entity
             "label": ("", "text"),          # prázdné = název entity v HA
             "icon": ("", "text"),           # mdi:… ; prázdné = ikona entity v HA
             "decimals": (1, ("int", 0, 3)),
@@ -151,6 +153,18 @@ def _check(value, kind, default):
                     item[k] = str(c[k]).strip()[:40]
             if c.get("red"):
                 item["red"] = True
+            out.append(item)
+        return out
+    if kind == "items":
+        out = []
+        for it in (value or [])[:12]:
+            if not isinstance(it, dict) or not str(it.get("entity", "")).strip():
+                continue
+            item = {"entity": _check(it["entity"], "entity", ""), "side": "right" if it.get("side") == "right" else "left",
+                    "decimals": _check(it.get("decimals", 1), ("int", 0, 3), 1)}
+            for k in ("attribute", "icon", "label"):
+                if str(it.get(k) or "").strip():
+                    item[k] = str(it[k]).strip()[:40]
             out.append(item)
         return out
     if isinstance(kind, tuple) and kind[0] == "enum":
@@ -358,6 +372,9 @@ def needs(layout: dict) -> dict:
             add(forecasts, b["weather"])
         elif t == "value":
             add(states, b["entity"])
+        elif t == "footer":
+            for it in b["items"]:
+                add(states, it["entity"])
         elif t == "template":
             for e in TEMPLATE_ENTITY_RE.findall(b["code"]):
                 add(states, e)

@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="{{ static }}/mdi/css/materialdesignicons.min.css">
+<style>
+  @font-face { font-family: "Inter"; src: url("{{ static }}/fonts/Inter.ttf"); font-weight: 100 900; }
+  @font-face { font-family: "RobotoCondensed"; src: url("{{ static }}/fonts/RobotoCondensed.ttf"); font-weight: 100 900; }
+
+  /* Pouze tři barvy panelu – žádné šedé, ty by se rozpadly na šum */
+  :root { --ink: #000; --paper: #fff; --red: #e00000; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 480px; height: 800px; overflow: hidden; background: var(--paper); color: var(--ink); }
+  body { font-family: "Inter", sans-serif; font-weight: 500; display: flex; flex-direction: column; }
+  .red { color: var(--red); }
+  .cond { font-family: "RobotoCondensed", sans-serif; }
+  .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .num { font-variant-numeric: tabular-nums; }
+  .mdi::before { line-height: 1; }
+
+  /* ── Hlavička ───────────────────────────── */
+  header { height: 138px; padding: 10px 16px 0; display: flex; border-bottom: 3px solid var(--ink); }
+  .date { display: flex; align-items: flex-start; flex: 1; min-width: 0; }
+  .daynum { font-size: 96px; font-weight: 800; line-height: 0.95; letter-spacing: -4px; margin-right: 12px; }
+  .datetext { padding-top: 6px; min-width: 0; }
+  .weekday { font-size: 32px; font-weight: 800; line-height: 1.05; }
+  .month { font-size: 18px; font-weight: 600; margin-top: 3px; }
+  .nameday { font-size: 18px; font-weight: 600; margin-top: 8px; }
+  .holiday, .alert { font-size: 19px; font-weight: 800; margin-top: 2px; }
+  .now { width: 158px; text-align: right; }
+  .now-top { display: flex; justify-content: flex-end; align-items: center; gap: 2px; }
+  .now-top .mdi { font-size: 56px; }
+  .temp { font-size: 46px; font-weight: 800; letter-spacing: -1.5px; line-height: 1; }
+  .now-sub { font-size: 18px; font-weight: 600; margin-top: 6px; display: flex; justify-content: flex-end; gap: 10px; }
+  .now-sub .mm { font-weight: 800; }
+  .now-sub small { font-size: 15px; font-weight: 700; }
+
+  /* ── Odjezdy ────────────────────────────── */
+  .deps { height: 188px; padding: 8px 16px 0; border-bottom: 3px solid var(--ink); }
+  .sec-title { display: flex; align-items: center; gap: 6px; font-size: 17px; font-weight: 800;
+               text-transform: uppercase; letter-spacing: 0.5px; height: 26px; }
+  .sec-title .mdi { font-size: 22px; }
+  .sec-title .right { margin-left: auto; font-size: 17px; letter-spacing: 0; text-transform: none; }
+  .dep { display: flex; align-items: center; height: 30px; gap: 8px; }
+  .dep .time { font-size: 25px; font-weight: 800; width: 72px; }
+  .dep .delay { font-size: 19px; font-weight: 800; width: 32px; margin-left: -2px; }
+  .route { font-size: 18px; font-weight: 800; background: var(--ink); color: var(--paper);
+           width: 48px; height: 25px; line-height: 25px; text-align: center; border-radius: 4px; }
+  .dep .head { font-size: 22px; font-weight: 600; flex: 1; min-width: 0; }
+  .plat { font-size: 16px; font-weight: 800; width: 24px; height: 24px; line-height: 21px; text-align: center;
+          border: 2px solid var(--ink); border-radius: 4px; }
+  .dep.canceled .time { text-decoration: line-through; text-decoration-thickness: 3px; }
+  .dis { font-size: 17px; font-weight: 700; height: 30px; padding-top: 5px; }
+  .msg { font-size: 19px; font-weight: 600; padding-top: 8px; }
+
+  /* ── Události ───────────────────────────── */
+  .events { flex: 1; padding: 6px 16px 0; overflow: hidden; }
+  .day { display: flex; align-items: baseline; height: 34px; padding: 6px 8px 0; margin: 0 -8px; gap: 8px; }
+  .day .label { font-size: 20px; font-weight: 800; }
+  .day .ddate { font-size: 16px; font-weight: 600; }
+  .day .hol { margin-left: auto; font-size: 15px; font-weight: 700; }
+  .day.today { background: var(--ink); color: var(--paper); border-radius: 5px; height: 30px; padding-top: 3px; margin-bottom: 4px; }
+  .ev { display: flex; align-items: baseline; height: 29px; gap: 10px; }
+  .ev .t { width: 58px; flex: none; font-size: 18px; font-weight: 700; }
+  .ev .s { font-size: 21px; font-weight: 500; flex: 1; min-width: 0; }
+  .ev.red .s, .ev.allday .s { font-weight: 700; }
+  .tag { font-size: 15px; font-weight: 700; border: 2px solid currentColor; border-radius: 4px; padding: 0 6px;
+         line-height: 20px; flex: none; position: relative; top: -2px; }
+  .more { font-size: 15px; font-weight: 700; text-align: right; height: 22px; padding-top: 2px; }
+
+  /* ── Předpověď ──────────────────────────── */
+  .forecast { height: 104px; display: flex; border-top: 3px solid var(--ink); }
+  .fday { flex: 1; text-align: center; padding-top: 6px; }
+  .fday + .fday { border-left: 2px solid var(--ink); }
+  .fday .fl { font-size: 17px; font-weight: 800; }
+  .fday .fl small { font-size: 15px; font-weight: 700; }
+  .fday .mdi { font-size: 36px; display: block; height: 38px; }
+  .fday .ft { font-size: 18px; font-weight: 800; }
+  .fday .ft .lo { font-weight: 600; }
+  .fday .fp { font-size: 15px; font-weight: 700; }
+
+  /* ── Patička ────────────────────────────── */
+  footer { height: 24px; border-top: 2px solid var(--ink); display: flex; align-items: center;
+           padding: 0 16px; font-size: 14px; font-weight: 600; gap: 4px; }
+  footer .mdi { font-size: 18px; }
+  footer .sp { flex: 1; }
+</style>
+</head>
+<body>
+{% set h = v.header %}{% set w = v.weather %}
+<header>
+  <div class="date">
+    <div class="daynum num {{ 'red' if h.holiday }}">{{ h.day }}</div>
+    <div class="datetext">
+      <div class="weekday {{ 'red' if h.holiday }}">{{ h.weekday }}</div>
+      <div class="month">{{ h.month }} · {{ h.week }}</div>
+      {% if h.nameday %}<div class="nameday ellipsis">{{ h.nameday if 'svátek' in h.nameday|lower else 'Svátek: ' ~ h.nameday }}</div>{% endif %}
+      {% if h.alert %}<div class="alert red ellipsis">{{ h.alert }}</div>
+      {% elif h.holiday %}<div class="holiday red ellipsis">{{ h.holiday }}</div>{% endif %}
+    </div>
+  </div>
+  <div class="now">
+    <div class="now-top">
+      <i class="mdi mdi-{{ w.icon }}"></i>
+      <span class="temp num">{{ w.temp or '--' }}°</span>
+    </div>
+    <div class="now-sub num">
+      {% if w.min and w.max %}<span class="mm">{% if w.minmax_label %}<small>{{ w.minmax_label }}</small> {% endif %}{{ w.min }}° / {{ w.max }}°</span>{% endif %}
+      {% if w.humidity %}<span>{{ w.humidity }} %</span>{% endif %}
+    </div>
+    <div class="now-sub num">
+      {% if w.rain %}<span>{{ w.rain }} mm</span>{% endif %}
+      {% if w.indoor %}<span><small>doma</small> {{ w.indoor }}°</span>{% endif %}
+      {% if w.pressure %}<span>{{ w.pressure }} hPa</span>{% endif %}
+    </div>
+  </div>
+</header>
+
+{% if v.departures %}{% set d = v.departures %}
+<section class="deps">
+  <div class="sec-title">
+    <i class="mdi mdi-bus"></i><span class="ellipsis">{{ d.stop or 'Odjezdy' }}</span>
+    <span class="right num">stav {{ updated_time }}</span>
+  </div>
+  {% if d.error %}<div class="msg">{{ d.error }}</div>{% endif %}
+  {% for x in d.rows %}
+  <div class="dep {{ 'canceled' if x.canceled }}">
+    <span class="time num">{{ x.time }}</span>
+    <span class="delay num red">{{ x.delay or '' }}</span>
+    <span class="route num">{{ x.route }}</span>
+    <span class="head cond ellipsis">{% if x.canceled %}<b class="red">ZRUŠENO</b>{% else %}{{ x.headsign }}{% endif %}</span>
+    {% if x.platform %}<span class="plat">{{ x.platform }}</span>{% endif %}
+  </div>
+  {% endfor %}
+  {% if d.disruptions %}<div class="dis red ellipsis"><i class="mdi mdi-alert"></i> {{ d.disruptions.text }}</div>{% endif %}
+</section>
+{% endif %}
+
+<section class="events">
+  {% for day in v.events.days %}
+  <div class="day {{ 'today' if day.today }} {{ 'red' if day.holiday_day and not day.today }}">
+    <span class="label">{{ day.label }}</span><span class="ddate">{{ day.date }}</span>
+    {% if day.holiday %}<span class="hol ellipsis">{{ day.holiday }}</span>{% endif %}
+  </div>
+  {% for e in day.rows %}
+  <div class="ev {{ 'red' if e.red }} {{ 'allday' if e.allday }}">
+    <span class="t num">{{ e.time }}</span>
+    <span class="s cond ellipsis">{{ e.summary }}</span>
+    {% if e.label %}<span class="tag">{{ e.label }}</span>{% endif %}
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="msg">Žádné události v příštích {{ v.events.range }} dnech</div>
+  {% endfor %}
+  {% if v.events.hidden %}<div class="more">+ {{ v.events.hidden }} další{{ 'ch' if v.events.hidden >= 5 }} …</div>{% endif %}
+</section>
+
+{% if v.forecast %}
+<section class="forecast">
+  {% for f in v.forecast %}
+  <div class="fday">
+    <div class="fl">{{ f.label }} <small>{{ f.date }}</small></div>
+    <i class="mdi mdi-{{ f.icon }}"></i>
+    <div class="ft num">{{ f.max or '--' }}° <span class="lo">/ {{ f.min or '--' }}°</span></div>
+    {% if f.precip %}<div class="fp num">{{ f.precip }}</div>{% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<footer>
+  <span>Aktualizováno {{ updated }}</span>
+  <span class="sp"></span>
+  {% if v.device.wifi_icon %}<i class="mdi mdi-{{ v.device.wifi_icon }}"></i> slabá WiFi{% endif %}
+  {% if v.device.battery_icon %}<i class="mdi mdi-{{ v.device.battery_icon }} red"></i>
+  <span class="num red">Baterie {{ v.device.battery }} %</span>{% endif %}
+</footer>
+</body>
+</html>

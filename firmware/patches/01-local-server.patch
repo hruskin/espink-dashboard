@@ -1,0 +1,34 @@
+diff --git a/src/http_client.h b/src/http_client.h
+index 7754ae7..5e58c7a 100644
+--- a/src/http_client.h
++++ b/src/http_client.h
+@@ -16,6 +16,12 @@
+   #define CONNECTION_URL_PREFIX "https://"
+ #endif
+ 
++// Server port can be overridden at build time: -D ZO_PORT=8099
++#ifdef ZO_PORT
++  #undef CONNECTION_PORT
++  #define CONNECTION_PORT ZO_PORT
++#endif
++
+ #include <Arduino.h>
+ #include <ArduinoJson.h>
+ #include <WiFi.h>
+diff --git a/src/main.cpp b/src/main.cpp
+index 3db52d1..3308bf5 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -40,7 +40,11 @@
+ ///////////////////////////////////////////////
+ 
+ extern const String serverName = "zivyobraz.eu";
+-const char *host = "cdn.zivyobraz.eu";
++// Server host can be overridden at build time: -D ZO_HOST=\"192.168.1.10\"
++#ifndef ZO_HOST
++  #define ZO_HOST "cdn.zivyobraz.eu"
++#endif
++const char *host = ZO_HOST;
+ const char *firmware = "3.2";
+ const String wifiPassword = "zivyobraz";
+ const String urlWiki = "https://wiki.zivyobraz.eu";

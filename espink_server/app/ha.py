@@ -21,14 +21,16 @@ class HomeAssistant:
             self.base = os.environ.get("HA_URL", "http://homeassistant.local:8123").rstrip("/") + "/api"
             token = os.environ.get("HA_TOKEN", "")
         self.headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        # vývoj: HA přes IP s certifikátem na doménu => HA_VERIFY_SSL=0
+        self.ssl = False if os.environ.get("HA_VERIFY_SSL") == "0" else None
 
     async def _get(self, path: str, params: dict | None = None):
-        async with self.session.get(self.base + path, headers=self.headers, params=params, timeout=TIMEOUT) as r:
+        async with self.session.get(self.base + path, headers=self.headers, params=params, timeout=TIMEOUT, ssl=self.ssl) as r:
             r.raise_for_status()
             return await r.json()
 
     async def _post(self, path: str, payload: dict):
-        async with self.session.post(self.base + path, headers=self.headers, json=payload, timeout=TIMEOUT) as r:
+        async with self.session.post(self.base + path, headers=self.headers, json=payload, timeout=TIMEOUT, ssl=self.ssl) as r:
             r.raise_for_status()
             return await r.json()
 
@@ -90,7 +92,7 @@ class HomeAssistant:
     async def save_addon_options(self, opts: dict) -> None:
         """Uloží konfiguraci add-onu přes Supervisor (validuje ji podle schématu)."""
         url = self.base.removesuffix("/core/api") + "/addons/self/options"
-        async with self.session.post(url, headers=self.headers, json={"options": opts}, timeout=TIMEOUT) as r:
+        async with self.session.post(url, headers=self.headers, json={"options": opts}, timeout=TIMEOUT, ssl=self.ssl) as r:
             body = await r.json(content_type=None)
             if r.status != 200 or body.get("result") != "ok":
                 raise RuntimeError(body.get("message") or f"HTTP {r.status}")

@@ -40,6 +40,10 @@ DEV = os.environ.get("DEV") == "1"
 MOCK = os.environ.get("MOCK") == "1"
 
 
+def template_mtime() -> float:
+    return max(p.stat().st_mtime for p in (render.APP_DIR / "templates").iterdir())
+
+
 def now_local() -> datetime:
     return datetime.now().astimezone()
 
@@ -81,9 +85,14 @@ class Server:
                 print(f"[render] chyba: {self.last_error}")
 
     async def loop(self) -> None:
+        # Ve vývoji se při změně šablony hned překreslí (bez čekání na data)
+        last_tpl, next_data = template_mtime(), 0.0
         while True:
-            await self.rebuild()
-            await asyncio.sleep(self.opts["render_interval"])
+            tpl = template_mtime() if DEV else last_tpl
+            if time.time() >= next_data or tpl != last_tpl:
+                await self.rebuild(force=tpl != last_tpl)
+                next_data, last_tpl = time.time() + self.opts["render_interval"], tpl
+            await asyncio.sleep(1 if DEV else self.opts["render_interval"])
 
     # ── zařízení ─────────────────────────────────────────────────────────
     async def handle_device(self, request: web.Request) -> web.Response:
@@ -176,8 +185,16 @@ class Server:
 <div><table>{rows}</table>
 <form method="post" action="refresh"><button>Překreslit hned</button></form>
 <p><a href="settings"><b>Nastavení</b></a> · <a href="view.json">Model zobrazení (JSON)</a></p></div></div>
-<script>setTimeout(()=>location.reload(),30000)</script></body></html>"""
+<script>
+ // obnovit náhled jen při změně obsahu
+ let ts={self.content_ts};
+ setInterval(async()=>{{try{{const r=await fetch("ts");const t=+(await r.text());
+   if(t!==ts){{location.reload()}}}}catch(e){{}}}},{1000 if DEV else 30000});
+</script></body></html>"""
         return web.Response(text=page, content_type="text/html")
+
+    async def handle_ts(self, request: web.Request) -> web.Response:
+        return web.Response(text=str(self.content_ts), headers={"Cache-Control": "no-store"})
 
     async def handle_preview(self, request: web.Request) -> web.Response:
         if not self.preview:
@@ -251,6 +268,7 @@ async def main() -> None:
             web.get("/index.php", srv.handle_device),
             web.get("/", srv.handle_index),
             web.get("/preview.png", srv.handle_preview),
+            web.get("/ts", srv.handle_ts),
             web.get("/view.json", srv.handle_view),
             web.post("/refresh", srv.handle_refresh),
             web.get("/settings", srv.handle_settings_page),

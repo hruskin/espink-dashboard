@@ -62,14 +62,19 @@ schedule:
                             # v noci spí do 5:45 / 6:00
 ```
 
-## Vývoj bez HA
+## Lokální náhled (vývoj)
 
 ```bash
-cd app
-MOCK=1 OPTIONS_PATH=options.example.json python main.py --once nahled.png   # jen obrázek
-DEV=1 MOCK=1 OPTIONS_PATH=options.example.json python main.py               # server na :8099
-DEV=1 HA_URL=http://ha:8123 HA_TOKEN=... python main.py             # se skutečnými daty
+./dev.sh          # skutečná data z HA → http://localhost:8099
+./dev.sh mock     # ukázková data, bez HA
+./dev.sh once x.png
 ```
+
+První spuštění vytvoří `.venv` a `.env.dev`. Do `.env.dev` doplňte `HA_TOKEN`
+(HA → Profil → Zabezpečení → Dlouhodobé přístupové tokeny). Konfigurace náhledu
+je v `dev-options.json` a dá se měnit i přes stránku Nastavení. Úpravy šablony
+se v prohlížeči projeví hned po uložení, změny v Pythonu vyžadují restart skriptu.
+Soubory `.env.dev`, `dev-options.json` a `.venv` se necommitují.
 
 Panel s náhledem (`/`, `/preview.png`, `/view.json`) je dostupný jen přes Ingress.
 Na portu 8099 je z LAN dostupné pouze `/index.php` pro zařízení.

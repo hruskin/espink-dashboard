@@ -263,7 +263,7 @@ def _events(raw: dict, opts: dict, now: datetime, tz, holidays: dict[date, str],
     today = now.date()
     guaranteed = today + timedelta(days=opts["event_days"] - 1)
     last = today + timedelta(days=max(opts["event_days"], LOOKAHEAD_DAYS) - 1)
-    per_day: dict[date, list] = {today: []}  # „Dnes“ vždy jako kotva přehledu
+    per_day: dict[date, list] = {}
     icons = calendar_icons(raw, opts)
     for cal in opts["calendars"]:
         for ev in raw["events"].get(cal["entity"], []):
@@ -300,7 +300,7 @@ def _events(raw: dict, opts: dict, now: datetime, tz, holidays: dict[date, str],
         if d in holidays and not is_today:  # dnešní svátek je v hlavičce
             uniq.insert(0, {"summary": holidays[d], "label": "", "red": True, "icon": None,
                             "time": "", "allday": True})
-        if not uniq and not is_today:
+        if not uniq:
             continue
         # Agenda: Dnes má pruh, ostatní dny jen řádky oddělené tenkou čárou
         # čára jen mezi dvěma bloky řádků (stejně jako CSS .aday + .aday)
@@ -328,9 +328,9 @@ def _events(raw: dict, opts: dict, now: datetime, tz, holidays: dict[date, str],
     if hidden and used + MORE_ROW_H > EVENTS_HEIGHT and days and days[-1]["rows"]:
         days[-1]["rows"].pop()
         hidden += 1
-        if not days[-1]["rows"] and not days[-1]["today"]:
+        if not days[-1]["rows"]:
             days.pop()
-    empty = len(days) == 1 and not days[0]["rows"]
+    empty = not days
     return {"days": days, "hidden": hidden, "range": opts["event_days"], "icons": bool(icons), "empty": empty}
 
 

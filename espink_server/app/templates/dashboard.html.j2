@@ -164,7 +164,6 @@
   {% if day.today %}
   <div class="day today">
     <span class="label">Dnes</span><span class="ddate">{{ day.date }}</span>
-    {% if not day.rows %}<span class="hol">nic dalšího</span>{% endif %}
   </div>
   {% endif %}
   {% if day.rows %}<div class="aday {{ 'red' if day.holiday_day }}">

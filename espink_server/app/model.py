@@ -40,6 +40,8 @@ LIPO_CURVE = [(4.20, 100), (4.15, 95), (4.11, 90), (4.08, 85), (4.02, 80), (3.98
 # Výšky sekcí v px – musí sedět s CSS v šabloně
 HEADER_H, DEPS_H, FORECAST_H, FOOTER_H, EVENTS_PAD = 138, 188, 104, 24, 6
 EVENTS_HEIGHT = 800 - HEADER_H - DEPS_H - FORECAST_H - FOOTER_H - EVENTS_PAD  # = 340
+# hlavička bez spodního řádku (upozornění / svátek) je nižší
+HEADER_COMPACT_H = 116
 DAY_HEADER_H = 34
 EVENT_ROW_H = 29
 MORE_ROW_H = 22
@@ -391,11 +393,14 @@ def build(raw: dict, opts: dict, device: dict, now: datetime) -> dict:
     holidays = _special_days(raw, opts.get("holiday_calendar"), tz)
     weather_now, forecast = _weather(raw, opts, now, tz)
     departures = _departures(raw, opts, now, tz)
-    budget = EVENTS_HEIGHT + (0 if departures else DEPS_H) + (0 if forecast else FORECAST_H)
+    header = _header(now, {"nameday": names.get(today), "holiday": holidays.get(today),
+                           "alert": _alert(raw, opts, now, tz)})
+    header["height"] = HEADER_H if header["alert"] or header["holiday"] else HEADER_COMPACT_H
+    budget = (EVENTS_HEIGHT + (HEADER_H - header["height"])
+              + (0 if departures else DEPS_H) + (0 if forecast else FORECAST_H))
     events = _events(raw, opts, now, tz, holidays, budget)
     return {
-        "header": _header(now, {"nameday": names.get(today), "holiday": holidays.get(today),
-                                "alert": _alert(raw, opts, now, tz)}),
+        "header": header,
         "weather": weather_now,
         "forecast": forecast,
         "departures": departures,

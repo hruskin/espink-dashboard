@@ -70,7 +70,7 @@
   .aday + .aday { border-top: 1px solid var(--ink); }
   .ev .dl { width: 58px; flex: none; font-size: 17px; font-weight: 800; white-space: nowrap; }
   .ev.red .dl { color: var(--ink); }
-  .aday.red .dl { color: var(--red); }
+  .aday.hday .dl { color: var(--red); }
   .day .label { font-size: 20px; font-weight: 800; }
   .day .ddate { font-size: 16px; font-weight: 600; }
   .day .hol { margin-left: auto; font-size: 15px; font-weight: 700; }
@@ -106,7 +106,7 @@
 </head>
 <body>
 {% set h = v.header %}{% set w = v.weather %}
-<header>
+<header style="height: {{ h.height }}px">
 <div class="hrow">
   <div class="date">
     <div class="daynum num {{ 'red' if h.holiday }}">{{ h.day }}</div>
@@ -166,7 +166,7 @@
     <span class="label">Dnes</span><span class="ddate">{{ day.date }}</span>
   </div>
   {% endif %}
-  {% if day.rows %}<div class="aday {{ 'red' if day.holiday_day }}">
+  {% if day.rows %}<div class="aday {{ 'hday' if day.holiday_day }}">
   {% for e in day.rows %}
   <div class="ev {{ 'red' if e.red }} {{ 'allday' if e.allday }}">
     <span class="dl">{{ day.label if loop.first and not day.today }}</span>

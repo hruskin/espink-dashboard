@@ -86,7 +86,7 @@
   .more { font-size: 15px; font-weight: 700; text-align: right; height: 22px; padding-top: 2px; }
 
   /* ── Předpověď ──────────────────────────── */
-  .forecast { height: 104px; display: flex; border-top: 3px solid var(--ink); }
+  .forecast { height: 104px; display: flex; }
   .fday { flex: 1; text-align: center; padding-top: 6px; }
   .fday .fl { font-size: 17px; font-weight: 800; }
   .fday .fl small { font-size: 15px; font-weight: 700; }
@@ -101,6 +101,7 @@
   footer .mdi { font-size: 20px; }
   footer .num { font-size: 15px; font-weight: 700; margin-left: 2px; }
   footer .sp { flex: 1; }
+  footer .fi { margin-left: 12px; }
 </style>
 </head>
 <body>
@@ -195,7 +196,8 @@
 {% endif %}
 
 <footer>
-  <span>Aktualizováno {{ updated }}</span>
+  <i class="mdi mdi-update"></i><span>{{ updated }}</span>
+  {% if next_wake %}<i class="mdi mdi-timer-sand fi"></i><span>za {{ next_wake }}</span>{% endif %}
   <span class="sp"></span>
   {% if v.device.wifi_icon %}<i class="mdi mdi-{{ v.device.wifi_icon }}"></i> slabá WiFi{% endif %}
   {% if v.device.battery is not none %}<i class="mdi mdi-{{ v.device.battery_icon }} {{ 'red' if v.device.battery_low }}"></i>

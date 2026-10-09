@@ -40,6 +40,15 @@ DEV = os.environ.get("DEV") == "1"
 MOCK = os.environ.get("MOCK") == "1"
 
 
+def after(now: datetime, seconds: int) -> str:
+    """Doba do další obnovy pro patičku: „5 min“, „1 h 30 min“."""
+    minutes = max(1, round(seconds / 60))
+    if minutes < 60:
+        return f"{minutes} min"
+    h, m = divmod(minutes, 60)
+    return f"{h} h {m} min" if m else f"{h} h"
+
+
 def template_mtime() -> float:
     return max(p.stat().st_mtime for p in (render.APP_DIR / "templates").iterdir())
 
@@ -62,6 +71,9 @@ class Server:
         self.device: dict = {}
         self.last_error = ""
         self.last_build = 0.0
+        self.updated_text = ""
+        self.next_text = ""       # „další obnova“ v aktuálním obrázku
+        self.served_ts = None     # Timestamp, který deska naposledy dostala (= má na displeji)
 
     # ── sestavení obrázku ────────────────────────────────────────────────
     async def rebuild(self, force: bool = False) -> None:
@@ -75,9 +87,12 @@ class Server:
                 if digest == self.view_hash and not force:
                     return
                 updated = f"{now.day}. {now.month}. {now:%H:%M}"  # %-d nefunguje v musl (Alpine)
+                # odhad; přesná doba se dokreslí, až se deska ozve (handle_device)
+                next_text = after(now, self.schedule.sleep_seconds(now))
                 self.preview, self.payload = await render.render(
-                    view, updated, self.opts["rotate"], self.opts["image_format"])
+                    view, updated, self.opts["rotate"], self.opts["image_format"], next_text)
                 self.view, self.view_hash, self.content_ts = view, digest, int(now.timestamp())
+                self.updated_text, self.next_text = updated, next_text
                 self.last_error = ""
                 print(f"[render] nový obsah {digest[:8]} ({len(self.payload)} B)")
             except Exception as e:  # noqa: BLE001 – server musí běžet dál i při chybě
@@ -127,6 +142,8 @@ class Server:
 
         if not self.payload:
             await self.rebuild(force=True)
+        if check == "1":
+            await self.stamp_next_wake(now, sleep)
         headers = {
             "Timestamp": str(self.content_ts),
             "PreciseSleep": str(sleep),
@@ -134,6 +151,21 @@ class Server:
             "Connection": "close",
         }
         return web.Response(body=self.payload, headers=headers)
+
+    async def stamp_next_wake(self, now: datetime, sleep: int) -> None:
+        """Deska bude překreslovat => dokreslit do patičky přesnou dobu do další obnovy.
+        Obsah (a Timestamp) se nemění, takže to nevyvolá žádné překreslení navíc."""
+        if self.content_ts != self.served_ts and self.view:
+            wanted = after(now, sleep)
+            if wanted != self.next_text:
+                async with self.lock:
+                    try:
+                        self.preview, self.payload = await render.render(
+                            self.view, self.updated_text, self.opts["rotate"], self.opts["image_format"], wanted)
+                        self.next_text = wanted
+                    except Exception as e:  # noqa: BLE001 – raději starý odhad než nic
+                        print(f"[render] patička: {e}")
+        self.served_ts = self.content_ts
 
     async def publish_device(self, now: datetime, sleep: int) -> None:
         if MOCK or not self.ha or not self.opts.get("battery_sensor"):

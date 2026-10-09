@@ -86,14 +86,24 @@ class Window:
     end: time
     interval: int
 
+    @property
+    def wraps(self) -> bool:
+        """Okno přes půlnoc, např. 23:00-05:00."""
+        return self.start >= self.end
+
     def contains(self, now: datetime) -> bool:
-        if now.isoweekday() not in self.days:
-            return False
         t = now.time()
-        return self.start <= t < self.end
+        if not self.wraps:
+            return now.isoweekday() in self.days and self.start <= t < self.end
+        if t >= self.start:  # večerní část – den začátku okna
+            return now.isoweekday() in self.days
+        if t < self.end:     # ranní část – okno začalo předchozí den
+            return (now - timedelta(days=1)).isoweekday() in self.days
+        return False
 
     def end_at(self, now: datetime) -> datetime:
-        return now.replace(hour=self.end.hour, minute=self.end.minute, second=0, microsecond=0)
+        end = now.replace(hour=self.end.hour, minute=self.end.minute, second=0, microsecond=0)
+        return end + timedelta(days=1) if end <= now else end
 
 
 @dataclass

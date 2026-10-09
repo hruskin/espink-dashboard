@@ -33,8 +33,9 @@ def chromium_binary() -> str:
     raise RuntimeError("Chromium nenalezen")
 
 
-def render_html(view: dict, updated: str) -> str:
-    return _env.get_template("dashboard.html.j2").render(v=view, updated=updated, updated_time=updated.split()[-1], static=STATIC_DIR.as_uri())
+def render_html(view: dict, updated: str, next_wake: str = "") -> str:
+    return _env.get_template("dashboard.html.j2").render(
+        v=view, updated=updated, updated_time=updated.split()[-1], next_wake=next_wake, static=STATIC_DIR.as_uri())
 
 
 async def screenshot(html: str) -> Image.Image:
@@ -113,9 +114,9 @@ def to_png(pal: Image.Image) -> bytes:
     return buf.getvalue()
 
 
-async def render(view: dict, updated: str, rotate: int, fmt: str) -> tuple[bytes, bytes]:
+async def render(view: dict, updated: str, rotate: int, fmt: str, next_wake: str = "") -> tuple[bytes, bytes]:
     """Vrátí (náhled PNG v portrétu, data pro zařízení)."""
-    img = await screenshot(render_html(view, updated))
+    img = await screenshot(render_html(view, updated, next_wake))
     pal = await asyncio.to_thread(quantize, img)
     payload = await asyncio.to_thread(device_payload, pal, rotate, fmt)
     return to_png(pal), payload

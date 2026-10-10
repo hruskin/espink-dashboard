@@ -7,11 +7,6 @@ import hashlib
 import json
 from datetime import date, datetime, timedelta
 
-from jinja2.sandbox import SandboxedEnvironment
-from markupsafe import Markup
-
-import layout as layout_mod
-
 DAYS = ["pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota", "neděle"]
 DAYS_SHORT = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"]
 MONTHS_GEN = ["ledna", "února", "března", "dubna", "května", "června",
@@ -41,8 +36,12 @@ LIPO_CURVE = [(4.20, 100), (4.15, 95), (4.11, 90), (4.08, 85), (4.02, 80), (3.98
               (3.80, 40), (3.79, 35), (3.77, 30), (3.75, 25), (3.73, 20), (3.71, 15),
               (3.69, 10), (3.61, 5), (3.27, 0)]
 
-# Výšky řádků agendy v px – musí sedět s CSS v šabloně (výšky bloků viz layout.py)
-EVENTS_PAD = 6
+# Výškový rozpočet sekce událostí v px (musí sedět s CSS v šabloně)
+# Výšky sekcí v px – musí sedět s CSS v šabloně
+HEADER_H, DEPS_H, FORECAST_H, FOOTER_H, EVENTS_PAD = 138, 188, 104, 24, 6
+EVENTS_HEIGHT = 800 - HEADER_H - DEPS_H - FORECAST_H - FOOTER_H - EVENTS_PAD  # = 340
+# hlavička bez spodního řádku (upozornění / svátek) je nižší
+HEADER_COMPACT_H = 116
 DAY_HEADER_H = 34
 EVENT_ROW_H = 29
 MORE_ROW_H = 22
@@ -105,54 +104,62 @@ def day_label(d: date, today: date) -> str:
 
 # ---------------------------------------------------------------------------
 
+def _header(now: datetime, cal_today: dict) -> dict:
+    # Červeně jen státní svátek – víkend by ředil význam červené
+    return {
+        "day": now.day,
+        "weekday": DAYS[now.weekday()],
+        "month": MONTHS_GEN[now.month - 1],
+        "week": f"{now.isocalendar().week}. týden",
+        "nameday": cal_today.get("nameday"),
+        "holiday": cal_today.get("holiday"),
+        "alert": cal_today.get("alert"),
+    }
+
+
 EVENING_HOUR = 18  # od této hodiny ukazovat v hlavičce min/max na zítřek
 
 
-def _weather(raw: dict, b: dict, now: datetime, tz) -> dict:
-    """Aktuální počasí do záhlaví: vlastní meteostanice, jinak entita počasí."""
+def _weather(raw: dict, opts: dict, now: datetime, tz) -> tuple[dict, list]:
     today = now.date()
     minmax_day = today + timedelta(days=1) if now.hour >= EVENING_HOUR else today
     states = raw["states"]
-    st = lambda key: states.get(b.get(key) or "", {}).get("state")  # noqa: E731
-    w = states.get(b.get("weather") or "")
+    st = lambda key: states.get(opts.get(key) or "", {}).get("state")  # noqa: E731
+    w = states.get(opts.get("weather") or "")
     cond = w["state"] if w else None
 
-    temp = st("temperature")
+    temp = st("meteo_temperature")
     if fnum(temp) is None and w:
         temp = w["attributes"].get("temperature")
-    hum = st("humidity")
+    hum = st("meteo_humidity")
     if fnum(hum) is None and w:
         hum = w["attributes"].get("humidity")
-    rain = fnum(st("rain"))
+    rain = fnum(st("meteo_rain_today"))
 
-    out = {
+    now_block = {
         "icon": WEATHER_ICONS.get(cond or "", "weather-cloudy-alert"),
         "temp": num(temp),
         "humidity": num(hum, 0),
         "rain": num(rain) if rain and rain >= 0.1 else None,
-        "pressure": num(st("pressure"), 0),
-        "indoor": num(st("indoor")),
+        "pressure": num(st("meteo_pressure"), 0),
+        "indoor": num(st("indoor_temperature")),
         "min": None,
         "max": None,
         "minmax_label": "zítra" if minmax_day != today else "",
     }
-    for f in raw["forecasts"].get(b.get("weather") or "", []):
-        dt = parse_dt(f.get("datetime", ""), tz)
-        if dt and dt.date() == minmax_day:
-            out["min"] = num(f.get("templow"), 0)
-            out["max"] = num(f.get("temperature"), 0)
-    return out
 
-
-def _forecast(raw: dict, b: dict, now: datetime, tz) -> list:
-    today = now.date()
     days = []
-    for f in raw["forecasts"].get(b.get("weather") or "", []):
+    for f in raw.get("forecast", []):
         dt = parse_dt(f.get("datetime", ""), tz)
         if not dt:
             continue
         d = dt.date()
-        if d <= today or len(days) >= b["days"]:
+        if d == minmax_day:
+            now_block["min"] = num(f.get("templow"), 0)
+            now_block["max"] = num(f.get("temperature"), 0)
+        if d == today:
+            continue
+        if d < today or len(days) >= 4:
             continue
         precip = fnum(f.get("precipitation"))
         days.append({
@@ -163,7 +170,7 @@ def _forecast(raw: dict, b: dict, now: datetime, tz) -> list:
             "min": num(f.get("templow"), 0),
             "precip": (num(precip, 0 if precip >= 10 else 1) + " mm") if precip and precip >= 0.5 else None,
         })
-    return days
+    return now_block, days
 
 
 def short_headsign(h: str) -> str:
@@ -174,19 +181,18 @@ def short_headsign(h: str) -> str:
     return h.replace(",", ", ")
 
 
-def _departures(raw: dict, b: dict, now: datetime, tz, rows: int) -> dict:
-    s = raw["states"].get(b["entity"])
+def _departures(raw: dict, opts: dict, now: datetime, tz) -> dict | None:
+    if not opts.get("departures") or opts.get("departures_count", 0) <= 0:
+        return None
+    s = raw["states"].get(opts["departures"])
     block = {"stop": "", "rows": [], "error": None, "disruptions": None}
-    if not b["entity"]:
-        block["error"] = "Není vybrána odjezdová tabule"
-        return block
     if not s or s["state"] in ("unavailable", "unknown"):
         block["error"] = "Odjezdy nejsou dostupné"
         return block
     a = s["attributes"]
     block["stop"] = a.get("stop_name", "")
 
-    dis = raw["states"].get(b.get("disruptions") or "")
+    dis = raw["states"].get(opts.get("disruptions") or "")
     if dis and (fnum(dis["state"]) or 0) > 0:
         texts = dis["attributes"].get("infotexts") or []
         first = texts[0] if texts else ""
@@ -194,9 +200,9 @@ def _departures(raw: dict, b: dict, now: datetime, tz, rows: int) -> dict:
             first = first.get("text") or first.get("display_text") or ""
         block["disruptions"] = {"count": int(fnum(dis["state"])), "text": str(first)[:160] or "Výluka"}
     # řádek s textem výluky zabere místo jednoho odjezdu
-    count = max(1, rows - (1 if block["disruptions"] else 0))
+    count = max(1, opts["departures_count"] - (1 if block["disruptions"] else 0))
 
-    limit = (now + timedelta(minutes=b.get("walk_minutes", 0))).replace(second=0, microsecond=0)
+    limit = (now + timedelta(minutes=opts.get("walk_minutes", 0))).replace(second=0, microsecond=0)
     for d in a.get("departures", []):
         t = parse_dt(d.get("predicted") or d.get("scheduled") or "", tz)
         if not t or t < limit:
@@ -243,25 +249,25 @@ def _special_days(raw: dict, cal_id: str, tz) -> dict[date, str]:
     return out
 
 
-def calendar_icons(raw: dict, calendars: list) -> dict[str, str]:
+def calendar_icons(raw: dict, opts: dict) -> dict[str, str]:
     """Ikona kalendáře: vlastní z nastavení, jinak atribut icon entity v HA („mdi:soccer“ -> „soccer“)."""
     out = {}
-    for cal in calendars:
+    for cal in opts["calendars"]:
         icon = cal.get("icon") or raw["states"].get(cal["entity"], {}).get("attributes", {}).get("icon") or ""
         if icon.startswith("mdi:"):
             out[cal["entity"]] = icon[4:]
     return out
 
 
-def _events(raw: dict, b: dict, now: datetime, tz, budget: int) -> dict:
+def _events(raw: dict, opts: dict, now: datetime, tz, holidays: dict[date, str],
+            budget: int = EVENTS_HEIGHT) -> dict:
     EVENTS_HEIGHT = budget  # noqa: N806 – lokální rozpočet
     today = now.date()
-    holidays = _special_days(raw, b.get("holiday_calendar"), tz)
-    guaranteed = today + timedelta(days=b["days"] - 1)
-    last = today + timedelta(days=max(b["days"], LOOKAHEAD_DAYS) - 1)
+    guaranteed = today + timedelta(days=opts["event_days"] - 1)
+    last = today + timedelta(days=max(opts["event_days"], LOOKAHEAD_DAYS) - 1)
     per_day: dict[date, list] = {}
-    icons = calendar_icons(raw, b["calendars"])
-    for cal in b["calendars"]:
+    icons = calendar_icons(raw, opts)
+    for cal in opts["calendars"]:
         for ev in raw["events"].get(cal["entity"], []):
             n = _normalize_event(ev, tz)
             if not n:
@@ -294,9 +300,6 @@ def _events(raw: dict, b: dict, now: datetime, tz, budget: int) -> dict:
                 uniq.append({k: v for k, v in it.items() if k != "sort"})
         is_today = d == today
         if d in holidays and not is_today:  # dnešní svátek je v hlavičce
-            # stejný svátek může být i v některém z běžných kalendářů
-            uniq = [it for it in uniq if not it.get("allday")
-                    or it["summary"].casefold() != holidays[d].casefold()]
             uniq.insert(0, {"summary": holidays[d], "label": "", "red": True, "icon": None,
                             "time": "", "allday": True})
         if not uniq:
@@ -330,14 +333,14 @@ def _events(raw: dict, b: dict, now: datetime, tz, budget: int) -> dict:
         if not days[-1]["rows"]:
             days.pop()
     empty = not days
-    return {"days": days, "hidden": hidden, "range": b["days"], "icons": bool(icons), "empty": empty}
+    return {"days": days, "hidden": hidden, "range": opts["event_days"], "icons": bool(icons), "empty": empty}
 
 
-def _alert(raw: dict, calendars: list, now: datetime, tz) -> str | None:
+def _alert(raw: dict, opts: dict, now: datetime, tz) -> str | None:
     """Nejbližší „červená“ událost dnes/zítra (svoz, narozeniny) jako upozornění do hlavičky."""
     today = now.date()
     for when, d in (("Dnes", today), ("Zítra", today + timedelta(days=1))):
-        for cal in calendars:
+        for cal in opts["calendars"]:
             if not cal.get("red"):
                 continue
             for ev in raw["events"].get(cal["entity"], []):
@@ -383,188 +386,27 @@ def _device(device: dict) -> dict:
     }
 
 
-STATE_TEXT = {"on": "zapnuto", "off": "vypnuto", "open": "otevřeno", "closed": "zavřeno",
-              "opening": "otevírá se", "closing": "zavírá se", "home": "doma", "not_home": "pryč",
-              "locked": "zamčeno", "unlocked": "odemčeno", "playing": "hraje", "paused": "pozastaveno",
-              "idle": "nečinný", "standby": "pohotovost", "cleaning": "uklízí", "docked": "v základně",
-              "returning": "vrací se", "charging": "nabíjí", "discharging": "vybíjí", "full": "nabito",
-              "heat": "topí", "cool": "chladí", "auto": "automaticky", "armed_away": "střeženo",
-              "armed_home": "střeženo doma", "disarmed": "nestřeženo", "triggered": "poplach",
-              "above_horizon": "nad obzorem", "below_horizon": "pod obzorem", "true": "ano", "false": "ne"}
-# binární senzory: význam on/off podle device_class
-BINARY_TEXT = {
-    "door": ("otevřeno", "zavřeno"), "window": ("otevřeno", "zavřeno"), "opening": ("otevřeno", "zavřeno"),
-    "garage_door": ("otevřeno", "zavřeno"), "lock": ("odemčeno", "zamčeno"),
-    "motion": ("pohyb", "klid"), "occupancy": ("obsazeno", "volno"), "presence": ("doma", "pryč"),
-    "moisture": ("mokro", "sucho"), "battery": ("slabá", "OK"), "battery_charging": ("nabíjí", "nenabíjí"),
-    "connectivity": ("připojeno", "odpojeno"), "plug": ("zapojeno", "odpojeno"), "power": ("zapnuto", "vypnuto"),
-    "problem": ("problém", "OK"), "safety": ("nebezpečí", "OK"), "smoke": ("kouř", "OK"), "gas": ("plyn", "OK"),
-    "running": ("běží", "neběží"), "update": ("aktualizace", "aktuální"), "vibration": ("vibrace", "klid"),
-}
-
-
-def format_state(s: dict | None, attribute: str = "", decimals: int = 1, maxlen: int = 60) -> dict:
-    """Stav (nebo atribut) entity pro displej: {value, unit, number, text}.
-    Čísla česky s jednotkou, časy jako „9. 10. 18:40“, známé stavy přeloženě, jinak text."""
-    out = {"value": "—", "unit": "", "number": None, "text": False}
-    if not s:
-        return out
-    a = s.get("attributes", {})
-    raw = a.get(attribute) if attribute else s.get("state")
-    if raw is None or raw in ("unavailable", "unknown", ""):
-        return out
-    if isinstance(raw, (list, tuple)):
-        raw = ", ".join(str(x) for x in raw)
-    elif isinstance(raw, dict):
-        raw = ", ".join(f"{k}: {v}" for k, v in raw.items())
-    v = fnum(raw) if not isinstance(raw, bool) else None
-    if v is not None:
-        if isinstance(raw, int):  # celočíselný atribut (jas, počet…) bez desetinných míst
-            decimals = 0
-        out.update(value=num(v, decimals), number=v,
-                   unit="" if attribute else (a.get("unit_of_measurement") or ""))
-        return out
-    text = str(raw)
-    domain = s.get("entity_id", "").split(".")[0]
-    dc = a.get("device_class")
-    if domain == "binary_sensor" and text in ("on", "off") and dc in BINARY_TEXT:
-        text = BINARY_TEXT[dc][0 if text == "on" else 1]
-    elif isinstance(raw, bool):
-        text = "ano" if raw else "ne"
-    elif text in STATE_TEXT:
-        text = STATE_TEXT[text]
-    else:
-        try:  # časový údaj (device_class timestamp, last_triggered…)
-            if len(text) >= 16 and text[4] == "-" and "T" in text:
-                dt = datetime.fromisoformat(text).astimezone()
-                text = f"{dt.day}. {dt.month}. {dt:%H:%M}"
-            elif len(text) == 10 and text[4] == "-" and text[7] == "-":
-                d = date.fromisoformat(text)
-                text = f"{d.day}. {d.month}. {d.year}"
-        except ValueError:
-            pass
-    out.update(value=text[:maxlen] + ("…" if len(text) > maxlen else ""), text=True)
-    return out
-
-
-def _icon(b: dict, s: dict | None) -> str | None:
-    icon = b.get("icon") or (s or {}).get("attributes", {}).get("icon") or ""
-    return icon[4:] if icon.startswith("mdi:") else (icon or None)
-
-
-def _value(raw: dict, b: dict) -> dict:
-    """Jedna hodnota entity (stav nebo atribut): číslo s jednotkou, nebo text."""
-    s = raw["states"].get(b["entity"]) if b["entity"] else None
-    a = (s or {}).get("attributes", {})
-    f = format_state(s, b["attribute"], b["decimals"])
-    lo, hi = fnum(b["red_below"]), fnum(b["red_above"])
-    v = f["number"]
-    return {"label": (b["label"] or a.get("friendly_name") or b["entity"] or "Hodnota") if b["show_label"] else "",
-            "icon": _icon(b, s), "value": f["value"], "unit": f["unit"], "text": f["text"],
-            "red": v is not None and ((lo is not None and v < lo) or (hi is not None and v > hi))}
-
-
-def _footer_items(raw: dict, items: list) -> list:
-    out = []
-    for it in items:
-        s = raw["states"].get(it["entity"])
-        f = format_state(s, it.get("attribute", ""), it.get("decimals", 1), maxlen=40)
-        out.append({"icon": _icon(it, s), "label": it.get("label", ""), "value": f["value"],
-                    "unit": f["unit"], "side": it.get("side", "left")})
-    return out
-
-
-def _text(b: dict) -> dict:
-    lines = b["text"].split("\n")[:30]
-    return {"lines": lines, "size": b["size"], "align": b["align"], "bold": b["bold"], "red": b["red"]}
-
-
-# Šablona běží v sandboxu Jinja: žádný přístup k Pythonu ani souborům; výstup je HTML
-# (vykresluje se v Chromiu s CSP bez skriptů a sítě), hodnoty entit se escapují.
-_tpl_env = SandboxedEnvironment(autoescape=True)
-_tpl_env.filters["num"] = lambda v, decimals=1: num(v, decimals) or "—"  # „11,6“ jako zbytek displeje
-
-
-def _template(raw: dict, b: dict, now: datetime) -> dict:
-    states = raw["states"]
-
-    def state(eid):
-        return (states.get(eid) or {}).get("state", "unknown")
-
-    def attr(eid, name):
-        return (states.get(eid) or {}).get("attributes", {}).get(name)
-
-    if not b["code"].strip():
-        return {"html": "", "error": "Prázdná šablona"}
-    try:
-        html = _tpl_env.from_string(b["code"]).render(
-            states=state, state_attr=attr, is_state=lambda e, v: state(e) == v, now=now)
-        return {"html": Markup(html[:8000]), "error": None}
-    except Exception as e:  # noqa: BLE001 – chyba šablony nesmí shodit dashboard
-        return {"html": "", "error": f"Chyba šablony: {type(e).__name__}: {e}"[:200]}
-
-
-def _header(raw: dict, b: dict, layout: dict, now: datetime, tz) -> dict:
-    today = now.date()
-    # upozornění bere červené kalendáře z bloku Události (i skrytého)
-    red_cals = [c for x in layout["blocks"] if x["type"] == "agenda" for c in x["calendars"]] if b["alert"] else []
-    holiday = _special_days(raw, b.get("holiday_calendar"), tz).get(today)
-    # Červeně jen státní svátek – víkend by ředil význam červené
-    return {
-        "day": now.day,
-        "weekday": DAYS[now.weekday()],
-        "month": MONTHS_GEN[now.month - 1],
-        "nameday": _special_days(raw, b.get("nameday_calendar"), tz).get(today),
-        "holiday": holiday,
-        "alert": _alert(raw, red_cals, now, tz),
-        "weather": _weather(raw, b, now, tz) if b["show_weather"] else None,
-    }
-
-
-def build(raw: dict, layout: dict, device: dict, now: datetime, worst: bool = False) -> dict:
-    """Model zobrazení: bloky s hotovými daty a obdélníkem v px; obsah se přizpůsobí obdélníku.
-    worst=True (jen náhled v editoru) vynutí upozornění v záhlaví a výluku v odjezdech."""
+def build(raw: dict, opts: dict, device: dict, now: datetime) -> dict:
     tz = now.tzinfo
-    blocks = []
-    for b in layout_mod.visible(layout):
-        t = b["type"]
-        left, top, width, height = layout_mod.rect_px(b)
-        lt, ll = layout_mod.LINES[b["line_top"]], layout_mod.LINES[b["line_left"]]
-        inner_h = height - lt
-        vb = {"type": t, "id": b["id"], "left": left, "top": top, "width": width, "height": height,
-              "line_top": lt, "line_left": ll, "inner_w": width - ll, "inner_h": inner_h}
-        if t == "header":
-            vb.update(_header(raw, b, layout, now, tz))
-            if worst and not vb["alert"]:
-                vb["alert"] = "Zítra: Ukázkové upozornění"
-            # bez spodního řádku (upozornění/svátek) obsah svisle vycentrovat (106 px = datum + jmeniny)
-            vb["pad_top"] = 8 if vb["alert"] or vb["holiday"] else max(8, (inner_h - 106) // 2)
-        elif t == "weather_now":
-            vb["weather"] = _weather(raw, b, now, tz)
-        elif t == "departures":
-            rows = max(0, (inner_h - layout_mod.DEPS_BASE_H) // layout_mod.DEP_ROW_H)
-            vb.update(_departures(raw, b, now, tz, rows))
-            if worst and not vb["disruptions"] and rows:
-                vb["disruptions"] = {"count": 1, "text": "Ukázková výluka"}
-                vb["rows"] = vb["rows"][:max(1, rows - 1)]
-        elif t == "forecast":
-            # dní jen kolik se vejde (aspoň 60 px na den); pod 100 px na den max a min pod sebou
-            fit = max(1, min(b["days"], (width - ll) // 60))
-            vb["days"] = _forecast(raw, dict(b, days=fit), now, tz)
-            vb["stack"] = bool(vb["days"]) and (width - ll) / len(vb["days"]) < 100
-        elif t == "footer":
-            vb.update({k: b[k] for k in ("updated", "next", "week", "battery")},
-                      week_label=f"{now.isocalendar().week}. týden", items=_footer_items(raw, b["items"]))
-        elif t == "text":
-            vb.update(_text(b))
-        elif t == "template":
-            vb.update(_template(raw, b, now))
-        elif t == "value":
-            vb.update(_value(raw, b))
-        elif t == "agenda":
-            vb.update(_events(raw, b, now, tz, inner_h - EVENTS_PAD))
-        blocks.append(vb)
-    return {"blocks": blocks, "device": _device(device)}
+    today = now.date()
+    names = _special_days(raw, opts.get("nameday_calendar"), tz)
+    holidays = _special_days(raw, opts.get("holiday_calendar"), tz)
+    weather_now, forecast = _weather(raw, opts, now, tz)
+    departures = _departures(raw, opts, now, tz)
+    header = _header(now, {"nameday": names.get(today), "holiday": holidays.get(today),
+                           "alert": _alert(raw, opts, now, tz)})
+    header["height"] = HEADER_H if header["alert"] or header["holiday"] else HEADER_COMPACT_H
+    budget = (EVENTS_HEIGHT + (HEADER_H - header["height"])
+              + (0 if departures else DEPS_H) + (0 if forecast else FORECAST_H))
+    events = _events(raw, opts, now, tz, holidays, budget)
+    return {
+        "header": header,
+        "weather": weather_now,
+        "forecast": forecast,
+        "departures": departures,
+        "events": events,
+        "device": _device(device),
+    }
 
 
 def digest(view: dict) -> str:

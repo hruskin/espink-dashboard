@@ -13,20 +13,15 @@
   :root { --ink: #000; --paper: #fff; --red: #e00000; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 480px; height: 800px; overflow: hidden; background: var(--paper); color: var(--ink); }
-  body { font-family: "Inter", "NotoEmoji", sans-serif; font-weight: 500; position: relative; }
+  body { font-family: "Inter", "NotoEmoji", sans-serif; font-weight: 500; display: flex; flex-direction: column; }
   .red { color: var(--red); }
   .cond { font-family: "RobotoCondensed", "NotoEmoji", sans-serif; }
   .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .num { font-variant-numeric: tabular-nums; }
   .mdi::before { line-height: 1; }
 
-  /* Bloky jdou pod sebou; výšku a čáru nad blokem nastavuje model (layout.py) */
-  /* Bloky leží na mřížce (layout.py): poloha a velikost inline, čára nahoře a vlevo.
-     container-type: obsah se může přizpůsobit velikosti svého bloku (@container, cqw/cqh) */
-  .blk { position: absolute; overflow: hidden; border: 0 solid var(--ink); container-type: size; }
-
-  /* ── Záhlaví ────────────────────────────── */
-  .blk.header { padding: 8px 16px 0; position: relative; }
+  /* ── Hlavička ───────────────────────────── */
+  header { height: 138px; padding: 8px 16px 0; border-bottom: 2px solid var(--ink); position: relative; }
   .hrow { display: flex; }
   /* upozornění přes celou šířku dole v hlavičce */
   .hline { position: absolute; left: 16px; right: 16px; bottom: 3px; height: 24px; font-size: 19px; font-weight: 800; }
@@ -38,18 +33,6 @@
   .nameday { font-size: 17px; font-weight: 600; margin-top: 8px; letter-spacing: -0.2px; }
   .nameday .mdi { font-size: 20px; margin-right: 1px; }
   .now { width: 212px; text-align: right; overflow: hidden; }
-  /* samostatný blok Počasí teď */
-  .blk.weather_now { display: flex; align-items: center; justify-content: center; padding: 0 12px; }
-  .blk.weather_now .now { width: 100%; }
-  .blk.weather_now .now-top, .blk.weather_now .now-sub { justify-content: center; }
-  @container (max-width: 210px) {
-    .weather_now .minmax, .weather_now .now-sub + .now-sub, .weather_now .rain { display: none; }
-    .weather_now .now-top { height: auto; gap: 2px; }
-    .weather_now .now-top .mdi { font-size: clamp(22px, 22cqw, 40px); }
-    .weather_now .temp, .weather_now .temp.long { font-size: clamp(20px, 26cqw, 46px); letter-spacing: -1px; }
-    .weather_now .now-sub { font-size: 15px; gap: 4px; }
-    .weather_now .now-sub .mdi { font-size: 18px; }
-  }
   .now-top { display: flex; justify-content: flex-end; align-items: center; gap: 4px; height: 54px; margin-bottom: 2px; }
   .now-top .mdi { font-size: 50px; line-height: 1; flex: none; }
   .minmax { display: flex; flex-direction: column; align-items: flex-end; line-height: 20px; font-size: 17px; margin-right: 2px; flex: none; letter-spacing: -0.5px; }
@@ -65,7 +48,7 @@
   .now-sub small { font-size: 15px; font-weight: 700; }
 
   /* ── Odjezdy ────────────────────────────── */
-  .blk.departures { padding: 8px 16px 0; }
+  .deps { height: 188px; padding: 8px 16px 0; border-bottom: 2px solid var(--ink); }
   .sec-title { display: flex; align-items: center; gap: 6px; font-size: 17px; font-weight: 800;
                text-transform: uppercase; letter-spacing: 0.5px; height: 26px; }
   .sec-title .mdi { font-size: 22px; }
@@ -83,7 +66,7 @@
   .msg { font-size: 19px; font-weight: 600; padding-top: 8px; }
 
   /* ── Události ───────────────────────────── */
-  .blk.agenda { padding: 6px 16px 0; }
+  .events { flex: 1; padding: 6px 16px 0; overflow: hidden; }
   .day { display: flex; align-items: baseline; height: 34px; padding: 6px 8px 0; margin: 0 -8px; gap: 8px; }
   /* agenda: dny oddělené tenkou čarou (1 px = SEP_H v modelu) */
   .aday + .aday { border-top: 1px solid var(--ink); }
@@ -105,10 +88,7 @@
   .more { font-size: 15px; font-weight: 700; text-align: right; height: 22px; padding-top: 2px; }
 
   /* ── Předpověď ──────────────────────────── */
-  .fcbox { display: flex; width: 100%; height: 100%; }
-  .fcbox.stack .sl { display: none; }
-  .fcbox.stack .ft .lo { display: block; }
-  .fcbox.stack .fp { display: none; }
+  .forecast { height: 104px; display: flex; }
   .fday { flex: 1; text-align: center; padding-top: 6px; }
   .fday .fl { font-size: 17px; font-weight: 800; }
   .fday .fl small { font-size: 15px; font-weight: 700; }
@@ -117,91 +97,114 @@
   .fday .ft .lo { font-weight: 600; }
   .fday .fp { font-size: 15px; font-weight: 700; }
 
-  /* ── Hodnota entity (velikosti s/m/l = VALUE_H v layout.py) ── */
-  /* písmo podle velikosti bloku: široký blok = ikona · popisek · hodnota v řádku,
-     užší = ikona s popiskem nahoře a velká hodnota pod nimi */
-  /* @container smí měnit jen potomky kontejneru, proto vnitřní .vbox */
-  .blk.value { padding: 0 12px; }
-  .vbox { display: flex; align-items: center; gap: 8px; width: 100%; height: 100%; }
-  .value .mdi { flex: none; font-size: clamp(16px, 60cqh, 64px); }
-  .value .vl { flex: 1; min-width: 0; font-weight: 600; font-size: clamp(14px, 34cqh, 30px); }
-  .value .vv { flex: none; font-weight: 800; white-space: nowrap; letter-spacing: -0.5px; font-size: clamp(16px, min(66cqh, 13cqw), 80px); }
-  .vbox.nolabel { justify-content: center; flex-wrap: nowrap; }
-  /* textový stav: menší písmo, smí se zkrátit výpustkou */
-  .value .vv.vtext { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0;
-                     font-family: "RobotoCondensed", "NotoEmoji", sans-serif; font-size: clamp(14px, min(42cqh, 9cqw), 48px); }
-  .footer .f-ent .num { margin-left: 0; }
-  .footer .f-ent { max-width: 45%; overflow: hidden; }
-  .value .vv small { font-size: 0.55em; font-weight: 700; letter-spacing: 0; }
-  @container (max-width: 359px) {
-    .vbox { flex-wrap: wrap; align-content: center; column-gap: 4px; row-gap: 0; }
-    .value .mdi { font-size: clamp(14px, 26cqh, 28px); }
-    .value .vl { font-size: clamp(12px, 24cqh, 22px); }
-    .value .vv { width: 100%; text-align: center; line-height: 1; font-size: clamp(14px, min(50cqh, 24cqw), 80px); }
-    .vbox.nolabel { flex-wrap: nowrap; }
-    .vbox.nolabel .vv { width: auto; font-size: clamp(14px, min(64cqh, 22cqw), 80px); }
-    .value .vv.vtext { width: 100%; font-size: clamp(12px, min(30cqh, 13cqw), 40px); }
-  }
-
-  /* úzké bloky (mřížka): méně detailů místo přetékání */
-  @container (max-width: 330px) {
-    .departures .sec-title .right, .departures .plat { display: none; }
-    .dep { gap: 5px; }
-    .dep .time { font-size: 21px; width: 58px; }
-    .dep .delay { font-size: 15px; width: 30px; margin-left: 0; }
-    .route { font-size: 15px; width: 40px; height: 22px; line-height: 22px; }
-    .dep .head { font-size: 18px; }
-    .agenda .tag { display: none; }
-    .ev { gap: 5px; }
-    .ev .dl { width: 46px; font-size: 14px; }
-    .ev .t { width: 44px; font-size: 16px; }
-    .ev .s { font-size: 18px; }
-    .fday .fl small { display: none; }
-    .fday .ft { font-size: 16px; }
-  }
-  @container (max-width: 280px) {
-    .ev .ci { display: none; }
-    .ev { gap: 4px; }
-    .ev .dl { width: 38px; font-size: 13px; }
-    .ev .t { width: 44px; font-size: 14px; flex: none; }
-    .ev .s { font-size: 17px; }
-  }
-  @container (max-width: 420px) {
-    .header .now { width: 150px; }
-    .header .minmax { display: none; }
-    .header .temp { font-size: 38px; }
-    .header .now-sub { font-size: 16px; gap: 6px; }
-  }
-  @container (max-width: 320px) { .header .now { display: none; } }
-
-  /* ── Text (výška řádku = TEXT_LINE_H v layout.py) ── */
-  .blk.text { padding: 4px 16px; }
-  .text.sz-s .txt div { font-size: 19px; line-height: 24px; height: 24px; }
-  .text.sz-m .txt div { font-size: 26px; line-height: 32px; height: 32px; }
-  .text.sz-l .txt div { font-size: 44px; line-height: 52px; height: 52px; }
-  /* ── Šablona: vlastní HTML, k dispozici třídy red/num/cond/ellipsis a ikony mdi ── */
-  .blk.template { padding: 4px 16px; font-size: 20px; }
-  .tplerr { font-size: 15px; font-weight: 700; }
-
   /* ── Patička ────────────────────────────── */
-  .blk.footer { padding: 0 16px; font-size: 14px; font-weight: 600; }
-  .fbox { display: flex; align-items: center; gap: 4px; width: 100%; height: 100%; white-space: nowrap; }
-  .fit { display: inline-flex; align-items: center; gap: 4px; }
-  .footer .mdi { font-size: 20px; }
-  .footer .num { font-size: 15px; font-weight: 700; margin-left: 2px; }
-  .footer .sp { flex: 1; }
-  .footer .fit + .fit { margin-left: 12px; }
-  /* úzká patička: schovávat podle priority – týden, další obnovení, čas aktualizace */
-  @container (max-width: 440px) { .footer .f-week { display: none; } }
-  @container (max-width: 330px) { .footer .f-next { display: none; } }
-  @container (max-width: 200px) { .footer .f-upd { display: none; } }
+  footer { height: 24px; border-top: 1px solid var(--ink); display: flex; align-items: center;
+           padding: 0 16px; font-size: 14px; font-weight: 600; gap: 4px; }
+  footer .mdi { font-size: 20px; }
+  footer .num { font-size: 15px; font-weight: 700; margin-left: 2px; }
+  footer .sp { flex: 1; }
+  footer .fi { margin-left: 12px; }
 </style>
 </head>
 <body>
-{% for b in v.blocks %}
-<section class="blk {{ b.type }} {{ 'sz-' ~ b.size if b.size }}" style="left: {{ b.left }}px; top: {{ b.top }}px; width: {{ b.width }}px; height: {{ b.height }}px; border-top-width: {{ b.line_top }}px; border-left-width: {{ b.line_left }}px">
-{% include "blocks/" ~ b.type ~ ".html.j2" %}
+{% set h = v.header %}{% set w = v.weather %}
+<header style="height: {{ h.height }}px">
+<div class="hrow">
+  <div class="date">
+    <div class="daynum num {{ 'red' if h.holiday }}">{{ h.day }}</div>
+    <div class="datetext">
+      <div class="weekday {{ 'red' if h.holiday }}">{{ h.weekday }}</div>
+      <div class="month">{{ h.month }}</div>
+      {% if h.nameday %}<div class="nameday ellipsis"><i class="mdi mdi-flower-tulip-outline"></i>{{ h.nameday }}</div>{% endif %}
+    </div>
+  </div>
+  <div class="now">
+    <div class="now-top">
+      <i class="mdi mdi-{{ w.icon }}"></i>
+      {% if w.min and w.max %}<span class="minmax num">
+        {% if w.minmax_label %}<small>{{ w.minmax_label }}</small>{% endif %}
+        <span class="hi">{{ w.max }}°</span><span class="lo">{{ w.min }}°</span>
+      </span>{% endif %}
+      <span class="temp num {{ 'long' if (w.temp or '')|length > 4 }}">{{ w.temp or '--' }}°</span>
+    </div>
+    <div class="now-sub num">
+      {% if w.humidity %}<span><i class="mdi mdi-water-percent"></i>{{ w.humidity }} %</span>{% endif %}
+      {% if w.rain %}<span><i class="mdi mdi-weather-pouring"></i>{{ w.rain }} mm</span>{% endif %}
+    </div>
+    {% if w.indoor or w.pressure %}<div class="now-sub num">
+      {% if w.indoor %}<span><i class="mdi mdi-home-thermometer-outline"></i>{{ w.indoor }}°</span>{% endif %}
+      {% if w.pressure %}<span><i class="mdi mdi-gauge"></i>{{ w.pressure }} hPa</span>{% endif %}
+    </div>{% endif %}
+  </div>
+</div>
+{% if h.alert %}<div class="hline red ellipsis">{{ h.alert }}</div>
+{% elif h.holiday %}<div class="hline red ellipsis">{{ h.holiday }}</div>{% endif %}
+</header>
+
+{% if v.departures %}{% set d = v.departures %}
+<section class="deps">
+  <div class="sec-title">
+    <i class="mdi mdi-bus"></i><span class="ellipsis">{{ d.stop or 'Odjezdy' }}</span>
+    <span class="right num">stav {{ updated_time }}</span>
+  </div>
+  {% if d.error %}<div class="msg">{{ d.error }}</div>{% endif %}
+  {% for x in d.rows %}
+  <div class="dep {{ 'canceled' if x.canceled }}">
+    <span class="time num">{{ x.time }}</span>
+    <span class="delay num red">{{ x.delay or '' }}</span>
+    <span class="route num">{{ x.route }}</span>
+    <span class="head cond ellipsis">{% if x.canceled %}<b class="red">ZRUŠENO</b>{% else %}{{ x.headsign }}{% endif %}</span>
+    {% if x.platform %}<span class="plat">{{ x.platform }}</span>{% endif %}
+  </div>
+  {% endfor %}
+  {% if d.disruptions %}<div class="dis red ellipsis"><i class="mdi mdi-alert"></i> {{ d.disruptions.text }}</div>{% endif %}
 </section>
-{% endfor %}
+{% endif %}
+
+<section class="events">
+  {% for day in v.events.days %}
+  {% if day.today %}
+  <div class="day today">
+    <span class="label">Dnes</span><span class="ddate">{{ day.date }}</span>
+  </div>
+  {% endif %}
+  {% if day.rows %}<div class="aday {{ 'hday' if day.holiday_day }}">
+  {% for e in day.rows %}
+  <div class="ev {{ 'red' if e.red }} {{ 'allday' if e.allday }}">
+    <span class="dl">{{ day.label if loop.first and not day.today }}</span>
+    <span class="t num">{{ e.time }}</span>
+    {% if v.events.icons %}<i class="ci mdi {{ 'mdi-' ~ e.icon if e.icon }}"></i>{% endif %}
+    <span class="s cond ellipsis">{{ e.summary }}</span>
+    {% if e.label %}<span class="tag">{{ e.label }}</span>{% endif %}
+  </div>
+  {% endfor %}
+  </div>{% endif %}
+  {% endfor %}
+  {% if v.events.empty %}<div class="msg">Žádné události v příštích {{ v.events.range }} dnech</div>{% endif %}
+  {% if v.events.hidden %}<div class="more">+ {{ v.events.hidden }} další{{ 'ch' if v.events.hidden >= 5 }} …</div>{% endif %}
+</section>
+
+{% if v.forecast %}
+<section class="forecast">
+  {% for f in v.forecast %}
+  <div class="fday">
+    <div class="fl">{{ f.label }} <small>{{ f.date }}</small></div>
+    <i class="mdi mdi-{{ f.icon }}"></i>
+    <div class="ft num">{{ f.max or '--' }}° <span class="lo">/ {{ f.min or '--' }}°</span></div>
+    {% if f.precip %}<div class="fp num">{{ f.precip }}</div>{% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<footer>
+  <i class="mdi mdi-update"></i><span>{{ updated }}</span>
+  {% if next_wake %}<i class="mdi mdi-timer-sand fi"></i><span>za {{ next_wake }}</span>{% endif %}
+  <i class="mdi mdi-calendar-week fi"></i><span>{{ h.week }}</span>
+  <span class="sp"></span>
+  {% if v.device.wifi_icon %}<i class="mdi mdi-{{ v.device.wifi_icon }}"></i> slabá WiFi{% endif %}
+  {% if v.device.battery is not none %}<i class="mdi mdi-{{ v.device.battery_icon }} {{ 'red' if v.device.battery_low }}"></i>
+  <span class="num {{ 'red' if v.device.battery_low }}">{{ v.device.battery }} %</span>{% endif %}
+</footer>
 </body>
 </html>

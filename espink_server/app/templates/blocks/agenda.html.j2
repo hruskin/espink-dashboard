@@ -1,0 +1,20 @@
+{% for day in b.days %}
+{% if day.today %}
+<div class="day today">
+  <span class="label">Dnes</span><span class="ddate">{{ day.date }}</span>
+</div>
+{% endif %}
+{% if day.rows %}<div class="aday {{ 'hday' if day.holiday_day }}">
+{% for e in day.rows %}
+<div class="ev {{ 'red' if e.red }} {{ 'allday' if e.allday }}">
+  <span class="dl">{{ day.label if loop.first and not day.today }}</span>
+  <span class="t num">{{ e.time }}</span>
+  {% if b.icons %}<i class="ci mdi {{ 'mdi-' ~ e.icon if e.icon }}"></i>{% endif %}
+  <span class="s cond ellipsis">{{ e.summary }}</span>
+  {% if e.label %}<span class="tag">{{ e.label }}</span>{% endif %}
+</div>
+{% endfor %}
+</div>{% endif %}
+{% endfor %}
+{% if b.empty %}<div class="msg">Žádné události v příštích {{ b.range }} dnech</div>{% endif %}
+{% if b.hidden %}<div class="more">+ {{ b.hidden }} další{{ 'ch' if b.hidden >= 5 }} …</div>{% endif %}

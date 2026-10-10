@@ -1,0 +1,14 @@
+{% set w = b.weather %}
+<div class="hrow" style="margin-top: {{ b.pad_top - 8 }}px">
+  <div class="date">
+    <div class="daynum num {{ 'red' if b.holiday }}">{{ b.day }}</div>
+    <div class="datetext">
+      <div class="weekday {{ 'red' if b.holiday }}">{{ b.weekday }}</div>
+      <div class="month">{{ b.month }}</div>
+      {% if b.nameday %}<div class="nameday ellipsis"><i class="mdi mdi-flower-tulip-outline"></i>{{ b.nameday }}</div>{% endif %}
+    </div>
+  </div>
+  {% if w %}{% include "blocks/_now.html.j2" %}{% endif %}
+</div>
+{% if b.alert %}<div class="hline red ellipsis">{{ b.alert }}</div>
+{% elif b.holiday %}<div class="hline red ellipsis">{{ b.holiday }}</div>{% endif %}

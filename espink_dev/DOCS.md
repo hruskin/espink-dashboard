@@ -18,9 +18,11 @@
 > převede automaticky.
 >
 > Bloky: Záhlaví (s počasím nebo bez), Počasí teď, Odjezdy, Události, Předpověď,
-> Patička, Hodnota entity (ikona, červeně pod/nad mezí), Text a Šablona (Jinja
+> Patička (i s libovolnými entitami), Hodnota entity (stav nebo atribut, textové stavy
+přeložené, ikona, červeně pod/nad mezí), Text a Šablona (Jinja
 > v sandboxu + HTML; `states()`, `state_attr()`, `is_state()`, `now`, filtr `|num(1)`).
-> Dál: duplikace, náhled „nejhorší případ“, mřížka 10/50 px, výběr ikon, export/import
+> Dál: prohození stejně širokých pásů přetažením, dvojklik na úchyt = roztáhnout
+k sousedovi, duplikace, náhled „nejhorší případ“, mřížka sloupců, výběr ikon, export/import
 > JSON, historie posledních 15 uložených verzí, ochrana proti přepsání z jiné karty.
 >
 > API (jen přes Ingress): `GET layout.json`, `POST layout/preview` (PNG),

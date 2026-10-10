@@ -18,6 +18,7 @@ import aiohttp
 from aiohttp import web
 
 import ha as ha_mod
+import layout as layout_mod
 import mock
 import model
 import options
@@ -50,7 +51,7 @@ def after(now: datetime, seconds: int) -> str:
 
 
 def template_mtime() -> float:
-    return max(p.stat().st_mtime for p in (render.APP_DIR / "templates").iterdir())
+    return max(p.stat().st_mtime for p in (render.APP_DIR / "templates").rglob("*") if p.is_file())
 
 
 def now_local() -> datetime:
@@ -60,6 +61,8 @@ def now_local() -> datetime:
 class Server:
     def __init__(self, opts: dict):
         self.opts = opts
+        self.layout, self.layout_saved, self.layout_error = layout_mod.load(opts)
+        self.draft_lock = asyncio.Lock()
         self.schedule = options.Schedule.parse(opts["schedule"])
         self.lock = asyncio.Lock()
         self.ha: ha_mod.HomeAssistant | None = None
@@ -84,8 +87,7 @@ class Server:
         async with self.lock:
             now = now_local()
             try:
-                raw = mock.raw(self.opts, now) if MOCK else await ha_mod.collect(self.ha, self.opts, now)
-                view = model.build(raw, self.opts, self.device, now)
+                view = await self.build_view(self.layout, now)
                 digest = model.digest(view)
                 self.last_build = time.time()
                 if digest == self.view_hash and not force:
@@ -102,6 +104,20 @@ class Server:
             except Exception as e:  # noqa: BLE001 – server musí běžet dál i při chybě
                 self.last_error = f"{now:%H:%M:%S} {type(e).__name__}: {e}"
                 print(f"[render] chyba: {self.last_error}")
+
+    async def build_view(self, layout: dict, now: datetime, worst: bool = False) -> dict:
+        needs = layout_mod.needs(layout)
+        raw = mock.raw(needs, now) if MOCK else await ha_mod.collect(self.ha, needs, now)
+        return model.build(raw, layout, self.device or await self.device_from_sensor(), now, worst)
+
+    async def device_from_sensor(self) -> dict:
+        """Deska se k tomuto serveru zatím nehlásila (DEV vedle stabilního add-onu) –
+        napětí a signál pro náhled vzít ze senzoru baterie, který plní stabilní verze."""
+        if MOCK or not self.ha or not self.opts.get("battery_sensor"):
+            return {}
+        s = await self.ha.state(self.opts["battery_sensor"])
+        a = (s or {}).get("attributes", {})
+        return {"voltage": model.fnum(a.get("voltage")), "rssi": model.fnum(a.get("rssi"))} if a.get("voltage") else {}
 
     async def loop(self) -> None:
         # Ve vývoji se při změně šablony hned překreslí (bez čekání na data)
@@ -263,7 +279,7 @@ class Server:
 <div class="wrap"><img id="p" src="preview.png?{self.content_ts}" alt="Náhled displeje">
 <div><table>{rows}</table>
 <button onclick="fetch('refresh',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:'{{}}'}}).then(()=>location.reload())">Překreslit hned</button>
-<p><a href="settings"><b>Nastavení</b></a> · <a href="view.json">Model zobrazení (JSON)</a></p></div></div>
+<p><a href="./"><b>Editor rozvržení</b></a> · <a href="settings"><b>Nastavení</b></a> · <a href="view.json">Model zobrazení (JSON)</a></p></div></div>
 <script>
  // obnovit náhled jen při změně obsahu
  let ts={self.content_ts};
@@ -285,6 +301,10 @@ class Server:
                                  dumps=lambda o: json.dumps(o, ensure_ascii=False, indent=2, default=str))
 
     # ── nastavení s našeptávačem ─────────────────────────────────────────
+    async def handle_editor(self, request: web.Request) -> web.Response:
+        return web.FileResponse(render.APP_DIR / "templates" / "editor.html",
+                                headers={"Cache-Control": "no-store"})
+
     async def handle_settings_page(self, request: web.Request) -> web.Response:
         return web.FileResponse(render.APP_DIR / "templates" / "settings.html",
                                 headers={"Cache-Control": "no-store"})
@@ -294,7 +314,7 @@ class Server:
 
     async def handle_entities(self, request: web.Request) -> web.Response:
         if MOCK:
-            raw = mock.raw(self.opts, now_local())
+            raw = mock.raw(layout_mod.needs(self.layout), now_local())
             ids = list(raw["states"]) + list(raw["events"]) + ["sensor.temperature_10", "weather.home"]
             return web.json_response([{"id": i, "name": i.split(".")[1].replace("_", " "), "unit": ""} for i in sorted(set(ids))])
         try:
@@ -312,9 +332,65 @@ class Server:
             return web.json_response({"error": str(e)}, status=400)
         self.opts = new
         self.schedule = options.Schedule.parse(new["schedule"])
+        if not self.layout_saved:  # rozvržení zatím odvozené z konfigurace
+            self.layout = layout_mod.from_options(new)
         await self.rebuild(force=True)
         print("[settings] konfigurace uložena")
         return web.json_response({"options": self.opts, "error": self.last_error or None})
+
+    # ── rozvržení (editor) ───────────────────────────────────────────────
+    async def handle_layout(self, request: web.Request) -> web.Response:
+        return web.json_response({"layout": self.layout, "saved": self.layout_saved,
+                                  "error": self.layout_error, "schema": layout_mod.schema()},
+                                 headers={"Cache-Control": "no-store"})
+
+    async def read_layout(self, request: web.Request) -> dict:
+        if request.content_type != "application/json":  # ochrana proti CSRF
+            raise web.HTTPUnsupportedMediaType(text="očekávám application/json")
+        try:
+            return layout_mod.sanitize(await request.json())
+        except (ValueError, TypeError, json.JSONDecodeError) as e:
+            raise web.HTTPBadRequest(text=json.dumps({"error": str(e)}, ensure_ascii=False),
+                                     content_type="application/json")
+
+    async def handle_layout_save(self, request: web.Request) -> web.Response:
+        new = await self.read_layout(request)
+        # Ochrana proti přepsání změn z jiné karty: návrh musí vycházet z aktuální revize
+        if new["rev"] != self.layout.get("rev", 0) and request.query.get("force") != "1":
+            return web.json_response({"error": "Rozvržení bylo mezitím uloženo jinde.", "conflict": True,
+                                      "layout": self.layout}, status=409)
+        try:
+            new = layout_mod.save(new, self.layout if self.layout_saved else None)
+        except OSError as e:
+            return web.json_response({"error": f"nelze uložit: {e}"}, status=500)
+        self.layout, self.layout_saved, self.layout_error = new, True, ""
+        await self.rebuild(force=True)
+        print("[layout] rozvržení uloženo")
+        return web.json_response({"layout": new, "error": self.last_error or None})
+
+    async def handle_layout_preview(self, request: web.Request) -> web.Response:
+        """Náhled neuloženého rozvržení – stejný renderer jako pro desku (přesné pixely)."""
+        draft = await self.read_layout(request)
+        async with self.draft_lock:  # Chromium je drahý – náhledy jeden po druhém
+            now = now_local()
+            try:
+                view = await self.build_view(draft, now, worst=request.query.get("worst") == "1")
+                png, _ = await render.render(view, f"{now.day}. {now.month}. {now:%H:%M}",
+                                             self.opts["rotate"], "png",
+                                             after(now, self.schedule.sleep_seconds(now)))
+            except Exception as e:  # noqa: BLE001
+                return web.json_response({"error": f"{type(e).__name__}: {e}"}, status=502)
+        return web.Response(body=png, content_type="image/png", headers={
+            "Cache-Control": "no-store"})
+
+    async def handle_history(self, request: web.Request) -> web.Response:
+        items = []
+        for it in layout_mod.history():  # starší verze (i bloky pod sebou) převést na aktuální tvar
+            try:
+                items.append({"rev": it.get("rev", 0), "layout": layout_mod.sanitize(it["layout"])})
+            except (ValueError, TypeError, KeyError):
+                continue
+        return web.json_response(items, headers={"Cache-Control": "no-store"})
 
     async def handle_refresh(self, request: web.Request) -> web.Response:
         if request.content_type != "application/json":  # ochrana proti CSRF
@@ -345,7 +421,8 @@ async def main() -> None:
         app = web.Application(middlewares=[srv.ingress_only])
         app.add_routes([
             web.post("/index.php", srv.handle_device),
-            web.get("/", srv.handle_index),
+            web.get("/", srv.handle_editor),
+            web.get("/status", srv.handle_index),
             web.get("/preview.png", srv.handle_preview),
             web.get("/ts", srv.handle_ts),
             web.get("/view.json", srv.handle_view),
@@ -354,6 +431,11 @@ async def main() -> None:
             web.post("/settings", srv.handle_settings_save),
             web.get("/options.json", srv.handle_options),
             web.get("/entities.json", srv.handle_entities),
+            web.get("/layout.json", srv.handle_layout),
+            web.static("/static", render.STATIC_DIR),
+            web.post("/layout", srv.handle_layout_save),
+            web.post("/layout/preview", srv.handle_layout_preview),
+            web.get("/layout/history.json", srv.handle_history),
         ])
         runner = web.AppRunner(app, access_log=None)
         await runner.setup()

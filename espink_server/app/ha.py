@@ -95,7 +95,9 @@ class HomeAssistant:
         states = await self._get("/states")
         return sorted(
             ({"id": s["entity_id"], "name": s["attributes"].get("friendly_name", ""),
-              "unit": s["attributes"].get("unit_of_measurement", "")} for s in states),
+              "unit": s["attributes"].get("unit_of_measurement", ""), "state": str(s.get("state", ""))[:60],
+              "attrs": [k for k in s["attributes"] if k not in ("friendly_name", "icon", "unit_of_measurement")][:40]}
+             for s in states),
             key=lambda e: e["id"],
         )
 
@@ -147,29 +149,19 @@ def aggregate_daily(items: list[dict]) -> list[dict]:
     return sorted(out, key=lambda d: d["datetime"])
 
 
-async def collect(ha: HomeAssistant, opts: dict, now: datetime) -> dict:
-    """Stáhne všechna surová data potřebná pro dashboard (paralelně)."""
-    state_ids = [
-        opts[k]
-        for k in ("meteo_temperature", "meteo_humidity", "meteo_rain_today", "meteo_pressure",
-                  "indoor_temperature", "weather", "departures", "disruptions")
-        if opts.get(k)
-    ] + [c["entity"] for c in opts["calendars"]]  # kvůli atributu icon
+async def collect(ha: HomeAssistant, needs: dict, now: datetime) -> dict:
+    """Stáhne všechna surová data potřebná pro rozvržení (paralelně); needs viz layout.needs()."""
     await ha.ping()
     day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    end = day_start + timedelta(days=max(opts["event_days"], 31) + 1)  # viz model.LOOKAHEAD_DAYS
-    cal_ids = [c["entity"] for c in opts["calendars"]]
-    for k in ("nameday_calendar", "holiday_calendar"):
-        if opts.get(k):
-            cal_ids.append(opts[k])
-
-    states, events, forecast = await asyncio.gather(
+    end = day_start + timedelta(days=31 + 1)  # viz model.LOOKAHEAD_DAYS
+    state_ids, cal_ids, fc_ids = needs["states"], needs["calendars"], needs["forecasts"]
+    states, events, forecasts = await asyncio.gather(
         asyncio.gather(*(ha.state(e) for e in state_ids)),
         asyncio.gather(*(ha.calendar_events(c, day_start, end) for c in cal_ids)),
-        ha.daily_forecast(opts.get("weather", "")),
+        asyncio.gather(*(ha.daily_forecast(w) for w in fc_ids)),
     )
     return {
         "states": {e: s for e, s in zip(state_ids, states) if s},
         "events": dict(zip(cal_ids, events)),
-        "forecast": forecast,
+        "forecasts": dict(zip(fc_ids, forecasts)),
     }

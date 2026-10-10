@@ -5,6 +5,30 @@ Add-on sbírá data z Home Assistantu (kalendáře, odjezdy, meteostanice, před
 vykreslí z nich dashboard 480×800 ve třech barvách a předá ho zařízení protokolem
 Živého obrazu. Zařízení běží na baterii a mezi probuzeními spí.
 
+
+## Editor rozvržení
+
+**Editor** (panel ESPink → Rozvržení): displej je mřížka 12 sloupců po 40 px,
+svisle po 4 px. Bloky se tahají přímo v náhledu a roztahují za úchyty (šipky posouvají
+vybraný blok, Shift+šipky mění velikost); přesné souřadnice jdou zadat v panelu.
+Překryvy editor nedovolí, volná místa jsou šrafovaná. Obsah se přizpůsobí velikosti
+bloku – Události a Odjezdy podle výšky spočítají, kolik řádků se vejde, úzké bloky
+skryjí méně důležité detaily. „Seřadit pod sebe“ srovná bloky na celou šířku.
+Náhled vykresluje server stejně jako pro desku. Po prvním uložení platí pro obsah jen
+editor (entity v Systém → nastavení se pak už nepoužijí). Starší rozvržení (bloky pod sebou) se
+převede automaticky.
+
+Bloky: Záhlaví (s počasím nebo bez), Počasí teď, Odjezdy, Události, Předpověď,
+Patička (i s libovolnými entitami), Hodnota entity (stav nebo atribut, textové stavy
+přeložené, ikona, červeně pod/nad mezí), Text a Šablona (Jinja
+v sandboxu + HTML; `states()`, `state_attr()`, `is_state()`, `now`, filtr `|num(1)`).
+Dál: prohození stejně širokých pásů přetažením, dvojklik na úchyt = roztáhnout
+k sousedovi, duplikace, náhled „nejhorší případ“, mřížka sloupců, výběr ikon, export/import
+JSON, historie posledních 15 uložených verzí, ochrana proti přepsání z jiné karty.
+
+API (jen přes Ingress): `GET layout.json`, `POST layout/preview` (PNG),
+`POST layout` (uložení), `GET layout/history.json`.
+
 ## Instalace (lokální add-on)
 
 1. Zkopírujte složku `espink_server` do `/addons/` na HA OS (doplněk Samba nebo SSH).

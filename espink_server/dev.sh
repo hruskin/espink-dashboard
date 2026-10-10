@@ -34,6 +34,8 @@ export DEV=1
 # vlastní kopie konfigurace (stejný formát jako konfigurace add-onu)
 export OPTIONS_PATH="${OPTIONS_PATH:-$HERE/dev-options.json}"
 [ -f "$OPTIONS_PATH" ] || cp "$HERE/app/options.example.json" "$OPTIONS_PATH"
+# rozvržení z editoru (dokud neexistuje, odvodí se z konfigurace)
+export LAYOUT_PATH="${LAYOUT_PATH:-$HERE/dev-layout.json}"
 
 cd "$HERE/app"
 case "${1:-}" in

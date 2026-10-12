@@ -131,14 +131,18 @@ class Server:
 
         if check == "1":
             old_bucket = model._device(self.device)["battery"]
+            prev = self.device
             self.device = {
                 "voltage": model.fnum(system.get("vccVoltage")),
                 "rssi": model.fnum(network.get("rssi")),
                 "mac": network.get("mac"),
                 "ip": network.get("ipAddress") or request.remote,
                 "fw": body.get("fwVersion"),
-                "refresh_ms": display.get("lastRefreshDuration"),
-                "download_ms": network.get("lastDownloadDuration"),
+                # deska posílá délku překreslení jen po probuzení, které následuje po překreslení –
+                # jinak ponechat poslední známou hodnotu (≈20 000 ms = vypršel limit ovladače panelu)
+                "refresh_ms": display.get("lastRefreshDuration") or prev.get("refresh_ms"),
+                "download_ms": network.get("lastDownloadDuration") or prev.get("download_ms"),
+                "cpu_temp": model.fnum(system.get("cpuTemp")),
                 "reset_reason": system.get("resetReason"),
                 "last_seen": now.isoformat(timespec="seconds"),
                 "sleep": sleep,
@@ -224,7 +228,7 @@ class Server:
             "last_seen": d.get("last_seen"), "next_wake": wake.isoformat(timespec="seconds"),
             "refresh_ms": d.get("refresh_ms"), "ip": d.get("ip"), "firmware": d.get("fw"),
             # důvod posledního restartu desky („brownout“ = pokles napětí, např. při překreslení)
-            "reset_reason": d.get("reset_reason"),
+            "reset_reason": d.get("reset_reason"), "cpu_temp": d.get("cpu_temp"),
         })
 
     # ── UI (jen přes Ingress) ────────────────────────────────────────────
@@ -245,6 +249,7 @@ class Server:
                 ("Další probuzení za", f"{d.get('sleep')} s" if d.get("sleep") else "–"),
                 ("Obnovení displeje", f"{d.get('refresh_ms')} ms" if d.get("refresh_ms") else "–"),
                 ("Poslední restart", d.get("reset_reason") or "–"),
+                ("Teplota procesoru", f"{d.get('cpu_temp'):.0f} °C" if d.get("cpu_temp") is not None else "–"),
                 ("Firmware", d.get("fw") or "–"),
                 ("Obsah změněn", datetime.fromtimestamp(self.content_ts).strftime("%H:%M:%S") if self.content_ts else "–"),
                 ("Velikost dat", f"{len(self.payload)} B ({self.opts['image_format']})"),

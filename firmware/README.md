@@ -114,10 +114,14 @@ Ověřeno ve zdrojovém kódu upstreamu (`src/http_client.cpp`, `src/main.cpp`, 
 - `ZO_AP_PASSWORD` – vlastní heslo konfiguračního AP místo veřejně známého
   `zivyobraz` (z `config.local.env`, který se necommituje).
 
-## Delší limit překreslení (patches/03-busy-timeout.patch)
+## Zastavené překreslení na baterii (patches/03, 04)
 
-Knihovna GxEPD2 čeká na dokončení překreslení panelu GDEY075Z08 nejvýš 20 s, nominálně
-trvá 17 s. V chladnějším prostředí panel potřeboval 20,05 s – ovladač ho pak vypnul
-uprostřed překreslení (po inverzním blikání a mazání) a displej zůstal bílý. Server to
-pozná podle atributu `refresh_ms` ≈ 20 000 u `sensor.espink_baterie`. Patch zvyšuje limit
-na 45 s.
+Příznak: na baterii panel po inverzním blikání a mazání (~10 s) přestane pracovat,
+displej zůstane bílý a firmware po 20 s ohlásí vypršení čekání (`refresh_ms` ≈ 20 000
+u `sensor.espink_baterie`). S připojeným USB se to neděje.
+
+- `03-busy-timeout.patch` – limit čekání na dokončení překreslení 45 s místo 20 s
+  (rezerva pro pomalejší překreslení v chladu; zastavený panel ale neopraví).
+- `04-no-light-sleep-refresh.patch` + `-D ZO_NO_LIGHT_SLEEP_REFRESH` – během
+  překreslení procesor neusíná do lehkého spánku (s USB se lehký spánek neuplatní,
+  proto to tam fungovalo). Spotřeba během překreslení o něco vyšší.

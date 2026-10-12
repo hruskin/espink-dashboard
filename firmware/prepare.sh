@@ -78,6 +78,7 @@ build_flags =
     -D ZO_HOST=\\"${ZO_HOST}\\"
     -D ZO_PORT=${ZO_PORT}
     -D ZO_DISABLE_OTA
+    -D ZO_NO_LIGHT_SLEEP_REFRESH
     -D ZO_AP_PASSWORD=\\"${ZO_AP_PASSWORD}\\"
     -D BOARD_HAS_PSRAM
     -D ARDUINO_USB_MODE=1

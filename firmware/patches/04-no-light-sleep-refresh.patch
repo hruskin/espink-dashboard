@@ -1,0 +1,18 @@
+diff --git a/src/display.cpp b/src/display.cpp
+--- a/src/display.cpp
++++ b/src/display.cpp
+@@ -585,6 +585,14 @@
+ 
+ void enableLightSleepDuringRefresh(bool enable)
+ {
++#ifdef ZO_NO_LIGHT_SLEEP_REFRESH
++  // Lokální úprava: na ESPink s GDEY075Z08 se panel na baterii uprostřed překreslení
++  // zastavoval (BUSY se neuvolnilo, displej zůstal bílý), s připojeným USB – kdy se
++  // lehký spánek neuplatní – ne. Během překreslení proto čekat bez lehkého spánku.
++  (void)enable;
++  setBusyCallback(nullptr);
++  return;
++#endif
+ #ifndef M5StackCoreInk
+   if (enable)
+   {

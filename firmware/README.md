@@ -113,3 +113,11 @@ Ověřeno ve zdrojovém kódu upstreamu (`src/http_client.cpp`, `src/main.cpp`, 
   Firmware nahráváme přes USB.
 - `ZO_AP_PASSWORD` – vlastní heslo konfiguračního AP místo veřejně známého
   `zivyobraz` (z `config.local.env`, který se necommituje).
+
+## Delší limit překreslení (patches/03-busy-timeout.patch)
+
+Knihovna GxEPD2 čeká na dokončení překreslení panelu GDEY075Z08 nejvýš 20 s, nominálně
+trvá 17 s. V chladnějším prostředí panel potřeboval 20,05 s – ovladač ho pak vypnul
+uprostřed překreslení (po inverzním blikání a mazání) a displej zůstal bílý. Server to
+pozná podle atributu `refresh_ms` ≈ 20 000 u `sensor.espink_baterie`. Patch zvyšuje limit
+na 45 s.

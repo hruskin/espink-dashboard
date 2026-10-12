@@ -239,6 +239,8 @@ class Server:
             "friendly_name": "ESPink baterie", "voltage": d.get("voltage"), "rssi": d.get("rssi"),
             "last_seen": d.get("last_seen"), "next_wake": wake.isoformat(timespec="seconds"),
             "refresh_ms": d.get("refresh_ms"), "ip": d.get("ip"), "firmware": d.get("fw"),
+            # důvod posledního restartu desky („brownout“ = pokles napětí, např. při překreslení)
+            "reset_reason": d.get("reset_reason"),
         })
 
     # ── UI (jen přes Ingress) ────────────────────────────────────────────
@@ -258,6 +260,7 @@ class Server:
                 ("WiFi", f"{d.get('rssi')} dBm" if d.get("rssi") is not None else "–"),
                 ("Další probuzení za", f"{d.get('sleep')} s" if d.get("sleep") else "–"),
                 ("Obnovení displeje", f"{d.get('refresh_ms')} ms" if d.get("refresh_ms") else "–"),
+                ("Poslední restart", d.get("reset_reason") or "–"),
                 ("Firmware", d.get("fw") or "–"),
                 ("Obsah změněn", datetime.fromtimestamp(self.content_ts).strftime("%H:%M:%S") if self.content_ts else "–"),
                 ("Velikost dat", f"{len(self.payload)} B ({self.opts['image_format']})"),

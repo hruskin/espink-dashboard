@@ -69,7 +69,10 @@ class Mqtt:
         import paho.mqtt.client as paho  # jen když je MQTT nastavené
         self.connected = threading.Event()
         self.on_connect = on_connect
-        self.client = paho.Client(paho.CallbackAPIVersion.VERSION2, client_id="espink_server")
+        try:
+            self.client = paho.Client(paho.CallbackAPIVersion.VERSION2, client_id="espink_server")
+        except AttributeError:  # paho-mqtt 1.x (balíček v Alpine 3.21)
+            self.client = paho.Client(client_id="espink_server")
         if user:
             self.client.username_pw_set(user, password)
         self.client.on_connect = self._connected
@@ -80,7 +83,8 @@ class Mqtt:
         self.client.loop_start()
 
     def _connected(self, client, userdata, flags, reason, properties=None):
-        if reason.is_failure:
+        # 2.x: ReasonCode, 1.x: číslo (0 = v pořádku)
+        if (reason.is_failure if hasattr(reason, "is_failure") else reason != 0):
             print(f"[mqtt] připojení k {self.target} odmítnuto: {reason}")
             return
         print(f"[mqtt] připojeno k {self.target}")
@@ -88,7 +92,8 @@ class Mqtt:
         if self.on_connect:
             self.on_connect()
 
-    def _disconnected(self, client, userdata, flags, reason, properties=None):
+    def _disconnected(self, client, userdata, *args):
+        reason = args[1] if len(args) >= 2 else args[0]  # 2.x: (flags, reason, properties), 1.x: (rc,)
         if self.connected.is_set():
             print(f"[mqtt] odpojeno ({reason}), připojím se znovu")
         self.connected.clear()

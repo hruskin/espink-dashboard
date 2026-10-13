@@ -38,7 +38,7 @@
 </head>
 <body>
 <div class="wrap">
-  <nav><h1>Nastavení ESPink</h1><a href="./">← Náhled</a></nav>
+  <nav><h1>Nastavení ESPink</h1><a href="./">← Editor</a> <a href="panels">Panely</a> <a href="status">Stav</a></nav>
   <form id="f" autocomplete="off"></form>
   <div class="bar"><button class="primary" id="save">Uložit</button><span id="msg"></span></div>
 </div>
@@ -71,12 +71,12 @@ const SECTIONS = [
     ["event_days", "Počet dní dopředu", "int"],
   ]],
   ["Displej a baterie", [
-    ["schedule", "Rozvrh probouzení", "lines", "jedno pravidlo na řádek: [dny ]HH:MM-HH:MM=sekundy, dny 1=Po…7=Ne"],
+    ["schedule", "Výchozí rozvrh probouzení", "lines", "pro panely bez vlastního rozvrhu (ten se nastaví v Panelech); jedno pravidlo na řádek: [dny ]HH:MM-HH:MM=sekundy, dny 1=Po…7=Ne"],
     ["rotate", "Otočení obrazu", "select:0,90,180,270", "obraz vzhůru nohama → 90 ↔ 270"],
     ["image_format", "Formát pro zařízení", "select:z2,png"],
     ["render_interval", "Kontrola dat (s)", "int"],
-    ["battery_sensor", "Senzor baterie (zapisuje add-on)", "text"],
-    ["allowed_devices", "Povolená zařízení (MAC)", "lines", "jedna MAC na řádek; prázdné = první zařízení, které se ozve, se zapíše samo. Ostatní jsou odmítnuta."],
+    ["battery_sensor", "Senzor baterie prvního panelu", "text", "jen při převodu na více panelů; každý panel má vlastní senzor v Panelech"],
+    ["allowed_devices", "Povolená zařízení (MAC)", "lines", "jedna MAC na řádek; prázdné = první zařízení, které se ozve, se zapíše samo. Ostatní jsou odmítnuta – povolit je jde i v Panelech."],
   ]],
 ];
 

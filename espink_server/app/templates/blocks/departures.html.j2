@@ -1,0 +1,15 @@
+<div class="sec-title">
+  <i class="mdi mdi-bus"></i><span class="ellipsis">{{ b.stop or 'Odjezdy' }}</span>
+  <span class="right num">stav {{ updated_time }}</span>
+</div>
+{% if b.error %}<div class="msg">{{ b.error }}</div>{% endif %}
+{% for x in b.rows %}
+<div class="dep {{ 'canceled' if x.canceled }}">
+  <span class="time num">{{ x.time }}</span>
+  <span class="delay num red">{{ x.delay or '' }}</span>
+  <span class="route num">{{ x.route }}</span>
+  <span class="head cond ellipsis">{% if x.canceled %}<b class="red">ZRUŠENO</b>{% else %}{{ x.headsign }}{% endif %}</span>
+  {% if x.platform %}<span class="plat">{{ x.platform }}</span>{% endif %}
+</div>
+{% endfor %}
+{% if b.disruptions %}<div class="dis red ellipsis"><i class="mdi mdi-alert"></i> {{ b.disruptions.text }}</div>{% endif %}

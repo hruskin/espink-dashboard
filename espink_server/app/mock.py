@@ -2,7 +2,8 @@
 from datetime import datetime, timedelta
 
 
-def raw(opts: dict, now: datetime) -> dict:
+def raw(needs: dict, now: datetime) -> dict:
+    """Ukázková data pro entity z layout.needs(); neznámé senzory dostanou číslo."""
     tz = now.tzinfo
     today = now.date()
 
@@ -28,12 +29,14 @@ def raw(opts: dict, now: datetime) -> dict:
         })
 
     states = {
-        opts["meteo_temperature"]: {"state": "11.9", "attributes": {}},
-        opts["meteo_humidity"]: {"state": "63", "attributes": {}},
-        opts["meteo_rain_today"]: {"state": "2.4", "attributes": {}},
-        opts["weather"]: {"state": "partlycloudy", "attributes": {"temperature": 10.6}},
-        opts["departures"]: {"state": now.isoformat(), "attributes": {"stop_name": "Křížkový Újezdec", "departures": deps}},
-        opts["disruptions"]: {"state": "1", "attributes": {"infotexts": [{"text": "Omezení provozu linky 335"}]}},
+        "sensor.temperature_10": {"state": "11.9", "attributes": {}},
+        "sensor.humidity_11": {"state": "63", "attributes": {}},
+        "sensor.zahrada_meteo_denni_uhrn_srazek": {"state": "2.4", "attributes": {}},
+        "weather.chmu_home_predpoved": {"state": "partlycloudy", "attributes": {"temperature": 10.6}},
+        "sensor.odjezdova_tabule_krizkovy_ujezdec_odjezdy": {
+            "state": now.isoformat(), "attributes": {"stop_name": "Křížkový Újezdec", "departures": deps}},
+        "sensor.odjezdova_tabule_krizkovy_ujezdec_vyluky": {
+            "state": "1", "attributes": {"infotexts": [{"text": "Omezení provozu linky 335"}]}},
     }
     for cal, icon in [("calendar.rodina", "mdi:home-heart"), ("calendar.skolka", "mdi:school"),
                       ("calendar.plavani", "mdi:swim"), ("calendar.narozeniny_2", "mdi:cake-variant"),
@@ -66,4 +69,12 @@ def raw(opts: dict, now: datetime) -> dict:
         "calendar.jmenne_svatky_ceske": [{"summary": "Štefan", **allday(0)}],
         "calendar.ceske_statni_svatky": [{"summary": "Den vzniku samostatného čs. státu", **allday(4)}],
     }
-    return {"states": states, "events": events, "forecast": forecast}
+    for e in needs["states"]:
+        if e not in states:
+            states[e] = ({"state": "partlycloudy", "attributes": {"temperature": 10.6}} if e.startswith("weather.")
+                         else {"state": "21.4", "attributes": {}})
+    return {
+        "states": {e: states[e] for e in needs["states"]},
+        "events": {c: events.get(c, []) for c in needs["calendars"]},
+        "forecasts": {w: forecast for w in needs["forecasts"]},
+    }

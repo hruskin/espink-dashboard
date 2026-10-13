@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ESPink – panely</title>
+<link rel="stylesheet" href="static/mdi/css/materialdesignicons.min.css">
+<style>
+  :root {
+    --bg: #fafafa; --card: #fff; --ink: #212121; --muted: #727272; --line: #e0e0e0; --hover: rgba(0,0,0,.04);
+    --primary: #03a9f4; --on-primary: #fff; --err: #db4437; --warn: #ffa600; --ok: #43a047;
+    --warn-bg: #fff4e0; --err-bg: #fdecea; --shadow: 0 2px 2px rgba(0,0,0,.14), 0 1px 5px rgba(0,0,0,.12);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111; --card: #1c1c1c; --ink: #e1e1e1; --muted: #9b9b9b; --line: #333; --hover: rgba(255,255,255,.05);
+            --warn-bg: #3a2c10; --err-bg: #3b1714; --shadow: none; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.4 Roboto, system-ui, sans-serif; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  a { color: var(--primary); }
+  .mdi { font-size: 20px; line-height: 1; }
+  .appbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 16px;
+            background: var(--card); border-bottom: 1px solid var(--line); }
+  .appbar h1 { font-size: 20px; font-weight: 400; margin: 0 16px 0 0; }
+  .tabs { display: flex; height: 100%; }
+  .tabs a { display: flex; align-items: center; padding: 0 16px; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; font-weight: 500; }
+  .tabs a[aria-current] { color: var(--primary); border-color: var(--primary); }
+  @media (max-width: 600px) { .appbar h1 { display: none; } .tabs a { padding: 0 10px; } }
+  main { max-width: 900px; margin: 0 auto; padding: 16px 16px 48px; }
+  h2 { font-size: 16px; font-weight: 500; margin: 20px 4px 8px; color: var(--muted); }
+  .card { background: var(--card); border-radius: 12px; box-shadow: var(--shadow); border: 1px solid var(--line); margin-bottom: 12px; }
+  .phead { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .phead b { font-size: 16px; font-weight: 500; }
+  .phead small { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+  .chip { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: var(--hover); color: var(--muted); display: inline-flex; gap: 4px; align-items: center; white-space: nowrap; }
+  .chip .mdi { font-size: 14px; }
+  .chip.bad { background: var(--err-bg); color: var(--err); }
+  .chip.warn { background: var(--warn-bg); }
+  .pbody { display: grid; grid-template-columns: 150px 1fr; gap: 16px; padding: 16px; }
+  .thumb { width: 150px; border: 1px solid var(--line); background: #fff; image-rendering: pixelated; align-self: start; }
+  @media (max-width: 560px) { .pbody { grid-template-columns: 1fr; } .thumb { width: 120px; } }
+  .f { display: block; margin-bottom: 12px; }
+  .f > span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .f input, .f select, .f textarea { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font: inherit; }
+  .f textarea { font: 13px/1.45 ui-monospace, "JetBrains Mono", monospace; min-height: 72px; resize: vertical; }
+  .f :focus { outline: 2px solid var(--primary); border-color: transparent; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+  @media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
+  .withbtn { display: flex; gap: 4px; align-items: center; }
+  .withbtn > :first-child { flex: 1; min-width: 0; }
+  .help { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .help code { background: var(--hover); padding: 0 3px; border-radius: 3px; }
+  .foot { display: flex; gap: 8px; align-items: center; border-top: 1px dashed var(--line); padding-top: 10px; }
+  .foot .sp { flex: 1; }
+  .txtbtn { background: none; border: 0; color: var(--primary); font-weight: 500; padding: 8px 10px; border-radius: 4px; display: inline-flex; gap: 4px; align-items: center; text-decoration: none; }
+  .txtbtn:hover { background: var(--hover); }
+  .txtbtn.danger { color: var(--err); }
+  .primary { background: var(--primary); color: var(--on-primary); border: 0; border-radius: 4px; padding: 9px 18px; font-weight: 500; }
+  .primary:disabled { background: var(--line); color: var(--muted); cursor: default; }
+  .pend { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 8px; align-items: end; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .pend:last-child { border-bottom: 0; }
+  .pend .f { margin: 0; }
+  @media (max-width: 700px) { .pend { grid-template-columns: 1fr; } }
+  .empty { padding: 16px; color: var(--muted); }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #323232; color: #fff; padding: 12px 16px; border-radius: 6px;
+           display: none; z-index: 40; max-width: calc(100vw - 32px); }
+  .toast.show { display: block; }
+  .banner { margin-bottom: 12px; padding: 10px 14px; border-radius: 8px; background: var(--err-bg); }
+  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<header class="appbar">
+  <h1>ESPink</h1>
+  <nav class="tabs"><a href="./">Rozvržení</a><a href="panels" aria-current="page">Panely</a><a href="status">Stav</a><a href="settings">Systém</a></nav>
+</header>
+<main>
+  <div id="banners"></div>
+  <div id="pendingBox"></div>
+  <h2>Panely</h2>
+  <div id="list"><div class="card empty">Načítám…</div></div>
+  <p class="help">Každý panel (deska ESPink) zobrazuje jedno rozvržení – víc panelů může sdílet stejné.
+    Rozvržení se upravují na kartě <a href="./">Rozvržení</a>. Nová deska se objeví nahoře, jakmile se poprvé ozve.</p>
+</main>
+<div class="toast" id="toast" role="status"></div>
+<datalist id="dl-sensor"></datalist>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const el = (t, a = {}, ...k) => { const e = Object.assign(document.createElement(t), a); k.forEach(x => x != null && e.append(x)); return e; };
+const icon = n => el("i", { className: "mdi mdi-" + n });
+let DATA = null, dirty = new Set();
+
+let tt;
+function toast(text) { const t = $("#toast"); t.textContent = text; t.classList.add("show"); clearTimeout(tt); tt = setTimeout(() => t.classList.remove("show"), 5000); }
+
+async function post(url, body) {
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const res = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(res.error || "HTTP " + r.status);
+  return res;
+}
+// „Kuchyň“ -> sensor.espink_kuchyn_baterie (stejně jako server)
+const suggest = name => "sensor.espink_" + (name.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase()
+  .replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "panel") + "_baterie";
+
+function ago(iso) {
+  if (!iso) return "zatím se neozval";
+  const d = new Date(iso), min = Math.round((Date.now() - d) / 60000);
+  if (min < 1) return "ozval se právě teď";
+  if (min < 60) return `ozval se před ${min} min`;
+  return "ozval se " + d.toLocaleString("cs-CZ", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+function layoutSelect(value) {
+  const s = el("select");
+  for (const l of DATA.layouts) s.append(el("option", { value: l.id, textContent: l.name, selected: l.id === value }));
+  return s;
+}
+const field = (label, input, help) => el("label", { className: "f" }, el("span", { textContent: label }), input, help || null);
+
+function panelCard(p) {
+  const d = p.device || {};
+  const chips = el("div", { className: "chips" },
+    p.allowed ? null : el("span", { className: "chip bad", title: "MAC není mezi povolenými zařízeními – deska nedostane obrázek" }, icon("lock-alert"), "nepovolená"),
+    el("span", { className: "chip" }, icon("clock-outline"), ago(d.last_seen)),
+    d.battery != null ? el("span", { className: "chip" + (d.battery <= 15 ? " warn" : "") }, icon("battery"), `${d.battery} % · ${d.voltage} V`) : null,
+    d.rssi != null ? el("span", { className: "chip" }, icon("wifi"), `${d.rssi} dBm`) : null,
+    d.refresh_ms ? el("span", { className: "chip" + (d.refresh_ms > 40000 ? " bad" : ""), title: "Délka posledního překreslení displeje" },
+                      icon("timer-outline"), (d.refresh_ms / 1000).toLocaleString("cs-CZ", { maximumFractionDigits: 1 }) + " s") : null,
+    d.reset_reason && d.reset_reason !== "deepsleep" ? el("span", { className: "chip" + (d.reset_reason === "brownout" ? " bad" : ""), title: "Důvod posledního restartu" }, icon("restart"), d.reset_reason) : null,
+    p.error ? el("span", { className: "chip bad", title: p.error }, icon("alert-circle"), "chyba vykreslení") : null);
+
+  const name = el("input", { type: "text", value: p.name, maxLength: 40 });
+  const lay = layoutSelect(p.layout);
+  const edit = el("a", { className: "txtbtn", href: "./?l=" + encodeURIComponent(p.layout), title: "Upravit rozvržení" }, icon("pencil-outline"));
+  lay.onchange = () => { edit.href = "./?l=" + encodeURIComponent(lay.value); };
+  const sensor = el("input", { type: "text", value: p.battery_sensor, placeholder: "prázdné = nezapisovat", spellcheck: false });
+  sensor.setAttribute("list", "dl-sensor");
+  const sug = el("button", { className: "txtbtn", type: "button", title: "Navrhnout podle názvu panelu" }, icon("auto-fix"));
+  sug.onclick = () => { sensor.value = suggest(name.value.trim() || p.name); mark(); };
+  const sched = el("textarea", { value: p.schedule.join("\n"), placeholder: DATA.default_schedule.join("\n"), spellcheck: false });
+  const save = el("button", { className: "primary", textContent: "Uložit", disabled: true });
+  const del = el("button", { className: "txtbtn danger" }, icon("delete-outline"), "Odebrat");
+  const mark = () => { save.disabled = false; dirty.add(p.mac); };
+  [name, lay, sensor, sched].forEach(i => i.addEventListener("input", mark));
+
+  save.onclick = async () => {
+    save.disabled = true;
+    try {
+      DATA = await post("panels/save", { mac: p.mac, name: name.value, layout: lay.value, battery_sensor: sensor.value,
+                                         schedule: sched.value.split("\n") });
+      dirty.delete(p.mac); render(); toast(`Panel ${name.value.trim()} uložen. Změna se projeví při příštím probuzení desky.`);
+    } catch (e) { save.disabled = false; toast("Nelze uložit: " + e.message); }
+  };
+  del.onclick = async () => {
+    if (!confirm(`Odebrat panel ${p.name}? Jeho deska (${p.mac}) přestane dostávat obrázek, dokud ji znovu nepovolíš.`)) return;
+    try { DATA = await post("panels/delete", { mac: p.mac }); dirty.delete(p.mac); render(); toast(`Panel ${p.name} odebrán.`); }
+    catch (e) { toast("Nelze odebrat: " + e.message); }
+  };
+  const img = el("img", { className: "thumb", src: `preview.png?panel=${encodeURIComponent(p.mac)}&${p.content_ts}`, alt: "Náhled panelu " + p.name, loading: "lazy" });
+  return el("section", { className: "card" },
+    el("div", { className: "phead" }, icon("tablet"), el("div", {}, el("b", { textContent: p.name }), el("br"), el("small", { textContent: p.mac })), chips),
+    el("div", { className: "pbody" }, el("a", { href: "status", title: "Stav panelu" }, img), el("div", {},
+      el("div", { className: "grid2" }, field("Název", name), field("Rozvržení", el("div", { className: "withbtn" }, lay, edit))),
+      field("Senzor baterie v HA", el("div", { className: "withbtn" }, sensor, sug),
+            el("div", { className: "help", textContent: DATA.mqtt
+        ? "Panel je v HA zařízení (MQTT) se senzory baterie, napětí, signálu, doby překreslení… Tohle je entity ID baterie – platí jen při prvním vytvoření, potom ho měň v HA."
+        : "Add-on ho vytvoří a plní přes REST API (napětí, signál, délka překreslení… v atributech)." })),
+      field("Rozvrh probouzení", sched, el("div", { className: "help", innerHTML:
+        "Jedno pravidlo na řádek: <code>[dny ]HH:MM-HH:MM=sekundy</code>, dny 1=Po … 7=Ne. Prázdné = výchozí rozvrh ze Systému (šedě)." })),
+      el("div", { className: "foot" }, save, el("span", { className: "sp" }), del))));
+}
+
+function pendingRow(p) {
+  const known = p.mac && p.mac !== "(bez MAC)";
+  const name = el("input", { type: "text", placeholder: "např. Kuchyň", maxLength: 40 });
+  const lay = layoutSelect(DATA.layouts[0]?.id);
+  const ok = el("button", { className: "primary", disabled: !known }, "Povolit");
+  ok.onclick = async () => {
+    ok.disabled = true;
+    try {
+      DATA = await post("panels/approve", { mac: p.mac, name: name.value, layout: lay.value });
+      render(); toast("Deska povolena. Obrázek dostane při příštím probuzení.");
+    } catch (e) { ok.disabled = false; toast("Nelze povolit: " + e.message); }
+  };
+  const info = p.allowed ? "povolená v Systému, zatím se neozvala"
+    : [p.when && "ozvala se " + p.when, p.ip, p.fw && "FW " + p.fw, p.voltage && p.voltage + " V"].filter(Boolean).join(" · ");
+  return el("div", { className: "pend" },
+    el("div", {}, el("b", { textContent: p.mac }), el("div", { className: "help", textContent: info })),
+    ...(p.allowed ? [el("span"), el("span"), el("span")] : [field("Název panelu", name), field("Rozvržení", lay), ok]));
+}
+
+function render() {
+  const list = $("#list");
+  // rozepsané karty nepřekreslovat (zachovat neuložené úpravy)
+  const keep = new Map([...list.querySelectorAll("section[data-mac]")].filter(s => dirty.has(s.dataset.mac)).map(s => [s.dataset.mac, s]));
+  list.replaceChildren();
+  if (!DATA.panels.length) list.append(el("div", { className: "card empty", textContent: "Zatím žádný panel – první deska, která se ozve, se přidá sama." }));
+  for (const p of DATA.panels) {
+    const c = keep.get(p.mac) || panelCard(p);
+    c.dataset.mac = p.mac; list.append(c);
+  }
+  const box = $("#pendingBox"); box.replaceChildren();
+  if (DATA.pending.length) box.append(el("h2", { textContent: "Nové desky" }),
+    el("div", { className: "card" }, ...DATA.pending.map(pendingRow)),
+    el("p", { className: "help", textContent: "Desky, které se ozvaly, ale nejsou povolené. Povolením dostanou obrázek a vlastní panel." }));
+}
+
+async function load() {
+  try {
+    const [d, ents] = await Promise.all([fetch("panels.json").then(r => r.json()),
+      fetch("entities.json").then(r => r.ok ? r.json() : []).catch(() => [])]);
+    DATA = d;
+    const dl = $("#dl-sensor"); dl.replaceChildren();
+    (Array.isArray(ents) ? ents : []).filter(e => e.id.startsWith("sensor.espink")).forEach(e => dl.append(el("option", { value: e.id, textContent: e.name })));
+    render();
+  } catch (e) {
+    $("#banners").replaceChildren(el("div", { className: "banner", textContent: "Panely se nepodařilo načíst: " + e.message }));
+  }
+}
+addEventListener("beforeunload", e => { if (dirty.size) e.preventDefault(); });
+// nové desky a stav se objeví bez obnovení stránky
+setInterval(() => { if (!document.hidden && !document.activeElement.matches("input,textarea,select")) load(); }, 30000);
+load();
+</script>
+</body>
+</html>

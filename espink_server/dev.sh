@@ -11,7 +11,7 @@ ENV_FILE="$HERE/.env.dev"
 if [ ! -x "$VENV/bin/python" ]; then
   echo "Připravuji Python prostředí ($VENV)…"
   python3 -m venv "$VENV"
-  "$VENV/bin/pip" install -q aiohttp jinja2 pillow
+  "$VENV/bin/pip" install -q aiohttp jinja2 pillow paho-mqtt
 fi
 
 if [ ! -f "$ENV_FILE" ]; then
@@ -22,6 +22,10 @@ HA_URL=https://192.168.0.73:8123
 HA_TOKEN=
 # certifikát HA je na doménu, ne na IP
 HA_VERIFY_SSL=0
+# MQTT (nepovinné): bez MQTT_HOST se stav panelů zapisuje přes REST API
+# MQTT_HOST=192.168.0.73
+# MQTT_USER=
+# MQTT_PASSWORD=
 CFG
   chmod 600 "$ENV_FILE"
   echo "Vytvořen $ENV_FILE – doplň HA_TOKEN a spusť znovu."
@@ -34,6 +38,11 @@ export DEV=1
 # vlastní kopie konfigurace (stejný formát jako konfigurace add-onu)
 export OPTIONS_PATH="${OPTIONS_PATH:-$HERE/dev-options.json}"
 [ -f "$OPTIONS_PATH" ] || cp "$HERE/app/options.example.json" "$OPTIONS_PATH"
+# rozvržení z editoru (dokud neexistuje, odvodí se z konfigurace)
+export LAYOUT_PATH="${LAYOUT_PATH:-$HERE/dev-layout.json}"
+# rozvržení a panely (dev-layout.json se při prvním spuštění převezme jako „Hlavní“)
+export LAYOUTS_PATH="${LAYOUTS_PATH:-$HERE/dev-layouts.json}"
+export PANELS_PATH="${PANELS_PATH:-$HERE/dev-panels.json}"
 
 cd "$HERE/app"
 case "${1:-}" in

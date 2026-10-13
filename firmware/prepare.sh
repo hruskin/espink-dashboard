@@ -2,10 +2,14 @@
 # Připraví firmware Živý obraz pro ESPink v3.6 + GDEY075Z08 s lokálním serverem.
 #  1. naklonuje / aktualizuje upstream zivyobraz-fw na připnutý commit
 #  2. aplikuje patche z ./patches (host/port serveru, vypnutá OTA na pokyn
-#     serveru, vlastní heslo konfiguračního AP)
+#     serveru, vlastní heslo konfiguračního AP, delší limit překreslení,
+#     bez lehkého spánku při překreslení, konfigurace přepsatelná instalátorem)
 #  3. přidá PlatformIO prostředí espink_v36_gdey075z08 s hodnotami z config.env
 #
-# Hodnoty z config.env lze přebít proměnnými prostředí:
+# Serial = UART0 (převodník CH343 na USB-C): logy i Improv (Wi-Fi z webového
+# instalátoru) jdou přes kabel; nativní USB ESP32-S3 na desce vyvedené není.
+#
+# Hodnoty z config.env (a heslo AP z config.local.env) lze přebít proměnnými prostředí:
 #   ZO_HOST=192.168.1.20 ./prepare.sh
 set -euo pipefail
 
@@ -20,6 +24,7 @@ ENV_NAME="espink_v36_gdey075z08"
 # Konfigurace: config.env, ale proměnné prostředí mají přednost
 _env_host="${ZO_HOST:-}"
 _env_port="${ZO_PORT:-}"
+_env_ap="${ZO_AP_PASSWORD:-}"
 # shellcheck source=config.env
 source ./config.env
 ZO_HOST="${_env_host:-$ZO_HOST}"
@@ -28,13 +33,13 @@ ZO_PORT="${_env_port:-$ZO_PORT}"
 # Tajné hodnoty (necommitují se): config.local.env
 # ZO_AP_PASSWORD = heslo konfiguračního AP (WPA2, min. 8 znaků); firmware ho
 # ukáže na displeji, když AP spustí. Chybí-li, vygeneruje se náhodné.
-if [[ ! -f config.local.env ]]; then
+if [[ -z "$_env_ap" && ! -f config.local.env ]]; then
   printf '# Necommitovat (je v .gitignore)\nZO_AP_PASSWORD=%s\n' "$(tr -dc 'a-km-z2-9' </dev/urandom | head -c 12)" > config.local.env
   chmod 600 config.local.env
   echo "Vytvořen config.local.env s náhodným heslem AP"
 fi
 # shellcheck source=/dev/null
-source ./config.local.env
+[[ -n "$_env_ap" ]] && ZO_AP_PASSWORD="$_env_ap" || source ./config.local.env
 if [[ ${#ZO_AP_PASSWORD} -lt 8 || "$ZO_AP_PASSWORD" =~ [\"\\] ]]; then
   echo "ZO_AP_PASSWORD musí mít aspoň 8 znaků a nesmí obsahovat \" ani \\" >&2
   exit 1
@@ -82,7 +87,7 @@ build_flags =
     -D ZO_AP_PASSWORD=\\"${ZO_AP_PASSWORD}\\"
     -D BOARD_HAS_PSRAM
     -D ARDUINO_USB_MODE=1
-    -D ARDUINO_USB_CDC_ON_BOOT=1
+    -D ARDUINO_USB_CDC_ON_BOOT=0
 lib_deps =
     \${common.lib_deps_builtin}
     \${common.lib_deps}

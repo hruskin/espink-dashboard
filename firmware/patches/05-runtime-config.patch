@@ -1,0 +1,60 @@
+diff --git a/src/http_client.cpp b/src/http_client.cpp
+index 9c98165..c4eb3d2 100644
+--- a/src/http_client.cpp
++++ b/src/http_client.cpp
+@@ -11,6 +11,7 @@
+ 
+ // External configuration
+ extern const char *host;
++extern const uint16_t serverPort;
+ extern const char *firmware;
+ 
+ // Timeouts for HTTP operations
+@@ -97,7 +98,7 @@ bool HttpClient::sendRequest(bool timestampCheck)
+   // Try to connect with retries
+   for (uint8_t attempt = 0; attempt < 3; attempt++)
+   {
+-    if (m_client.connect(host, CONNECTION_PORT))
++    if (m_client.connect(host, serverPort))
+       break;
+ 
+     Logger::log<Logger::Level::ERROR, Logger::Topic::HTTP>("Connection failed, retrying... {}/3\n", attempt + 1);
+diff --git a/src/main.cpp b/src/main.cpp
+index 50ad3be..1643219 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -44,13 +44,32 @@ extern const String serverName = "zivyobraz.eu";
+ #ifndef ZO_HOST
+   #define ZO_HOST "cdn.zivyobraz.eu"
+ #endif
+-const char *host = ZO_HOST;
+ const char *firmware = "3.2";
+ // Heslo konfiguračního AP lze změnit při sestavení: -D ZO_AP_PASSWORD=\"...\"
+ #ifndef ZO_AP_PASSWORD
+   #define ZO_AP_PASSWORD "zivyobraz"
+ #endif
+-const String wifiPassword = ZO_AP_PASSWORD;
++#ifndef ZO_PORT
++  #define ZO_PORT CONNECTION_PORT
++#endif
++#define ZO_STR2(x) #x
++#define ZO_STR(x) ZO_STR2(x)
++// Host, port a heslo AP v bloku se značkou, který webový instalátor add-onu ESPink
++// Server přepíše přímo v binárce (a přepočítá kontrolní součty obrazu) – jedna
++// binárka bez tajných údajů pro všechny instalace. volatile: kompilátor hodnoty
++// nesmí vložit do kódu, čtou se za běhu z obrazu.
++struct ZoConfig
++{
++  char magic[16];
++  char host[64];
++  char port[8];
++  char apPassword[64];
++};
++extern "C" __attribute__((used)) const volatile ZoConfig zoConfig = {"ZOCFG1:espink", ZO_HOST, ZO_STR(ZO_PORT),
++                                                                     ZO_AP_PASSWORD};
++const char *host = (const char *)zoConfig.host;
++extern const uint16_t serverPort = (uint16_t)atoi((const char *)zoConfig.port);
++const String wifiPassword = String((const char *)zoConfig.apPassword);
+ const String urlWiki = "https://wiki.zivyobraz.eu";
+ extern const char *const NVS_NAMESPACE = "zivyobraz";
+ 

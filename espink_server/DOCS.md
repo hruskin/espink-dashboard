@@ -38,6 +38,19 @@ API (jen přes Ingress, `?id=` = rozvržení): `GET layout.json`, `POST layout/p
 (PNG), `POST layout` (uložení), `GET layout/history.json`, `POST layouts/create|rename|delete`,
 `GET panels.json`, `POST panels/save|approve|delete`, `GET preview.png?panel=MAC`.
 
+## Instalace firmwaru z prohlížeče
+
+Karta **Instalace** nahraje firmware do desky přes USB-C přímo z prohlížeče
+([ESP Web Tools](https://esphome.github.io/esp-web-tools/); Chrome nebo Edge na počítači,
+Home Assistant otevřený přes HTTPS). Adresu serveru a port add-on zjistí sám od
+Supervisoru, heslo konfiguračního AP desky vygeneruje; obojí jde změnit. Hodnoty
+se vloží do firmwaru až při stažení (blok `ZOCFG1`, patch 05 – add-on přepíše blok
+a přepočítá kontrolní součet a SHA-256 obrazu), v add-onu je jen neutrální binárka.
+Po nahrání instalátor nabídne připojení k Wi-Fi (protokol Improv přes sériovou linku)
+– stačí vybrat síť a zadat heslo. Pokud panel HA přístup k USB nepovolí, otevři
+instalátor v novém okně (odkaz na stránce). Binárku sestavuje
+`firmware/build-addon.sh` (do `app/firmware` obou add-onů).
+
 ## Instalace (lokální add-on)
 
 1. Zkopírujte složku `espink_server` do `/addons/` na HA OS (doplněk Samba nebo SSH).

@@ -13,6 +13,8 @@ Tento adresář obsahuje open-source firmware [Živý obraz](https://github.com/
 | `config.env` | **Jediné místo pro nastavení**: IP adresa a port serveru |
 | `prepare.sh` | Stáhne upstream, aplikuje patche a přidá PlatformIO prostředí `espink_v36_gdey075z08` |
 | `patches/01-local-server.patch` | Umožní nastavit host (`ZO_HOST`) a port (`ZO_PORT`) při sestavení. Bez nich firmware zůstane beze změny. |
+| `patches/05-runtime-config.patch` | Host, port a heslo AP v bloku `ZOCFG1`, který webový instalátor add-onu přepíše přímo v binárce |
+| `build-addon.sh` | Sestaví neutrální binárku pro webový instalátor a zkopíruje ji do `app/firmware` add-onů |
 | `zivyobraz-fw/` | Vygenerovaný zdrojový kód. Needituj ho, `prepare.sh` ho při každém spuštění vrátí do čistého stavu. |
 
 ## Nastavení serveru
@@ -28,6 +30,19 @@ Zadej IP adresu, ne `homeassistant.local`. Překlad mDNS po probuzení zdržuje,
 
 Jednorázově se dá hodnota přebít i proměnnou prostředí: `ZO_HOST=192.168.1.20 ./prepare.sh`.
 
+## Webový instalátor (doporučeno)
+
+V panelu ESPink → **Instalace** se firmware nahraje přes USB-C z prohlížeče (Chrome/Edge)
+a hned se zadá i Wi-Fi (Improv). Adresu serveru a heslo AP vloží add-on do binárky
+při stažení. Po změně patchů binárku obnov:
+
+```sh
+./build-addon.sh          # PIO=/cesta/k/pio, když pio není v PATH
+```
+
+`Serial` je od patche 05 na UART0 (`ARDUINO_USB_CDC_ON_BOOT=0`): na USB-C desky je
+převodník CH343, ne nativní USB ESP32-S3. Přes kabel tak jdou logy aplikace i Improv.
+
 ## Sestavení a nahrání
 
 Potřebuješ PlatformIO (`pipx install platformio` nebo `pip install platformio`).
@@ -40,7 +55,7 @@ pio run -e espink_v36_gdey075z08 -t upload    # nahrání přes USB-C
 pio device monitor -b 115200                  # sériový log (volitelné)
 ```
 
-Deska používá nativní USB ESP32-S3. Kdyby se nahrávání nechytilo, podrž **BOOT**, stiskni **RESET**, pusť BOOT a spusť upload znovu.
+USB-C desky vede na převodník CH343 (UART0). Kdyby se nahrávání nechytilo, podrž **BOOT**, stiskni **RESET**, pusť BOOT a spusť upload znovu.
 
 Ověřené sestavení: RAM 29,4 %, flash 15,2 % (~1 MB z 6,25 MB aplikačního oddílu, rozdělení `default_16MB.csv` se dvěma OTA sloty).
 

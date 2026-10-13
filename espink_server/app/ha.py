@@ -109,6 +109,13 @@ class HomeAssistant:
             if r.status != 200 or body.get("result") != "ok":
                 raise RuntimeError(body.get("message") or f"HTTP {r.status}")
 
+    async def supervisor(self, path: str) -> dict | None:
+        """GET na Supervisor API (jen v add-onu), vrací pole data."""
+        if not self.base.startswith("http://supervisor"):
+            return None
+        async with self.session.get(self.base.removesuffix("/core/api") + path, headers=self.headers, timeout=TIMEOUT) as r:
+            return (await r.json(content_type=None)).get("data") if r.status == 200 else None
+
     async def mqtt_service(self) -> dict | None:
         """Přihlašovací údaje k MQTT brokeru od Supervisoru (add-on má services: mqtt:want)."""
         if not self.base.startswith("http://supervisor"):

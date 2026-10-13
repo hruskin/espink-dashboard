@@ -19,6 +19,7 @@ from aiohttp import web
 
 import ha as ha_mod
 import layout as layout_mod
+import firmware as firmware_mod
 import mock
 import model
 import mqtt as mqtt_mod
@@ -417,7 +418,7 @@ class Server:
  th{{font-weight:600;color:#444}} button{{margin-top:12px;padding:8px 14px;font-size:15px}}
  @media (prefers-color-scheme:dark){{body{{background:#111;color:#eee}} table{{background:#1c1c1c}} th{{color:#bbb}} th,td{{border-color:#333}}}}
 </style></head><body>
-<p><a href="./"><b>Editor rozvržení</b></a> · <a href="panels"><b>Panely</b></a> · <a href="settings"><b>Nastavení</b></a> · <a href="view.json">Model zobrazení (JSON)</a></p>
+<p><a href="./"><b>Editor rozvržení</b></a> · <a href="panels"><b>Panely</b></a> · <a href="install"><b>Instalace</b></a> · <a href="settings"><b>Nastavení</b></a> · <a href="view.json">Model zobrazení (JSON)</a></p>
 <p>Povolená zařízení: {html.escape(", ".join(self.opts.get("allowed_devices") or []) or "zatím žádné (první se zapíše samo)")}<br>
 Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
 <button onclick="fetch('refresh',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:'{{}}'}}).then(()=>location.reload())">Překreslit hned</button>
@@ -697,6 +698,71 @@ Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
         return web.json_response(self.panels_json())
 
 
+async def detect_server(srv: "Server") -> dict:
+    """Adresa HA v místní síti a port add-onu od Supervisoru (pro výchozí nastavení firmwaru)."""
+    host, port = "", 8099
+    try:
+        net = await srv.ha.supervisor("/network/info") or {}
+        for iface in net.get("interfaces", []):
+            addrs = (iface.get("ipv4") or {}).get("address") or []
+            if addrs and (iface.get("primary") or not host):
+                host = addrs[0].split("/")[0]
+        info = await srv.ha.supervisor("/addons/self/info") or {}
+        port = int((info.get("network") or {}).get("8099/tcp") or port)
+    except Exception as e:  # noqa: BLE001
+        print(f"[firmware] nelze zjistit adresu HA: {e}")
+    if not host and srv.ha and not srv.ha.base.startswith("http://supervisor"):
+        host = srv.ha.base.split("//")[1].split(":")[0].split("/")[0]  # vývoj: HA_URL
+    return {"host": host, "port": port}
+
+
+class Installer:
+    """Webový instalátor firmwaru (ESP Web Tools) – stránka, manifest a části obrazu."""
+
+    def __init__(self, srv: "Server"):
+        self.srv = srv
+
+    async def settings(self) -> dict:
+        s = firmware_mod.load_settings()
+        detected = await detect_server(self.srv)
+        return {"host": s.get("host") or detected["host"], "port": s.get("port") or detected["port"],
+                "ap_password": s["ap_password"], "detected": detected}
+
+    async def page(self, request: web.Request) -> web.Response:
+        return web.FileResponse(render.APP_DIR / "templates" / "install.html", headers={"Cache-Control": "no-store"})
+
+    async def info(self, request: web.Request) -> web.Response:
+        return web.json_response({"available": firmware_mod.available(), "build": firmware_mod.build_info(),
+                                  "settings": await self.settings()}, headers={"Cache-Control": "no-store"})
+
+    async def save(self, request: web.Request) -> web.Response:
+        data = await Server.read_json(request)
+        try:
+            cfg = firmware_mod.check(data.get("host"), data.get("port"), data.get("ap_password"))
+        except (ValueError, TypeError) as e:
+            raise bad_request(str(e))
+        firmware_mod.save_settings(cfg)
+        return await self.info(request)
+
+    async def manifest(self, request: web.Request) -> web.Response:
+        b = firmware_mod.build_info()
+        return web.json_response(firmware_mod.manifest(f"{b.get('firmware', '?')} ({b.get('built', '')[:10]})"),
+                                 headers={"Cache-Control": "no-store"})
+
+    async def part(self, request: web.Request) -> web.Response:
+        s = await self.settings()
+        try:
+            cfg = firmware_mod.check(s["host"], s["port"], s["ap_password"])
+            data = firmware_mod.part(request.match_info["name"], cfg)
+        except FileNotFoundError:
+            raise web.HTTPNotFound()
+        except ValueError as e:
+            raise bad_request(f"nastavení firmwaru: {e}")
+        if request.match_info["name"] == "firmware.bin":
+            print(f"[firmware] stažení pro instalaci: server {cfg['host']}:{cfg['port']}")
+        return web.Response(body=data, content_type="application/octet-stream", headers={"Cache-Control": "no-store"})
+
+
 def bad_request(text: str) -> web.HTTPBadRequest:
     return web.HTTPBadRequest(text=json.dumps({"error": text}, ensure_ascii=False), content_type="application/json")
 
@@ -723,6 +789,7 @@ async def main() -> None:
             print(f"náhled: {args.once}, data pro zařízení: {len(srv.target(None).payload)} B")
             return
 
+        inst = Installer(srv)
         app = web.Application(middlewares=[srv.ingress_only])
         app.add_routes([
             web.post("/index.php", srv.handle_device),
@@ -749,6 +816,11 @@ async def main() -> None:
             web.post("/panels/save", srv.handle_panel_save),
             web.post("/panels/approve", srv.handle_panel_approve),
             web.post("/panels/delete", srv.handle_panel_delete),
+            web.get("/install", inst.page),
+            web.get("/firmware/info.json", inst.info),
+            web.post("/firmware/settings", inst.save),
+            web.get("/firmware/manifest.json", inst.manifest),
+            web.get(r"/firmware/{name:[a-z_0-9]+\.bin}", inst.part),
         ])
         runner = web.AppRunner(app, access_log=None)
         await runner.setup()

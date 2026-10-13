@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ESPink – instalace firmwaru</title>
+<link rel="stylesheet" href="static/mdi/css/materialdesignicons.min.css">
+<script type="module" src="https://cdn.jsdelivr.net/npm/esp-web-tools@10.2.1/dist/web/install-button.js"></script>
+<style>
+  :root {
+    --bg: #fafafa; --card: #fff; --ink: #212121; --muted: #727272; --line: #e0e0e0; --hover: rgba(0,0,0,.04);
+    --primary: #03a9f4; --on-primary: #fff; --err: #db4437; --warn: #ffa600; --ok: #43a047;
+    --warn-bg: #fff4e0; --err-bg: #fdecea; --shadow: 0 2px 2px rgba(0,0,0,.14), 0 1px 5px rgba(0,0,0,.12);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111; --card: #1c1c1c; --ink: #e1e1e1; --muted: #9b9b9b; --line: #333; --hover: rgba(255,255,255,.05);
+            --warn-bg: #3a2c10; --err-bg: #3b1714; --shadow: none; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 Roboto, system-ui, sans-serif; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  a { color: var(--primary); }
+  .mdi { font-size: 20px; line-height: 1; }
+  .appbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 16px;
+            background: var(--card); border-bottom: 1px solid var(--line); }
+  .appbar h1 { font-size: 20px; font-weight: 400; margin: 0 16px 0 0; }
+  .tabs { display: flex; height: 100%; overflow-x: auto; }
+  .tabs a { display: flex; align-items: center; padding: 0 16px; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; font-weight: 500; white-space: nowrap; }
+  .tabs a[aria-current] { color: var(--primary); border-color: var(--primary); }
+  @media (max-width: 600px) { .appbar h1 { display: none; } .tabs a { padding: 0 10px; } }
+  main { max-width: 760px; margin: 0 auto; padding: 16px 16px 48px; }
+  .card { background: var(--card); border-radius: 12px; box-shadow: var(--shadow); border: 1px solid var(--line); margin-bottom: 16px; padding: 16px; }
+  .card h2 { font-size: 16px; font-weight: 500; margin: 0 0 12px; display: flex; gap: 8px; align-items: center; }
+  .card h2 .mdi { color: var(--primary); }
+  .f { display: block; margin-bottom: 12px; }
+  .f > span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .f input { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font: inherit; }
+  .f input:focus { outline: 2px solid var(--primary); border-color: transparent; }
+  .grid { display: grid; grid-template-columns: 1fr 110px; gap: 0 12px; }
+  .withbtn { display: flex; gap: 4px; align-items: center; }
+  .withbtn input { flex: 1; min-width: 0; font-family: ui-monospace, monospace !important; }
+  .help { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .primary { background: var(--primary); color: var(--on-primary); border: 0; border-radius: 4px; padding: 9px 18px; font-weight: 500; }
+  .primary:disabled { background: var(--line); color: var(--muted); cursor: default; }
+  .txtbtn { background: none; border: 0; color: var(--primary); font-weight: 500; padding: 8px 10px; border-radius: 4px; display: inline-flex; gap: 4px; align-items: center; text-decoration: none; }
+  .txtbtn:hover { background: var(--hover); }
+  .icon-btn { width: 40px; height: 40px; border-radius: 50%; border: 0; background: none; color: var(--muted); display: grid; place-items: center; flex: none; }
+  .icon-btn:hover { background: var(--hover); }
+  .banner { padding: 10px 14px; border-radius: 8px; display: flex; gap: 10px; align-items: flex-start; margin-bottom: 16px; }
+  .banner.warn { background: var(--warn-bg); } .banner.warn > .mdi { color: var(--warn); }
+  .banner.err { background: var(--err-bg); } .banner.err > .mdi { color: var(--err); }
+  .banner[hidden] { display: none; }
+  ol { margin: 0; padding-left: 20px; } ol li { margin-bottom: 6px; }
+  .install { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 4px 0 16px; }
+  .meta { font-size: 12px; color: var(--muted); }
+  .saved { color: var(--ok); font-size: 13px; }
+  esp-web-install-button { --esp-tools-button-color: var(--primary); --esp-tools-button-text-color: #fff; }
+</style>
+</head>
+<body>
+<header class="appbar">
+  <h1>ESPink</h1>
+  <nav class="tabs"><a href="./">Rozvržení</a><a href="panels">Panely</a><a href="install" aria-current="page">Instalace</a><a href="status">Stav</a><a href="settings">Systém</a></nav>
+</header>
+<main>
+  <div class="banner err" id="noSerial" hidden><i class="mdi mdi-usb-port"></i><div>
+    <b>Tady prohlížeč nepustí přístup k USB.</b> <span id="noSerialWhy"></span>
+    <div><a class="txtbtn" id="popout" href="install" target="_blank" rel="noopener" style="padding-left:0"><i class="mdi mdi-open-in-new"></i>Otevřít instalátor v novém okně</a></div></div></div>
+  <div class="banner err" id="noFw" hidden><i class="mdi mdi-alert-circle"></i><div>V add-onu chybí sestavený firmware (<code>app/firmware</code>).</div></div>
+
+  <section class="card">
+    <h2><i class="mdi mdi-cog-outline"></i>Nastavení firmwaru</h2>
+    <div class="grid">
+      <label class="f"><span>Adresa serveru (Home Assistant)</span><input type="text" id="host" spellcheck="false" autocomplete="off">
+        <div class="help" id="hostHelp"></div></label>
+      <label class="f"><span>Port</span><input type="number" id="port" min="1" max="65535"></label>
+    </div>
+    <label class="f"><span>Heslo konfiguračního AP desky</span>
+      <div class="withbtn"><input type="text" id="ap" spellcheck="false" autocomplete="off" maxlength="63">
+        <button class="icon-btn" id="regen" title="Vygenerovat nové heslo" type="button"><i class="mdi mdi-dice-multiple-outline"></i></button></div>
+      <div class="help">Když se deska nepřipojí k Wi-Fi, spustí vlastní přístupový bod <code>INK_…</code> s tímto heslem (ukáže ho i na displeji).</div></label>
+    <div class="withbtn" style="gap:12px"><button class="primary" id="save" disabled>Uložit</button><span id="saveMsg" class="saved"></span></div>
+    <p class="help">Hodnoty se vloží do firmwaru při stažení – binárka v add-onu sama žádnou adresu ani heslo neobsahuje. Zadej raději IP adresu než <code>homeassistant.local</code> (mDNS po probuzení zdržuje).</p>
+  </section>
+
+  <section class="card">
+    <h2><i class="mdi mdi-chip"></i>Nahrát do desky</h2>
+    <ol>
+      <li>Připoj ESPink datovým kabelem USB-C k tomuto počítači (Chrome nebo Edge).</li>
+      <li>Klikni na <b>Instalovat</b> a vyber port desky (<i>USB Single Serial</i> / CH343).</li>
+      <li>U nové nebo cizí desky zvol <b>smazat zařízení</b> (Erase) – smažou se i uložené údaje Wi-Fi.</li>
+      <li>Po nahrání instalátor nabídne <b>připojení k Wi-Fi</b> – vyber síť a zadej heslo. (Nabídne ho, jen když deska Wi-Fi nezná.)</li>
+      <li>Deska se připojí k serveru. Nová se objeví v <a href="panels">Panelech</a> pod <i>Nové desky</i>.</li>
+    </ol>
+    <div class="install">
+      <esp-web-install-button id="btn" manifest="firmware/manifest.json">
+        <button slot="activate" class="primary"><i class="mdi mdi-usb-flash-drive-outline" style="font-size:16px;vertical-align:-2px"></i> Instalovat</button>
+        <span slot="unsupported">Prohlížeč neumí Web Serial – použij Chrome nebo Edge na počítači.</span>
+        <span slot="not-allowed">Instalace vyžaduje HTTPS (otevři Home Assistant přes https://).</span>
+      </esp-web-install-button>
+      <span class="meta" id="build"></span>
+    </div>
+    <p class="help">Kdyby se deska nechytila: podrž <b>BOOT</b>, stiskni <b>RESET</b>, pusť BOOT a zkus to znovu. Logy desky uvidíš v instalátoru přes <i>Logs &amp; Console</i>.</p>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+let saved = {};
+
+// Web Serial: jen Chrome/Edge, jen přes HTTPS a v iframe (panel HA) jen s povolením „serial“
+function checkSerial() {
+  let why = "";
+  if (!("serial" in navigator)) why = "Prohlížeč neumí Web Serial (Chrome nebo Edge na počítači) nebo stránka neběží přes HTTPS.";
+  else if (window.top !== window.self && document.featurePolicy && !document.featurePolicy.allowsFeature("serial"))
+    why = "Panel Home Assistantu (iframe) přístup k USB nepovoluje.";
+  $("#noSerial").hidden = !why; $("#noSerialWhy").textContent = why;
+}
+
+const values = () => ({ host: $("#host").value.trim(), port: parseInt($("#port").value, 10), ap_password: $("#ap").value });
+const dirty = () => JSON.stringify(values()) !== JSON.stringify({ host: saved.host, port: +saved.port, ap_password: saved.ap_password });
+function show(d) {
+  saved = d.settings;
+  $("#host").value = saved.host; $("#port").value = saved.port; $("#ap").value = saved.ap_password;
+  const det = saved.detected || {};
+  $("#hostHelp").textContent = det.host ? `Zjištěno ze Supervisoru: ${det.host}:${det.port}` : "Adresu HA se nepodařilo zjistit – zadej ji ručně.";
+  const b = d.build || {};
+  $("#build").textContent = b.firmware ? `Živý obraz ${b.firmware} · upstream ${b.upstream} · ${(b.patches || []).length} patchů · sestaveno ${new Date(b.built).toLocaleDateString("cs-CZ")}` : "";
+  $("#noFw").hidden = d.available; $("#btn").hidden = !d.available;
+  $("#save").disabled = true;
+}
+["#host", "#port", "#ap"].forEach(s => $(s).addEventListener("input", () => { $("#save").disabled = !dirty(); $("#saveMsg").textContent = ""; }));
+$("#regen").onclick = () => {
+  const abc = "abcdefghijkmnpqrstuvwxyz23456789", r = crypto.getRandomValues(new Uint32Array(12));
+  $("#ap").value = [...r].map(x => abc[x % abc.length]).join(""); $("#save").disabled = !dirty();
+};
+$("#save").onclick = async () => {
+  $("#save").disabled = true;
+  try {
+    const r = await fetch("firmware/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(values()) });
+    const res = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(res.error || "HTTP " + r.status);
+    show(res); $("#saveMsg").textContent = "Uloženo – platí pro příští instalaci.";
+  } catch (e) { $("#save").disabled = false; $("#saveMsg").textContent = ""; alert("Nelze uložit: " + e.message); }
+};
+// neuložené změny by instalace nepoužila
+$("#btn").addEventListener("click", e => { if (dirty()) { e.stopPropagation(); e.preventDefault(); alert("Nejdřív ulož nastavení firmwaru."); } }, true);
+
+checkSerial();
+fetch("firmware/info.json").then(r => r.json()).then(show).catch(e => { $("#noFw").hidden = false; $("#noFw").lastElementChild.textContent = "Nelze načíst: " + e.message; });
+</script>
+</body>
+</html>

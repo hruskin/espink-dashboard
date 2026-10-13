@@ -34,6 +34,8 @@ k sousedovi, duplikace, náhled „nejhorší případ“, mřížka sloupců, v
 > Dosavadní `layout.json` se převezme jako rozvržení „Hlavní“ a povolené desky jako
 > panely (první s dosavadním `battery_sensor`). Panely jsou v `/data/panels.json`.
 >
+> **Instalace firmwaru** z prohlížeče (karta Instalace, ESP Web Tools + Improv pro Wi-Fi) – viz stabilní DOCS.
+>
 > API (jen přes Ingress, `?id=` = rozvržení): `GET layout.json`, `POST layout/preview`
 > (PNG), `POST layout` (uložení), `GET layout/history.json`, `POST layouts/create|rename|delete`,
 > `GET panels.json`, `POST panels/save|approve|delete`, `GET preview.png?panel=MAC`.

@@ -109,6 +109,23 @@ class HomeAssistant:
             if r.status != 200 or body.get("result") != "ok":
                 raise RuntimeError(body.get("message") or f"HTTP {r.status}")
 
+    async def mqtt_service(self) -> dict | None:
+        """Přihlašovací údaje k MQTT brokeru od Supervisoru (add-on má services: mqtt:want)."""
+        if not self.base.startswith("http://supervisor"):
+            return None
+        url = self.base.removesuffix("/core/api") + "/services/mqtt"
+        async with self.session.get(url, headers=self.headers, timeout=TIMEOUT) as r:
+            if r.status != 200:
+                return None
+            return (await r.json(content_type=None)).get("data") or None
+
+    async def delete_state(self, entity_id: str) -> None:
+        if ENTITY_RE.match(entity_id or ""):
+            async with self.session.delete(f"{self.base}/states/{entity_id}", headers=self.headers,
+                                           timeout=TIMEOUT, ssl=self.ssl) as r:
+                if r.status not in (200, 404):
+                    raise RuntimeError(f"HTTP {r.status}")
+
     async def set_state(self, entity_id: str, state, attributes: dict) -> None:
         if not ENTITY_RE.match(entity_id or ""):
             if entity_id:

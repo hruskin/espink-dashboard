@@ -166,7 +166,9 @@ function panelCard(p) {
     el("div", { className: "pbody" }, el("a", { href: "status", title: "Stav panelu" }, img), el("div", {},
       el("div", { className: "grid2" }, field("Název", name), field("Rozvržení", el("div", { className: "withbtn" }, lay, edit))),
       field("Senzor baterie v HA", el("div", { className: "withbtn" }, sensor, sug),
-            el("div", { className: "help", textContent: "Add-on ho vytvoří a plní (napětí, signál, délka překreslení…)." })),
+            el("div", { className: "help", textContent: DATA.mqtt
+        ? "Panel je v HA zařízení (MQTT) se senzory baterie, napětí, signálu, doby překreslení… Tohle je entity ID baterie – platí jen při prvním vytvoření, potom ho měň v HA."
+        : "Add-on ho vytvoří a plní přes REST API (napětí, signál, délka překreslení… v atributech)." })),
       field("Rozvrh probouzení", sched, el("div", { className: "help", innerHTML:
         "Jedno pravidlo na řádek: <code>[dny ]HH:MM-HH:MM=sekundy</code>, dny 1=Po … 7=Ne. Prázdné = výchozí rozvrh ze Systému (šedě)." })),
       el("div", { className: "foot" }, save, el("span", { className: "sp" }), del))));

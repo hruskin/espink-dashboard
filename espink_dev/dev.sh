@@ -11,7 +11,7 @@ ENV_FILE="$HERE/.env.dev"
 if [ ! -x "$VENV/bin/python" ]; then
   echo "Připravuji Python prostředí ($VENV)…"
   python3 -m venv "$VENV"
-  "$VENV/bin/pip" install -q aiohttp jinja2 pillow
+  "$VENV/bin/pip" install -q aiohttp jinja2 pillow paho-mqtt
 fi
 
 if [ ! -f "$ENV_FILE" ]; then
@@ -22,6 +22,10 @@ HA_URL=https://192.168.0.73:8123
 HA_TOKEN=
 # certifikát HA je na doménu, ne na IP
 HA_VERIFY_SSL=0
+# MQTT (nepovinné): bez MQTT_HOST se stav panelů zapisuje přes REST API
+# MQTT_HOST=192.168.0.73
+# MQTT_USER=
+# MQTT_PASSWORD=
 CFG
   chmod 600 "$ENV_FILE"
   echo "Vytvořen $ENV_FILE – doplň HA_TOKEN a spusť znovu."

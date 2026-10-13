@@ -21,6 +21,7 @@ import ha as ha_mod
 import layout as layout_mod
 import mock
 import model
+import mqtt as mqtt_mod
 import options
 import panels as panels_mod
 import render
@@ -92,6 +93,9 @@ class Server:
         self.draft_lock = asyncio.Lock()
         self.lock = asyncio.Lock()
         self.ha: ha_mod.HomeAssistant | None = None
+        self.mqtt: mqtt_mod.Mqtt | None = None
+        self.announced: dict[str, str] = {}   # MAC -> poslední odeslaná konfigurace discovery
+        self.legacy_checked: set[str] = set()
         self.last_error = ""
         self.last_build = 0.0
         # bezpečnost: omezení rychlosti a odmítnutá zařízení (čekají na povolení v editoru)
@@ -300,22 +304,71 @@ class Server:
                 json.dump(new, f, ensure_ascii=False, indent=2)
 
     async def publish_device(self, t: Target, now: datetime, sleep: int) -> None:
-        if MOCK or not self.ha or not t.cfg["battery_sensor"]:
+        if MOCK or not self.ha:
             return
         if time.time() - t.last_publish < 60:  # nejvýš jeden zápis do HA za minutu
             return
         t.last_publish = time.time()
         d = t.device
-        pct = model.battery_percent(d.get("voltage"))
         wake = datetime.fromtimestamp(now.timestamp() + sleep).astimezone()
-        await self.ha.set_state(t.cfg["battery_sensor"], pct if pct is not None else "unknown", {
-            "unit_of_measurement": "%", "device_class": "battery", "state_class": "measurement",
-            "friendly_name": f"{t.cfg['name']} baterie", "voltage": d.get("voltage"), "rssi": d.get("rssi"),
-            "last_seen": d.get("last_seen"), "next_wake": wake.isoformat(timespec="seconds"),
-            "refresh_ms": d.get("refresh_ms"), "ip": d.get("ip"), "firmware": d.get("fw"), "mac": d.get("mac"),
+        state = {
+            "battery": model.battery_percent(d.get("voltage")), "voltage": d.get("voltage"), "rssi": d.get("rssi"),
+            "refresh_s": round(d["refresh_ms"] / 1000, 1) if d.get("refresh_ms") else None,
+            "cpu_temp": d.get("cpu_temp"), "last_seen": d.get("last_seen"),
+            "next_wake": wake.isoformat(timespec="seconds"),
             # důvod posledního restartu desky („brownout“ = pokles napětí, např. při překreslení)
-            "reset_reason": d.get("reset_reason"), "cpu_temp": d.get("cpu_temp"),
-        })
+            "reset_reason": d.get("reset_reason"), "ip": d.get("ip"), "mac": d.get("mac"), "firmware": d.get("fw"),
+        }
+        if self.mqtt:
+            await self.announce(t.cfg, d.get("fw"))
+            self.mqtt.publish(mqtt_mod.state_topic(t.cfg["mac"]), state)
+        elif t.cfg["battery_sensor"]:  # bez MQTT: stav přes REST API (po restartu HA zmizí)
+            await self.ha.set_state(t.cfg["battery_sensor"], state["battery"] if state["battery"] is not None else "unknown", {
+                "unit_of_measurement": "%", "device_class": "battery", "state_class": "measurement",
+                "friendly_name": f"{t.cfg['name']} baterie", **{k: v for k, v in state.items() if k not in ("battery", "refresh_s")},
+                "refresh_ms": d.get("refresh_ms"),
+            })
+
+    # ── MQTT discovery ───────────────────────────────────────────────────
+    async def announce(self, cfg: dict, fw: str | None = None) -> None:
+        """Zařízení panelu v HA (retained konfigurace) – odešle se jen při změně (název, firmware…)."""
+        if not self.mqtt or not cfg["mac"]:
+            return
+        await self.drop_legacy_state(cfg)
+        fw = fw or (self.targets[cfg["mac"]].device.get("fw") if cfg["mac"] in self.targets else None)
+        msg = mqtt_mod.discovery(cfg, fw)
+        key = json.dumps(msg, sort_keys=True, ensure_ascii=False)
+        if self.announced.get(cfg["mac"]) != key:
+            self.mqtt.publish(mqtt_mod.config_topic(cfg["mac"]), msg)
+            self.announced[cfg["mac"]] = key
+            print(f"[mqtt] zařízení {msg['dev']['name']} ohlášeno")
+
+    async def drop_legacy_state(self, cfg: dict) -> None:
+        """Senzor baterie zapsaný dřív přes REST (s atributem voltage) by blokoval stejné
+        entity ID pro MQTT entitu – před prvním ohlášením ho smazat (jen ze stavů, není v registru)."""
+        sensor = cfg["battery_sensor"]
+        if not sensor or sensor in self.legacy_checked or not self.ha:
+            return
+        self.legacy_checked.add(sensor)
+        try:
+            s = await self.ha.state(sensor)
+            if s and "voltage" in s.get("attributes", {}):
+                await self.ha.delete_state(sensor)
+                print(f"[mqtt] smazán starý stav {sensor} zapsaný přes REST")
+        except Exception as e:  # noqa: BLE001
+            print(f"[mqtt] nelze zkontrolovat {sensor}: {e}")
+
+    async def announce_all(self) -> None:
+        self.announced.clear()  # po (znovu)připojení poslat vše – broker nemusí retained zprávy uchovat
+        for p in self.panels:
+            await self.announce(p)
+
+    def forget(self, mac: str) -> None:
+        """Odebraný panel: smazat zařízení z HA (prázdná retained konfigurace) i poslední stav."""
+        if self.mqtt:
+            self.mqtt.publish(mqtt_mod.config_topic(mac), "")
+            self.mqtt.publish(mqtt_mod.state_topic(mac), "")
+        self.announced.pop(mac, None)
 
     # ── UI (jen přes Ingress) ────────────────────────────────────────────
     @web.middleware
@@ -346,7 +399,8 @@ class Server:
                     ("Velikost dat", f"{len(t.payload)} B ({self.opts['image_format']})"),
                     ("Režim teď", f"probouzení po {t.schedule.sleep_seconds(now)} s"
                                   + ("" if t.cfg["schedule"] else " (výchozí rozvrh)")),
-                    ("Senzor baterie", t.cfg["battery_sensor"] or "–"),
+                    ("Zápis do HA", (f"MQTT ({mqtt_mod.node(t.cfg['mac'])})" if self.mqtt and t.cfg["mac"]
+                                     else t.cfg["battery_sensor"] or "–")),
                     ("Chyba", t.error or "žádná"),
                 ])
             q = f"panel={t.cfg['mac']}&" if t.cfg["mac"] else ""
@@ -584,7 +638,7 @@ Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
         # povolené MAC bez panelu (zapsané ručně v Nastavení) – panel vznikne, až se deska ozve
         waiting = [{"mac": m, "allowed": True} for m in allowed - known]
         return {"panels": out, "pending": [p for p in self.pending.values() if p["mac"] not in known] + waiting,
-                "layouts": self.layout_list(), "default_schedule": self.opts["schedule"]}
+                "layouts": self.layout_list(), "default_schedule": self.opts["schedule"], "mqtt": bool(self.mqtt)}
 
     async def handle_panels(self, request: web.Request) -> web.Response:
         return web.json_response(self.panels_json(), headers={"Cache-Control": "no-store"})
@@ -603,6 +657,7 @@ Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
         if any(p["name"] == cfg["name"] and p["mac"] != mac for p in self.panels):
             raise bad_request(f"panel {cfg['name']} už existuje")
         self.save_panels([cfg if p["mac"] == mac else p for p in self.panels])
+        await self.announce(cfg)  # nový název zařízení v HA
         # bez force: obrázek (a tím překreslení desky) se změní, jen když se změní obsah – např. jiné rozvržení
         await self.rebuild(only=[self.targets[mac]])
         print(f"[panels] panel {cfg['name']} uložen")
@@ -621,7 +676,7 @@ Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
         except Exception as e:  # noqa: BLE001
             return web.json_response({"error": f"nelze uložit povolená zařízení: {e}"}, status=500)
         if not any(p["mac"] == mac for p in self.panels):
-            self.add_panel(mac, data.get("name"), data.get("layout"))
+            await self.announce(self.add_panel(mac, data.get("name"), data.get("layout")))
         await self.rebuild(only=[self.targets[mac]])
         return web.json_response(self.panels_json())
 
@@ -637,6 +692,7 @@ Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
         except Exception as e:  # noqa: BLE001
             return web.json_response({"error": f"nelze uložit povolená zařízení: {e}"}, status=500)
         self.save_panels([p for p in self.panels if p["mac"] != mac])
+        self.forget(mac)
         print(f"[panels] panel {mac} odebrán")
         return web.json_response(self.panels_json())
 
@@ -655,6 +711,9 @@ async def main() -> None:
     srv = Server(options.load())
     async with aiohttp.ClientSession() as session:
         srv.ha = ha_mod.HomeAssistant(session)
+        if not args.once and not MOCK:
+            loop = asyncio.get_running_loop()
+            srv.mqtt = await mqtt_mod.connect(srv.ha, lambda: asyncio.run_coroutine_threadsafe(srv.announce_all(), loop))
         if args.once:
             await srv.rebuild(force=True)
             if srv.last_error:

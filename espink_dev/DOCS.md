@@ -61,10 +61,18 @@ Firmware s touto adresou připravíte podle `firmware/README.md`.
 - Hlavička `Timestamp` se mění jen při změně obsahu. Když se nic nezměnilo,
   zařízení nepřekresluje a hned usne. To je hlavní úspora baterie.
 - Hlavička `PreciseSleep` určuje dobu spánku podle rozvrhu panelu (jinak `schedule`).
-- Napětí baterie a signál WiFi ze zařízení se zapisují do senzoru baterie panelu
-  (první panel `sensor.espink_baterie`). Senzor má atributy `voltage`, `rssi`,
-  `last_seen`, `next_wake`, `refresh_ms`, `reset_reason`, `mac`… Po restartu HA
-  zmizí, dokud se zařízení znovu neozve.
+- **Stav panelů v HA přes MQTT discovery** (potřebuje broker, např. doplněk Mosquitto
+  a integraci MQTT; add-on si přihlašovací údaje vezme od Supervisoru). Každý panel je
+  v HA zařízení *ESPink <název>* se senzory Baterie, Napětí baterie, Signál WiFi,
+  Doba překreslení, Teplota procesoru, Poslední kontakt, Další probuzení a Důvod
+  restartu. Zprávy jsou retained, takže entity i hodnoty přežijí restart HA.
+  Entity ID baterie = senzor baterie panelu (první panel `sensor.espink_baterie`);
+  starý stav zapsaný přes REST se před prvním ohlášením smaže, aby ID zůstalo stejné.
+  Přejmenování panelu přejmenuje zařízení, odebrání panelu zařízení z HA smaže.
+  Témata: `homeassistant/device/espink_<mac>/config`, `espink/espink_<mac>/state`.
+- Bez brokeru se stav zapisuje postaru přes REST API do senzoru baterie panelu
+  (atributy `voltage`, `rssi`, `last_seen`, `next_wake`, `refresh_ms`…); po restartu
+  HA zmizí, dokud se zařízení znovu neozve.
 
 ## Bezpečnost
 

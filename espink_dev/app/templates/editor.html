@@ -229,13 +229,15 @@
   /* položka patičky: entita přes celou šířku, pod ní ikona · atribut · popisek · strana · pořadí · odebrat */
   .itemrow { display: grid; grid-template-columns: 48px 1fr 1fr 74px 32px 32px; gap: 6px; align-items: start; padding: 8px 0; border-bottom: 1px dashed var(--line); }
   .itemrow .c1 { grid-column: 1 / -1; }
+  .lsel { padding: 12px 16px; margin-bottom: 12px; }
+  .lsel .withbtn select { flex: 1; min-width: 0; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font: inherit; font-weight: 500; }
   .itemrow input, .itemrow select { width: 100%; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font: inherit; }
 </style>
 </head>
 <body data-pane="blocks">
 <header class="appbar">
   <h1>ESPink</h1>
-  <nav class="tabs"><a href="./" aria-current="page" id="tabLayout">Rozvržení</a><a href="status">Stav</a><a href="settings">Systém</a></nav>
+  <nav class="tabs"><a href="./" aria-current="page" id="tabLayout">Rozvržení</a><a href="panels">Panely</a><a href="status">Stav</a><a href="settings">Systém</a></nav>
   <div class="actions">
     <button class="icon-btn" id="histBtn" title="Historie uložených verzí"><i class="mdi mdi-history"></i></button>
     <button class="icon-btn" id="exportBtn" title="Exportovat rozvržení (JSON)"><i class="mdi mdi-download"></i></button>
@@ -250,6 +252,14 @@
 
 <main>
   <section id="editCol" aria-label="Bloky">
+    <div class="card lsel">
+      <div class="f" style="margin:0"><span id="lselLabel">Rozvržení</span>
+        <div class="withbtn"><select id="layoutSel" aria-labelledby="lselLabel"></select>
+          <button class="icon-btn" id="lNew" title="Nové rozvržení"><i class="mdi mdi-plus"></i></button>
+          <button class="icon-btn" id="lRename" title="Přejmenovat rozvržení"><i class="mdi mdi-pencil-outline"></i></button>
+          <button class="icon-btn" id="lDelete" title="Smazat rozvržení"><i class="mdi mdi-delete-outline"></i></button></div>
+        <div class="help" id="lUsers"></div></div>
+    </div>
     <div class="card budget">
       <div class="budget-head"><span>Mřížka 12 sloupců po 40 px, krok 4 px</span><span id="cover"></span></div>
       <div class="budget-msg" id="budgetMsg" aria-live="polite"></div>
@@ -305,6 +315,10 @@
   <input type="search" id="iconSearch" placeholder="Hledat anglicky: thermometer, bus, trash…" autocomplete="off">
   <div class="icons" id="iconGrid"></div>
   <div class="dlg-foot"><button class="txtbtn" id="iconNone">Bez vlastní ikony</button><button class="txtbtn" onclick="iconDlg.close()">Zavřít</button></div></dialog>
+<dialog id="newDlg"><h3 style="margin:0 0 12px">Nové rozvržení</h3>
+  <label class="f"><span>Název</span><input type="text" id="newName" maxlength="40" placeholder="např. Kuchyň"></label>
+  <label class="f"><span>Začít z</span><select id="newFrom"></select></label>
+  <div class="dlg-foot"><button class="txtbtn" onclick="newDlg.close()">Zrušit</button><button class="primary" id="newOk">Vytvořit</button></div></dialog>
 <dialog id="histDlg"><h3 style="margin:0">Uložené verze</h3>
   <ul class="hist" id="histList"></ul>
   <div class="dlg-foot"><button class="txtbtn" onclick="histDlg.close()">Zavřít</button></div></dialog>
@@ -326,7 +340,9 @@ const TYPES = {
 const SIZES = { s: "Malá", m: "Střední", l: "Velká" };
 let SCHEMA = null, D = null;          // popis bloků a rozměry ze serveru
 let ENT = null;                       // id → {name, state, unit}; null = HA nedostupné
-let unsavedBanner = null, rev = 0;
+let unsavedBanner = null, rev = 0, leaving = false;
+let LID = new URLSearchParams(location.search).get("l") || "", LAYOUTS = [];
+const q = () => LID ? "?id=" + encodeURIComponent(LID) : "";
 let blocks = [], saved = "[]", hist = [], hpos = 0, openId = null;
 
 const $ = s => document.querySelector(s);
@@ -799,7 +815,7 @@ async function draw() {
   ctrl?.abort(); ctrl = new AbortController();
   const scr = $("#screen");
   try {
-    const r = await fetch("layout/preview" + ($("#worst").checked ? "?worst=1" : ""), { method: "POST", headers: { "Content-Type": "application/json" },
+    const r = await fetch("layout/preview" + q() + ($("#worst").checked ? (LID ? "&" : "?") + "worst=1" : ""), { method: "POST", headers: { "Content-Type": "application/json" },
                                               body: JSON.stringify(toServer()), signal: ctrl.signal });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "HTTP " + r.status);
     const url = URL.createObjectURL(await r.blob());
@@ -1038,7 +1054,7 @@ function refresh(soft) {
 async function doSave(force) {
   $("#save").disabled = true;
   try {
-    const r = await fetch("layout" + (force ? "?force=1" : ""), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toServer()) });
+    const r = await fetch("layout" + q() + (force ? (LID ? "&" : "?") + "force=1" : ""), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toServer()) });
     const res = await r.json().catch(() => ({}));
     if (r.status === 409 && res.conflict) { conflictLayout = res.layout; $("#conflict").showModal(); return; }
     if (!r.ok) throw new Error(res.error || "HTTP " + r.status);
@@ -1047,7 +1063,8 @@ async function doSave(force) {
     refresh();
     const n = blocks.filter(invalid).length;
     toast(res.error ? "Uloženo, ale vykreslení selhalo: " + res.error
-          : n ? `Uloženo, ${n} ${n > 1 ? "bloky mají" : "blok má"} neplatnou entitu.` : "Uloženo. Displej se změní při příštím probuzení desky.");
+          : n ? `Uloženo, ${n} ${n > 1 ? "bloky mají" : "blok má"} neplatnou entitu.`
+          : current().panels.length ? `Uloženo. ${current().panels.join(", ")} se změní při příštím probuzení desky.` : "Uloženo. Rozvržení zatím nepoužívá žádný panel.");
   } catch (e) {
     toast("Nelze uložit: " + e.message);
   } finally { renderStatus(); }
@@ -1064,7 +1081,7 @@ $("#cfTheirs").onclick = () => {
 $("#exportBtn").onclick = () => {
   const { rev: _, ...data } = toServer();
   const a = el("a", { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })),
-                      download: `espink-rozvrzeni-${new Date().toISOString().slice(0, 10)}.json` });
+                      download: `espink-${current().name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\W+/g, "-").toLowerCase()}-${new Date().toISOString().slice(0, 10)}.json` });
   document.body.append(a); a.click(); a.remove();
 };
 $("#importBtn").onclick = () => $("#importFile").click();
@@ -1090,7 +1107,7 @@ $("#importFile").onchange = async e => {
 $("#histBtn").onclick = async () => {
   const ul = $("#histList"); ul.replaceChildren(el("li", { textContent: "Načítám…" })); $("#histDlg").showModal();
   try {
-    const items = await (await fetch("layout/history.json")).json();
+    const items = await (await fetch("layout/history.json" + q())).json();
     ul.replaceChildren();
     if (!items.length) ul.append(el("li", { textContent: "Zatím žádné starší verze – vznikají při každém uložení." }));
     for (const it of items) {
@@ -1141,7 +1158,56 @@ document.addEventListener("keydown", e => {
   if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z" || e.target.matches("input,textarea")) return;
   e.preventDefault(); travel(e.shiftKey ? 1 : -1);
 });
-addEventListener("beforeunload", e => { if (snap() !== saved) e.preventDefault(); });
+addEventListener("beforeunload", e => { if (!leaving && snap() !== saved) e.preventDefault(); });
+
+// ───────── Více rozvržení (každý panel zobrazuje jedno z nich) ─────────
+const current = () => LAYOUTS.find(l => l.id === LID) || { name: "", panels: [] };
+function renderLayouts() {
+  const sel = $("#layoutSel"); sel.replaceChildren();
+  for (const l of LAYOUTS) sel.append(el("option", { value: l.id, textContent: l.name + (l.panels.length ? ` (${l.panels.join(", ")})` : ""), selected: l.id === LID }));
+  const c = current();
+  $("#lUsers").textContent = c.panels.length ? `Zobrazuje se na: ${c.panels.join(", ")}` : "Žádný panel ho nepoužívá – přiřaď ho v Panelech.";
+  $("#lDelete").disabled = LAYOUTS.length < 2 || c.panels.length > 0;
+  $("#lDelete").title = c.panels.length ? "Rozvržení používá panel – nejdřív mu v Panelech přiřaď jiné" : LAYOUTS.length < 2 ? "Poslední rozvržení nejde smazat" : "Smazat rozvržení";
+  document.title = `ESPink – ${c.name}`;
+}
+function go(id) {                       // přepnout rozvržení = načíst editor znovu
+  if (snap() !== saved && !confirm("Neuložené změny v tomto rozvržení se ztratí. Pokračovat?")) { renderLayouts(); return false; }
+  leaving = true; location.search = "?l=" + encodeURIComponent(id); return true;
+}
+async function post(url, body) {
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+  const res = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(res.error || "HTTP " + r.status);
+  return res;
+}
+$("#layoutSel").onchange = e => go(e.target.value);
+$("#lNew").onclick = () => {
+  const f = $("#newFrom"); f.replaceChildren(el("option", { value: "", textContent: "Prázdné rozvržení" }));
+  for (const l of LAYOUTS) f.append(el("option", { value: l.id, textContent: "Kopie: " + l.name + (l.id === LID && snap() !== saved ? " (uložená verze)" : ""), selected: l.id === LID }));
+  $("#newName").value = ""; $("#newDlg").showModal(); $("#newName").focus();
+};
+$("#newName").onkeydown = e => { if (e.key === "Enter") $("#newOk").click(); };
+$("#newOk").onclick = async () => {
+  const name = $("#newName").value.trim();
+  if (!name) { $("#newName").focus(); return; }
+  try {
+    const res = await post("layouts/create", { name, copy: $("#newFrom").value });
+    LAYOUTS = res.layouts; $("#newDlg").close();
+    if (!go(res.layout.id)) toast(`Rozvržení ${name} vytvořeno – najdeš ho v nabídce.`);
+  } catch (e) { toast("Nelze vytvořit: " + e.message); }
+};
+$("#lRename").onclick = async () => {
+  const name = prompt("Nový název rozvržení:", current().name);
+  if (!name || !name.trim() || name.trim() === current().name) return;
+  try { LAYOUTS = (await post("layouts/rename" + q(), { name })).layouts; renderLayouts(); toast("Přejmenováno."); }
+  catch (e) { toast("Nelze přejmenovat: " + e.message); }
+};
+$("#lDelete").onclick = async () => {
+  if (!confirm(`Smazat rozvržení ${current().name}? Nejde to vrátit.`)) return;
+  try { const res = await post("layouts/delete" + q()); leaving = true; location.search = "?l=" + encodeURIComponent(res.layouts[0].id); }
+  catch (e) { toast("Nelze smazat: " + e.message); }
+};
 
 let tt;
 function toast(text, undo) {
@@ -1184,8 +1250,10 @@ async function loadEntities() {
 
 (async function init() {
   try {
-    const [res] = await Promise.all([fetch("layout.json").then(r => r.json()), loadEntities()]);
+    const [res] = await Promise.all([fetch("layout.json" + q()).then(r => r.ok ? r.json() : Promise.reject(new Error(
+      r.status === 404 ? "rozvržení neexistuje (smazané?)" : "HTTP " + r.status))), loadEntities()]);
     SCHEMA = res.schema; D = SCHEMA.grid;
+    LID = res.layout.id; LAYOUTS = res.layouts; renderLayouts();
     rev = res.layout.rev || 0;
     blocks = fromServer(res.layout); saved = snap(); hist = [saved]; hpos = 0;
     if (res.error) banner("err", "Uložené rozvržení je poškozené (" + res.error + "), načteno výchozí. Starší verze najdeš v historii.");
@@ -1195,7 +1263,7 @@ async function loadEntities() {
     });
     fit(); refresh(); scheduleRender(true);
   } catch (e) {
-    banner("err", "Editor se nepodařilo načíst: " + e.message, () => location.reload());
+    banner("err", "Editor se nepodařilo načíst: " + e.message, () => { leaving = true; location.search = ""; });
   }
 })();
 </script>

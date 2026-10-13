@@ -17,6 +17,8 @@ from options import ENTITY_RE
 SCREEN_W, SCREEN_H = 480, 800
 COLS, COL_W, ROW_STEP = 12, 40, 4
 VERSION = 2
+DEFAULT_ID, DEFAULT_NAME = "main", "Hlavní"
+ID_RE = re.compile(r"^[a-z0-9]{1,16}$")
 # entity zmíněné v šabloně v uvozovkách: states('sensor.x')
 TEMPLATE_ENTITY_RE = re.compile(r"""['"]([a-z_]+\.[a-z0-9_]+)['"]""")
 LINES = {"none": 0, "thin": 1, "thick": 2}
@@ -232,6 +234,10 @@ def sanitize(layout: dict) -> dict:
     if not isinstance(layout, dict) or not isinstance(layout.get("blocks"), list):
         raise ValueError("rozvržení musí obsahovat seznam bloků")
     rev = int(layout.get("rev") or 0)
+    lid = str(layout.get("id") or DEFAULT_ID)
+    if not ID_RE.match(lid):
+        raise ValueError(f"neplatné ID rozvržení: {lid}")
+    name = clean_name(layout.get("name")) or DEFAULT_NAME
     if any(isinstance(b, dict) and "h" not in b for b in layout["blocks"]):
         layout = _migrate_v1(layout)
     blocks = []
@@ -261,7 +267,11 @@ def sanitize(layout: dict) -> dict:
         for b in shown[i + 1:]:
             if overlaps(a, b):
                 raise ValueError(f"bloky {BLOCK_TYPES[a['type']]['title']} a {BLOCK_TYPES[b['type']]['title']} se překrývají")
-    return {"version": VERSION, "rev": rev, "blocks": blocks}
+    return {"id": lid, "name": name, "version": VERSION, "rev": rev, "blocks": blocks}
+
+
+def clean_name(value) -> str:
+    return " ".join(str(value or "").split())[:40]
 
 
 def visible(layout: dict) -> list[dict]:
@@ -292,11 +302,20 @@ def from_options(opts: dict) -> dict:
 
 
 def path() -> str:
+    """Původní jediné rozvržení (do verze 0.6.0-dev5) – už se jen čte při převodu."""
     return os.environ.get("LAYOUT_PATH", "/data/layout.json")
 
 
-def load(opts: dict) -> tuple[dict, bool, str]:
-    """Vrátí (rozvržení, uložené?, chyba). Bez layout.json se odvodí z konfigurace."""
+def _sibling(env: str, name: str) -> str:
+    return os.environ.get(env) or os.path.join(os.path.dirname(path()) or ".", name)
+
+
+def store_path() -> str:
+    return _sibling("LAYOUTS_PATH", "layouts.json")
+
+
+def _load_legacy(opts: dict) -> tuple[dict, bool, str]:
+    """Rozvržení z layout.json, jinak odvozené z konfigurace add-onu."""
     try:
         with open(path(), encoding="utf-8") as f:
             return sanitize(json.load(f)), True, ""
@@ -308,20 +327,58 @@ def load(opts: dict) -> tuple[dict, bool, str]:
     return from_options(opts), False, ""
 
 
-HISTORY_MAX = 15
+def load_all(opts: dict) -> tuple[dict[str, dict], bool, str]:
+    """Vrátí ({id: rozvržení}, uložené?, chyba). Bez layouts.json se převezme
+    dosavadní layout.json (nebo konfigurace) jako rozvržení „Hlavní“."""
+    error = ""
+    try:
+        with open(store_path(), encoding="utf-8") as f:
+            data = json.load(f)
+        out, errors = {}, []
+        for raw in data.get("layouts", []):
+            try:
+                lay = sanitize(raw)
+            except (ValueError, TypeError) as e:
+                errors.append(f"{raw.get('name') or raw.get('id') if isinstance(raw, dict) else raw}: {e}")
+                continue
+            out.setdefault(lay["id"], lay)
+        if errors:
+            print(f"[layout] {store_path()}: vynechána neplatná rozvržení: {'; '.join(errors)}")
+        if out:
+            return out, True, "; ".join(errors)
+        error = "soubor neobsahuje žádné platné rozvržení"
+    except FileNotFoundError:
+        pass
+    except (ValueError, TypeError, AttributeError, json.JSONDecodeError) as e:
+        error = str(e)
+        print(f"[layout] {store_path()} je neplatný ({e}); použito výchozí rozvržení")
+    lay, saved, legacy_error = _load_legacy(opts)
+    lay.update(id=DEFAULT_ID, name=DEFAULT_NAME)
+    return {DEFAULT_ID: lay}, saved and not error, error or legacy_error
+
+
+def new_id(layouts: dict) -> str:
+    while (lid := uuid.uuid4().hex[:8]) in layouts:
+        pass
+    return lid
+
+
+HISTORY_MAX = 15  # na jedno rozvržení
 
 
 def history_path() -> str:
     return os.path.join(os.path.dirname(path()) or ".", "layout-history.json")
 
 
-def history() -> list[dict]:
+def history(lid: str | None = None) -> list[dict]:
+    """Starší uložené verze; s lid jen daného rozvržení (záznamy bez layout_id = Hlavní)."""
     try:
         with open(history_path(), encoding="utf-8") as f:
             items = json.load(f)
-        return items if isinstance(items, list) else []
     except (FileNotFoundError, json.JSONDecodeError):
         return []
+    items = [it for it in items if isinstance(it, dict)] if isinstance(items, list) else []
+    return items if lid is None else [it for it in items if it.get("layout_id", DEFAULT_ID) == lid]
 
 
 def _write(file: str, data) -> None:
@@ -331,13 +388,22 @@ def _write(file: str, data) -> None:
     os.replace(tmp, file)
 
 
-def save(layout: dict, previous: dict | None) -> dict:
-    """Uloží rozvržení s novou revizí; předchozí uloženou verzi přidá do historie."""
-    new = dict(layout, rev=int(time.time() * 1000))
+def write_all(layouts: dict[str, dict]) -> None:
+    _write(store_path(), {"version": VERSION, "layouts": list(layouts.values())})
+
+
+def save(layouts: dict[str, dict], new: dict, previous: dict | None) -> dict:
+    """Uloží jedno rozvržení s novou revizí (ostatní beze změny); předchozí verzi přidá do historie."""
+    new = dict(new, rev=int(time.time() * 1000))
     if previous:
-        items = [{"rev": previous.get("rev", 0), "layout": previous}] + history()
-        _write(history_path(), items[:HISTORY_MAX])
-    _write(path(), new)
+        items, counts = [], {}
+        for it in [{"rev": previous.get("rev", 0), "layout_id": previous["id"], "layout": previous}] + history():
+            lid = it.get("layout_id", DEFAULT_ID)
+            counts[lid] = counts.get(lid, 0) + 1
+            if counts[lid] <= HISTORY_MAX:
+                items.append(it)
+        _write(history_path(), items)
+    write_all({**layouts, new["id"]: new})
     return new
 
 

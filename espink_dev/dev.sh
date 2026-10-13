@@ -36,6 +36,9 @@ export OPTIONS_PATH="${OPTIONS_PATH:-$HERE/dev-options.json}"
 [ -f "$OPTIONS_PATH" ] || cp "$HERE/app/options.example.json" "$OPTIONS_PATH"
 # rozvržení z editoru (dokud neexistuje, odvodí se z konfigurace)
 export LAYOUT_PATH="${LAYOUT_PATH:-$HERE/dev-layout.json}"
+# rozvržení a panely (dev-layout.json se při prvním spuštění převezme jako „Hlavní“)
+export LAYOUTS_PATH="${LAYOUTS_PATH:-$HERE/dev-layouts.json}"
+export PANELS_PATH="${PANELS_PATH:-$HERE/dev-panels.json}"
 
 cd "$HERE/app"
 case "${1:-}" in

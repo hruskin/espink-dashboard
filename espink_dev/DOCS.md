@@ -2,7 +2,7 @@
 
 > **Vývojová verze (DEV).** Běží vedle stabilního add-onu ESPink Server a desku
 > neobsluhuje (port 8099 je ve výchozím stavu vypnutý). Slouží k vývoji editoru
-> rozvržení: obsah dashboardu se skládá z bloků (`/data/layout.json`). Dokud
+> rozvržení: obsah dashboardu se skládá z bloků (`/data/layouts.json`). Dokud
 > rozvržení není uložené z editoru, odvozuje se z konfigurace níže, takže dashboard
 > vypadá stejně jako ve stabilní verzi.
 >
@@ -25,8 +25,18 @@ přeložené, ikona, červeně pod/nad mezí), Text a Šablona (Jinja
 k sousedovi, duplikace, náhled „nejhorší případ“, mřížka sloupců, výběr ikon, export/import
 > JSON, historie posledních 15 uložených verzí, ochrana proti přepsání z jiné karty.
 >
-> API (jen přes Ingress): `GET layout.json`, `POST layout/preview` (PNG),
-> `POST layout` (uložení), `GET layout/history.json`.
+> **Více panelů:** rozvržení může být víc (výběr nahoře v editoru: nové – prázdné
+> nebo kopie, přejmenovat, smazat). Na kartě **Panely** má každá deska (podle MAC)
+> název, přiřazené rozvržení, vlastní rozvrh probouzení (prázdné = výchozí ze Systému)
+> a senzor baterie (`sensor.espink_<název>_baterie`). Víc panelů může sdílet jedno
+> rozvržení. Nová deska, která se ozve, se objeví v Panelech pod *Nové desky* a po
+> „Povolit“ se zapíše do `allowed_devices`. Odebrání panelu desku zase zakáže.
+> Dosavadní `layout.json` se převezme jako rozvržení „Hlavní“ a povolené desky jako
+> panely (první s dosavadním `battery_sensor`). Panely jsou v `/data/panels.json`.
+>
+> API (jen přes Ingress, `?id=` = rozvržení): `GET layout.json`, `POST layout/preview`
+> (PNG), `POST layout` (uložení), `GET layout/history.json`, `POST layouts/create|rename|delete`,
+> `GET panels.json`, `POST panels/save|approve|delete`, `GET preview.png?panel=MAC`.
 
 Lokální náhrada serveru [Živý obraz](https://zivyobraz.eu) pro e-paper ESPink.
 Add-on sbírá data z Home Assistantu (kalendáře, odjezdy, meteostanice, předpověď),
@@ -50,17 +60,18 @@ Firmware s touto adresou připravíte podle `firmware/README.md`.
   Obrázek se znovu vykreslí jen tehdy, když se model změní.
 - Hlavička `Timestamp` se mění jen při změně obsahu. Když se nic nezměnilo,
   zařízení nepřekresluje a hned usne. To je hlavní úspora baterie.
-- Hlavička `PreciseSleep` určuje dobu spánku podle rozvrhu `schedule`.
-- Napětí baterie a signál WiFi ze zařízení se zapisují do `battery_sensor`
-  (výchozí `sensor.espink_baterie`). Senzor má atributy `voltage`, `rssi`,
-  `last_seen` a `next_wake`. Po restartu HA zmizí, dokud se zařízení znovu neozve.
+- Hlavička `PreciseSleep` určuje dobu spánku podle rozvrhu panelu (jinak `schedule`).
+- Napětí baterie a signál WiFi ze zařízení se zapisují do senzoru baterie panelu
+  (první panel `sensor.espink_baterie`). Senzor má atributy `voltage`, `rssi`,
+  `last_seen`, `next_wake`, `refresh_ms`, `reset_reason`, `mac`… Po restartu HA
+  zmizí, dokud se zařízení znovu neozve.
 
 ## Bezpečnost
 
 - **Povolená zařízení:** port 8099 obsluhuje jen desky ze seznamu `allowed_devices`
   (MAC adresy). Je-li seznam prázdný, první deska, která se ozve, se zapíše sama;
-  ostatní dostanou `403`. Poslední odmítnuté zařízení je vidět v panelu ESPink.
-  Novou desku přidáte v Nastavení (nebo seznam vyprázdněte a nechte ji zapsat).
+  ostatní dostanou `403`. Odmítnuté desky jsou vidět v Panelech (*Nové desky*),
+  kde je jde jedním tlačítkem povolit.
 - **Omezení rychlosti:** deska vynutí nové vykreslení nejvýš jednou za 30 s a zápis
   do HA nejvýš jednou za minutu.
 - **Webové rozhraní** je dostupné jen přes Ingress (administrátoři HA); ukládání
@@ -91,7 +102,7 @@ se hned, bez restartu. Stejné volby jsou i na záložce *Konfigurace* add-onu:
 | `calendars` | Seznam kalendářů: `entity`, volitelně `label` (štítek u události), `icon` (např. `mdi:soccer`; jinak ikona entity z HA) a `red: true` (zvýraznit červeně). |
 | `nameday_calendar`, `holiday_calendar` | Svátek a státní svátky v hlavičce dne. |
 | `event_days` | Kolik dní dopředu ukazovat události vždy; pokud zbývá místo, přidají se další dny (až 31). |
-| `schedule` | Rozvrh probouzení, viz níže. |
+| `schedule` | Výchozí rozvrh probouzení pro panely bez vlastního, viz níže. |
 | `allowed_devices` | MAC adresy povolených desek (viz Bezpečnost). |
 
 ### Rozvrh probouzení

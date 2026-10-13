@@ -85,10 +85,7 @@ def sanitize(new: dict, current: dict) -> dict:
                 raise ValueError("neplatná MAC adresa v povolených zařízeních")
             v = macs
         elif key == "schedule":
-            v = [str(r).strip() for r in v if str(r).strip()]
-            bad = [r for r in v if not _RULE.match(r)]
-            if bad:
-                raise ValueError(f"neplatné pravidlo rozvrhu: {bad[0]}")
+            v = check_rules(v)
         else:
             v = str(v).strip()
             if key in ENTITY_KEYS:
@@ -105,6 +102,14 @@ def sanitize(new: dict, current: dict) -> dict:
 _RULE = re.compile(r"^\s*(?:(\d)(?:-(\d))?\s+)?(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})\s*=\s*(\d+)\s*$")
 
 MIN_SLEEP = 60
+
+
+def check_rules(rules) -> list[str]:
+    v = [str(r).strip() for r in rules or [] if str(r).strip()]
+    bad = [r for r in v if not _RULE.match(r)]
+    if bad:
+        raise ValueError(f"neplatné pravidlo rozvrhu: {bad[0]}")
+    return v
 FALLBACK_SLEEP = 1800
 
 

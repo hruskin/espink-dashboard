@@ -11,7 +11,7 @@ ENV_FILE="$HERE/.env.dev"
 if [ ! -x "$VENV/bin/python" ]; then
   echo "Připravuji Python prostředí ($VENV)…"
   python3 -m venv "$VENV"
-  "$VENV/bin/pip" install -q aiohttp jinja2 pillow paho-mqtt
+  "$VENV/bin/pip" install -q aiohttp jinja2 pillow paho-mqtt weasyprint
 fi
 
 if [ ! -f "$ENV_FILE" ]; then

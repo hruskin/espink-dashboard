@@ -279,6 +279,8 @@
       <div class="ptool">
         <span class="st" id="pstat" aria-live="polite">Načítám…</span>
         <label class="worst" title="Vynutí upozornění v záhlaví a výluku v odjezdech – nejméně místa pro události"><input type="checkbox" id="worst">Nejhorší případ</label>
+        <select id="engine" class="worst" title="Vykreslovač náhledu (porovnání); deska používá ten z Nastavení" style="border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);padding:2px">
+          <option value="">podle nastavení</option><option value="chromium">Chromium</option><option value="weasyprint">WeasyPrint</option><option value="typst">Typst</option></select>
         <button class="icon-btn" id="gridBtn" title="Mřížka: 12 sloupců po 40 px (při tažení se ukáže sama)" aria-pressed="false"><i class="mdi mdi-grid"></i></button>
         <div class="segbtn" role="group" aria-label="Měřítko">
           <button aria-pressed="true" data-z="fit" title="Přizpůsobit oknu"><i class="mdi mdi-fit-to-screen-outline"></i></button>
@@ -815,14 +817,17 @@ async function draw() {
   ctrl?.abort(); ctrl = new AbortController();
   const scr = $("#screen");
   try {
-    const r = await fetch("layout/preview" + q() + ($("#worst").checked ? (LID ? "&" : "?") + "worst=1" : ""), { method: "POST", headers: { "Content-Type": "application/json" },
+    const qs = [LID && "id=" + encodeURIComponent(LID), $("#worst").checked && "worst=1", $("#engine").value && "engine=" + $("#engine").value].filter(Boolean);
+    const t0 = performance.now();
+    const r = await fetch("layout/preview" + (qs.length ? "?" + qs.join("&") : ""), { method: "POST", headers: { "Content-Type": "application/json" },
                                               body: JSON.stringify(toServer()), signal: ctrl.signal });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "HTTP " + r.status);
     const url = URL.createObjectURL(await r.blob());
     $("#pimg").src = url; if (lastUrl) URL.revokeObjectURL(lastUrl); lastUrl = url;
     scr.classList.remove("busy", "failed");
     const dirty = snap() !== saved;
-    $("#pstat").textContent = "Vykresleno " + new Date().toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" }) + (dirty ? " · návrh" : "");
+    $("#pstat").textContent = "Vykresleno " + new Date().toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" }) + (dirty ? " · návrh" : "")
+      + ` · ${((performance.now() - t0) / 1000).toFixed(1)} s`;
     $("#pimg").alt = `Náhled displeje, ${shown().length} bloků`;
   } catch (e) {
     if (e.name === "AbortError") return;
@@ -1145,6 +1150,7 @@ $("#iconSearch").oninput = e => showIcons(e.target.value);
 $("#iconNone").onclick = () => { $("#iconDlg").close(); iconCb(""); };
 
 $("#worst").onchange = () => scheduleRender(true);
+$("#engine").onchange = () => scheduleRender(true);
 $("#gridBtn").onclick = () => {
   const on = !document.body.classList.contains("grid-on");
   document.body.classList.toggle("grid-on", on); $("#gridBtn").setAttribute("aria-pressed", on);

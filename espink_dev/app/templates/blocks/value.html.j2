@@ -1,5 +1,13 @@
+{# velikost písma podle bloku (dřív clamp() s cqw/cqh – WeasyPrint je neumí) #}
+{% set narrow = cw <= 359 %}
+{% set fs_icon = clamp(14, ch * 0.26, 28) if narrow else clamp(16, ch * 0.6, 64) %}
+{% set fs_label = clamp(12, ch * 0.24, 22) if narrow else clamp(14, ch * 0.34, 30) %}
+{% if b.text %}{% set fs_value = clamp(12, [ch * 0.3, cw * 0.13]|min, 40) if narrow else clamp(14, [ch * 0.42, cw * 0.09]|min, 48) %}
+{% elif narrow and not b.label %}{% set fs_value = clamp(14, [ch * 0.64, cw * 0.22]|min, 80) %}
+{% elif narrow %}{% set fs_value = clamp(14, [ch * 0.5, cw * 0.24]|min, 80) %}
+{% else %}{% set fs_value = clamp(16, [ch * 0.66, cw * 0.13]|min, 80) %}{% endif %}
 <div class="vbox {{ 'nolabel' if not b.label }}">
-{% if b.icon %}<i class="mdi mdi-{{ b.icon }}"></i>{% endif %}
-{% if b.label %}<span class="vl cond ellipsis">{{ b.label }}</span>{% endif %}
-<span class="vv num {{ 'red' if b.red }} {{ 'vtext' if b.text }}">{{ b.value }}{% if b.unit %}<small>{{ ' ' ~ b.unit }}</small>{% endif %}</span>
+{% if b.icon %}<i class="mdi mdi-{{ b.icon }}" style="font-size: {{ fs_icon }}"></i>{% endif %}
+{% if b.label %}<span class="vl cond ellipsis" style="font-size: {{ fs_label }}">{{ b.label }}</span>{% endif %}
+<span class="vv num {{ 'red' if b.red }} {{ 'vtext' if b.text }}" style="font-size: {{ fs_value }}">{{ b.value }}{% if b.unit %}<small>{{ ' ' ~ b.unit }}</small>{% endif %}</span>
 </div>

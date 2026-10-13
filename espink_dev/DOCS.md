@@ -34,6 +34,13 @@ k sousedovi, duplikace, náhled „nejhorší případ“, mřížka sloupců, v
 > Dosavadní `layout.json` se převezme jako rozvržení „Hlavní“ a povolené desky jako
 > panely (první s dosavadním `battery_sensor`). Panely jsou v `/data/panels.json`.
 >
+> **Vykreslovače (zkouška, volba `renderer` v Systému):** `chromium` (původní),
+> `weasyprint` (stejná HTML šablona přes WeasyPrint 70 + pdftoppm, bez prohlížeče)
+> a `typst` (vlastní šablona `templates/dashboard.typ`, obrázek za ~0,05 s). V náhledu
+> editoru jde vykreslovač přepnout pro porovnání. Typst potřebuje statické řezy fontů
+> (`app/static/fonts/typst`, vyrábí `tools/typst_fonts.py`); blok Šablona (HTML)
+> ukáže v Typstu jen text. Cíl: odstranit Chromium (~750 MB) z obrazu.
+>
 > **Instalace firmwaru** z prohlížeče (karta Instalace, ESP Web Tools + Improv pro Wi-Fi) – viz stabilní DOCS.
 >
 > API (jen přes Ingress, `?id=` = rozvržení): `GET layout.json`, `POST layout/preview`

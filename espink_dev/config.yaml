@@ -1,5 +1,5 @@
 name: ESPink Server DEV
-version: "0.6.0-dev9"
+version: "0.6.0-dev10"
 slug: espink_server_dev
 description: Vývojová verze s editorem rozvržení – lokální server protokolu Živý obraz – kreslí dashboard z dat Home Assistantu pro e-paper ESPink
 arch:
@@ -20,6 +20,7 @@ ports_description:
   8099/tcp: HTTP pro zařízení ESPink (vypnuto – desku obsluhuje stabilní add-on)
 options:
   rotate: 90
+  renderer: chromium
   image_format: z2
   render_interval: 60
   meteo_temperature: sensor.temperature_10
@@ -52,6 +53,7 @@ options:
   allowed_devices: []
 schema:
   rotate: list(0|90|180|270)
+  renderer: list(chromium|weasyprint|typst)?
   image_format: list(z2|png)
   render_interval: int(30,600)
   meteo_temperature: str?

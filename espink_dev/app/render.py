@@ -1,11 +1,23 @@
-"""HTML -> PNG (headless Chromium) -> přesná paleta BWR -> náhled PNG + data pro zařízení."""
+"""Model zobrazení -> obrázek -> přesná paleta BWR -> náhled PNG + data pro zařízení.
+
+Vykreslovače (volba renderer):
+  chromium   – HTML/CSS šablona, snímek z headless Chromia (původní, velký obraz)
+  weasyprint – stejná HTML/CSS šablona přes WeasyPrint (PDF) a pdftoppm (PNG)
+  typst      – vlastní šablona dashboard.typ.j2 přeložená Typstem rovnou do PNG
+"""
 import asyncio
 import io
+import json
+import logging
 import os
 import pwd
+import re
 import shutil
+import subprocess
 import tempfile
+import time
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from PIL import Image
@@ -24,7 +36,10 @@ DEVICE_RGB = {WHITE: (255, 255, 255), BLACK: (0, 0, 0), RED: (255, 0, 0)}
 # Práh černé (jas 0–255); stejná logika jako firmware pro PNG
 BLACK_THRESHOLD = 160
 
-_env = Environment(loader=FileSystemLoader(APP_DIR / "templates"), autoescape=select_autoescape(["j2", "html"]))
+_env = Environment(loader=FileSystemLoader(APP_DIR / "templates"), autoescape=select_autoescape(["html.j2", "html"]))
+ENGINES = ("chromium", "weasyprint", "typst")
+ENGINE = "chromium"  # nastavuje main.py podle konfigurace (renderer)
+TYPST_FONTS = STATIC_DIR / "fonts" / "typst"
 
 
 def chromium_binary() -> str:
@@ -154,9 +169,143 @@ def to_png(pal: Image.Image) -> bytes:
     return buf.getvalue()
 
 
-async def render(view: dict, updated: str, rotate: int, fmt: str, next_wake: str = "") -> tuple[bytes, bytes]:
+# ── WeasyPrint ──────────────────────────────────────────────────────────
+logging.getLogger("weasyprint").setLevel(logging.ERROR)  # nepodporované CSS (jen Chromium) nehlásit
+logging.getLogger("fontTools").setLevel(logging.ERROR)
+
+
+def _weasy_check(url: str) -> None:
+    """Jen soubory add-onu (fonty, ikony) a data: – žádná síť (názvy událostí a šablony
+    jsou cizí obsah) ani jiné soubory."""
+    if url.startswith("data:"):
+        return
+    if url.startswith("file:") and Path(unquote(urlparse(url).path)).resolve().is_relative_to(STATIC_DIR):
+        return
+    raise ValueError(f"zakázaná adresa: {url[:80]}")
+
+
+def _weasy_fetcher():
+    import weasyprint
+    import weasyprint.urls
+    if hasattr(weasyprint.urls, "URLFetcher"):  # WeasyPrint 68+: třída
+        class Fetcher(weasyprint.urls.URLFetcher):
+            def fetch(self, url, *args, **kwargs):
+                _weasy_check(url)
+                return super().fetch(url, *args, **kwargs)
+        return Fetcher(allowed_protocols=("file", "data"))
+
+    def fetch(url, *args, **kwargs):  # starší (Alpine 3.21: 63): funkce
+        _weasy_check(url)
+        return weasyprint.default_url_fetcher(url, *args, **kwargs)
+    return fetch
+
+
+def weasy_png(html: str) -> Image.Image:
+    import weasyprint
+    pdf = weasyprint.HTML(string=html, base_url=STATIC_DIR.as_uri(), url_fetcher=_weasy_fetcher()).write_pdf(
+        # stránka vyšší než displej: obsah u spodního okraje by WeasyPrint jinak přesunul
+        # na další stránku (body má pevných 800 px, přebytek se ořízne)
+        stylesheets=[weasyprint.CSS(string=f"@page {{ size: {WIDTH}px {HEIGHT * 2}px; margin: 0 }}")])
+    # 96 dpi: 1 CSS px = 1 pixel
+    out = subprocess.run(["pdftoppm", "-r", "96", "-png", "-singlefile", "-"], input=pdf,
+                         capture_output=True, timeout=60, check=False)
+    if out.returncode or not out.stdout:
+        raise RuntimeError(f"pdftoppm selhal: {out.stderr.decode(errors='replace')[-300:]}")
+    return _fit(Image.open(io.BytesIO(out.stdout)).convert("RGB"))
+
+
+def _fit(img: Image.Image) -> Image.Image:
+    if img.size != (WIDTH, HEIGHT):
+        canvas = Image.new("RGB", (WIDTH, HEIGHT), "white")
+        canvas.paste(img.crop((0, 0, min(WIDTH, img.width), min(HEIGHT, img.height))))
+        img = canvas
+    return img
+
+
+# ── Typst ───────────────────────────────────────────────────────────────
+def typst_str(value) -> str:
+    """Text jako řetězcový literál Typstu ("…") – žádný obsah se nevykoná jako kód."""
+    s = "" if value is None else str(value)
+    s = s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "").replace("\t", " ")
+    return '"' + "".join(ch for ch in s if ch >= " ") + '"'
+
+
+_MDI_RE = re.compile(r'\.mdi-([a-z0-9-]+)::?before\s*\{\s*content:\s*"\\([0-9A-Fa-f]+)"')
+_mdi_codes: dict[str, int] = {}
+# ikony použité přímo v šabloně (ostatní – počasí, kalendáře, entity – jsou v modelu)
+TYPST_ICONS = ("bus", "alert", "update", "timer-sand", "calendar-week", "water-percent", "weather-pouring",
+               "home-thermometer-outline", "gauge", "flower-tulip-outline")
+
+
+def mdi_codes() -> dict[str, int]:
+    """Název ikony -> kód znaku ve fontu Material Design Icons (z CSS knihovny)."""
+    if not _mdi_codes:
+        css = (STATIC_DIR / "mdi" / "css" / "materialdesignicons.min.css").read_text(encoding="utf-8")
+        _mdi_codes.update((n, int(c, 16)) for n, c in _MDI_RE.findall(css))
+    return _mdi_codes
+
+
+def _icon_names(obj, out: set) -> set:
+    if isinstance(obj, dict):
+        for k, val in obj.items():
+            if k.endswith("icon") and isinstance(val, str):
+                out.add(val.removeprefix("mdi:"))
+            else:
+                _icon_names(val, out)
+    elif isinstance(obj, list):
+        for x in obj:
+            _icon_names(x, out)
+    return out
+
+
+def render_typst(view: dict, updated: str, next_wake: str = "") -> str:
+    """Zdroj pro Typst: data jako JSON v řetězcovém literálu + šablona dashboard.typ."""
+    codes = mdi_codes()
+    names = _icon_names(view, set(TYPST_ICONS))
+    # šablona (HTML) se v Typstu ukáže jen jako text
+    tpl = {b["id"]: re.sub(r"\s+", " ", re.sub(r"<[^>]*>", " ", str(b.get("html") or ""))).strip()
+           for b in view["blocks"] if b["type"] == "template"}
+    data = {"view": view, "updated": updated, "updated_time": updated.split()[-1], "next_wake": next_wake or "",
+            "icons": {n: codes[n] for n in names if n in codes}, "template_text": tpl}
+    source = (APP_DIR / "templates" / "dashboard.typ").read_text(encoding="utf-8")
+    return f"#let data = json.decode({typst_str(json.dumps(data, ensure_ascii=False, default=str))})\n" + source
+
+
+def typst_binary() -> str:
+    for name in (os.environ.get("TYPST"), "typst"):
+        if name and shutil.which(name):
+            return shutil.which(name)
+    raise RuntimeError("Typst nenalezen")
+
+
+def typst_png(source: str) -> Image.Image:
+    with tempfile.TemporaryDirectory(prefix="espink-typst-") as root:  # prázdný kořen: šablona nemá co číst
+        out = subprocess.run([typst_binary(), "compile", "--root", root, "--font-path", str(TYPST_FONTS),
+                              "--ignore-system-fonts", "--format", "png", "--ppi", "72", "-", "-"],
+                             input=source.encode(), capture_output=True, timeout=60, check=False, cwd=root)
+    if out.returncode or not out.stdout:
+        raise RuntimeError(f"Typst: {out.stderr.decode(errors='replace')[-600:]}")
+    return _fit(Image.open(io.BytesIO(out.stdout)).convert("RGB"))
+
+
+async def rasterize(view: dict, updated: str, next_wake: str = "", engine: str | None = None) -> Image.Image:
+    engine = engine or ENGINE
+    t = time.monotonic()
+    if engine == "typst":
+        img = await asyncio.to_thread(typst_png, render_typst(view, updated, next_wake))
+    elif engine == "weasyprint":
+        img = await asyncio.to_thread(weasy_png, render_html(view, updated, next_wake))
+    else:
+        img = await screenshot(render_html(view, updated, next_wake))
+    if os.environ.get("DEV") == "1":
+        print(f"[render] {engine}: {time.monotonic() - t:.2f} s")
+    return img
+
+
+async def render(view: dict, updated: str, rotate: int, fmt: str, next_wake: str = "",
+                 engine: str | None = None) -> tuple[bytes, bytes]:
     """Vrátí (náhled PNG v portrétu, data pro zařízení)."""
-    img = await screenshot(render_html(view, updated, next_wake))
+    img = await rasterize(view, updated, next_wake, engine)
     pal = await asyncio.to_thread(quantize, img)
     payload = await asyncio.to_thread(device_payload, pal, rotate, fmt)
     return to_png(pal), payload

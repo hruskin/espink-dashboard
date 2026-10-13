@@ -20,19 +20,19 @@
   .num { font-variant-numeric: tabular-nums; }
   .mdi::before { line-height: 1; }
 
-  /* Bloky jdou pod sebou; výšku a čáru nad blokem nastavuje model (layout.py) */
   /* Bloky leží na mřížce (layout.py): poloha a velikost inline, čára nahoře a vlevo.
-     container-type: obsah se může přizpůsobit velikosti svého bloku (@container, cqw/cqh) */
-  .blk { position: absolute; overflow: hidden; border: 0 solid var(--ink); container-type: size; }
+     Přizpůsobení velikosti bloku: třídy wNNN (šířka obsahu ≤ NNN px) a velikosti písma
+     spočítané níže – místo @container/cqw, které WeasyPrint neumí */
+  .blk { position: absolute; overflow: hidden; border: 0 solid var(--ink); }
 
   /* ── Záhlaví ────────────────────────────── */
-  .blk.header { padding: 8px 16px 0; position: relative; }
+  .blk.header { padding: 8px 16px 0; }  /* absolute z .blk: hline se umisťuje vůči bloku */
   .hrow { display: flex; }
   /* upozornění přes celou šířku dole v hlavičce */
   .hline { position: absolute; left: 16px; right: 16px; bottom: 3px; height: 24px; font-size: 19px; font-weight: 800; }
   .date { display: flex; align-items: flex-start; flex: 1; min-width: 0; overflow: hidden; margin-right: 6px; }
   .daynum { font-size: 98px; font-weight: 400; line-height: 0.74; letter-spacing: -7px; margin: 12px 12px 0 -4px; flex: none; }
-  .datetext { padding-top: 4px; min-width: 0; }
+  .datetext { padding-top: 4px; min-width: 0; flex: 1; }
   .weekday { font-size: 28px; font-weight: 800; line-height: 1.05; white-space: nowrap; }
   .month { font-size: 18px; font-weight: 600; margin-top: 3px; white-space: nowrap; }
   .nameday { font-size: 17px; font-weight: 600; margin-top: 8px; letter-spacing: -0.2px; }
@@ -42,14 +42,11 @@
   .blk.weather_now { display: flex; align-items: center; justify-content: center; padding: 0 12px; }
   .blk.weather_now .now { width: 100%; }
   .blk.weather_now .now-top, .blk.weather_now .now-sub { justify-content: center; }
-  @container (max-width: 210px) {
-    .weather_now .minmax, .weather_now .now-sub + .now-sub, .weather_now .rain { display: none; }
-    .weather_now .now-top { height: auto; gap: 2px; }
-    .weather_now .now-top .mdi { font-size: clamp(22px, 22cqw, 40px); }
-    .weather_now .temp, .weather_now .temp.long { font-size: clamp(20px, 26cqw, 46px); letter-spacing: -1px; }
-    .weather_now .now-sub { font-size: 15px; gap: 4px; }
-    .weather_now .now-sub .mdi { font-size: 18px; }
-  }
+  .weather_now.w210 .minmax, .weather_now.w210 .now-sub + .now-sub, .weather_now.w210 .rain { display: none; }
+  .weather_now.w210 .now-top { height: auto; gap: 2px; }
+  .weather_now.w210 .temp, .weather_now.w210 .temp.long { letter-spacing: -1px; }
+  .weather_now.w210 .now-sub { font-size: 15px; gap: 4px; }
+  .weather_now.w210 .now-sub .mdi { font-size: 18px; }
   .now-top { display: flex; justify-content: flex-end; align-items: center; gap: 4px; height: 54px; margin-bottom: 2px; }
   .now-top .mdi { font-size: 50px; line-height: 1; flex: none; }
   .minmax { display: flex; flex-direction: column; align-items: flex-end; line-height: 20px; font-size: 17px; margin-right: 2px; flex: none; letter-spacing: -0.5px; }
@@ -120,59 +117,48 @@
   /* ── Hodnota entity (velikosti s/m/l = VALUE_H v layout.py) ── */
   /* písmo podle velikosti bloku: široký blok = ikona · popisek · hodnota v řádku,
      užší = ikona s popiskem nahoře a velká hodnota pod nimi */
-  /* @container smí měnit jen potomky kontejneru, proto vnitřní .vbox */
   .blk.value { padding: 0 12px; }
   .vbox { display: flex; align-items: center; gap: 8px; width: 100%; height: 100%; }
-  .value .mdi { flex: none; font-size: clamp(16px, 60cqh, 64px); }
-  .value .vl { flex: 1; min-width: 0; font-weight: 600; font-size: clamp(14px, 34cqh, 30px); }
-  .value .vv { flex: none; font-weight: 800; white-space: nowrap; letter-spacing: -0.5px; font-size: clamp(16px, min(66cqh, 13cqw), 80px); }
+  .value .mdi { flex: none; }
+  .value .vl { flex: 1; min-width: 0; font-weight: 600; }
+  .value .vv { flex: none; font-weight: 800; white-space: nowrap; letter-spacing: -0.5px; }
   .vbox.nolabel { justify-content: center; flex-wrap: nowrap; }
   /* textový stav: menší písmo, smí se zkrátit výpustkou */
   .value .vv.vtext { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0;
-                     font-family: "RobotoCondensed", "NotoEmoji", sans-serif; font-size: clamp(14px, min(42cqh, 9cqw), 48px); }
+                     font-family: "RobotoCondensed", "NotoEmoji", sans-serif; }
   .footer .f-ent .num { margin-left: 0; }
   .footer .f-ent { max-width: 45%; overflow: hidden; }
   .value .vv small { font-size: 0.55em; font-weight: 700; letter-spacing: 0; }
-  @container (max-width: 359px) {
-    .vbox { flex-wrap: wrap; align-content: center; column-gap: 4px; row-gap: 0; }
-    .value .mdi { font-size: clamp(14px, 26cqh, 28px); }
-    .value .vl { font-size: clamp(12px, 24cqh, 22px); }
-    .value .vv { width: 100%; text-align: center; line-height: 1; font-size: clamp(14px, min(50cqh, 24cqw), 80px); }
-    .vbox.nolabel { flex-wrap: nowrap; }
-    .vbox.nolabel .vv { width: auto; font-size: clamp(14px, min(64cqh, 22cqw), 80px); }
-    .value .vv.vtext { width: 100%; font-size: clamp(12px, min(30cqh, 13cqw), 40px); }
-  }
+  .w359 .vbox { flex-wrap: wrap; align-content: center; column-gap: 4px; row-gap: 0; }
+  .w359.value .vv { width: 100%; text-align: center; line-height: 1; }
+  .w359 .vbox.nolabel { flex-wrap: nowrap; }
+  .w359 .vbox.nolabel .vv { width: auto; }
+  .w359.value .vv.vtext { width: 100%; }
 
   /* úzké bloky (mřížka): méně detailů místo přetékání */
-  @container (max-width: 330px) {
-    .departures .sec-title .right, .departures .plat { display: none; }
-    .dep { gap: 5px; }
-    .dep .time { font-size: 21px; width: 58px; }
-    .dep .delay { font-size: 15px; width: 30px; margin-left: 0; }
-    .route { font-size: 15px; width: 40px; height: 22px; line-height: 22px; }
-    .dep .head { font-size: 18px; }
-    .agenda .tag { display: none; }
-    .ev { gap: 5px; }
-    .ev .dl { width: 46px; font-size: 14px; }
-    .ev .t { width: 44px; font-size: 16px; }
-    .ev .s { font-size: 18px; }
-    .fday .fl small { display: none; }
-    .fday .ft { font-size: 16px; }
-  }
-  @container (max-width: 280px) {
-    .ev .ci { display: none; }
-    .ev { gap: 4px; }
-    .ev .dl { width: 38px; font-size: 13px; }
-    .ev .t { width: 44px; font-size: 14px; flex: none; }
-    .ev .s { font-size: 17px; }
-  }
-  @container (max-width: 420px) {
-    .header .now { width: 150px; }
-    .header .minmax { display: none; }
-    .header .temp { font-size: 38px; }
-    .header .now-sub { font-size: 16px; gap: 6px; }
-  }
-  @container (max-width: 320px) { .header .now { display: none; } }
+  .departures.w330 .sec-title .right, .departures.w330 .plat { display: none; }
+  .w330 .dep { gap: 5px; }
+  .w330 .dep .time { font-size: 21px; width: 58px; }
+  .w330 .dep .delay { font-size: 15px; width: 30px; margin-left: 0; }
+  .w330 .route { font-size: 15px; width: 40px; height: 22px; line-height: 22px; }
+  .w330 .dep .head { font-size: 18px; }
+  .agenda.w330 .tag { display: none; }
+  .w330 .ev { gap: 5px; }
+  .w330 .ev .dl { width: 46px; font-size: 14px; }
+  .w330 .ev .t { width: 44px; font-size: 16px; }
+  .w330 .ev .s { font-size: 18px; }
+  .w330 .fday .fl small { display: none; }
+  .w330 .fday .ft { font-size: 16px; }
+  .w280 .ev .ci { display: none; }
+  .w280 .ev { gap: 4px; }
+  .w280 .ev .dl { width: 38px; font-size: 13px; }
+  .w280 .ev .t { width: 44px; font-size: 14px; flex: none; }
+  .w280 .ev .s { font-size: 17px; }
+  .header.w420 .now { width: 150px; }
+  .header.w420 .minmax { display: none; }
+  .header.w420 .temp { font-size: 38px; }
+  .header.w420 .now-sub { font-size: 16px; gap: 6px; }
+  .header.w320 .now { display: none; }
 
   /* ── Text (výška řádku = TEXT_LINE_H v layout.py) ── */
   .blk.text { padding: 4px 16px; }
@@ -186,20 +172,26 @@
   /* ── Patička ────────────────────────────── */
   .blk.footer { padding: 0 16px; font-size: 14px; font-weight: 600; }
   .fbox { display: flex; align-items: center; gap: 4px; width: 100%; height: 100%; white-space: nowrap; }
-  .fit { display: inline-flex; align-items: center; gap: 4px; }
+  .fit { display: flex; align-items: center; gap: 4px; }  /* flex = inline-flex pro položku flexboxu; WeasyPrint umí jen flex */
   .footer .mdi { font-size: 20px; }
   .footer .num { font-size: 15px; font-weight: 700; margin-left: 2px; }
   .footer .sp { flex: 1; }
   .footer .fit + .fit { margin-left: 12px; }
   /* úzká patička: schovávat podle priority – týden, další obnovení, čas aktualizace */
-  @container (max-width: 440px) { .footer .f-week { display: none; } }
-  @container (max-width: 330px) { .footer .f-next { display: none; } }
-  @container (max-width: 200px) { .footer .f-upd { display: none; } }
+  .footer.w440 .f-week { display: none; }
+  .footer.w330 .f-next { display: none; }
+  .footer.w200 .f-upd { display: none; }
 </style>
 </head>
 <body>
+{# vnitřní rozměry bloku (bez čar a vodorovného/svislého odsazení z CSS výše) #}
+{% set PAD_X = {"header": 32, "departures": 32, "agenda": 32, "weather_now": 24, "value": 24, "text": 32, "template": 32, "footer": 32} %}
+{% set PAD_Y = {"header": 8, "departures": 8, "agenda": 6, "text": 8, "template": 8} %}
+{% macro clamp(lo, v, hi) %}{{ [hi, [lo, v]|max]|min|round(2) }}px{% endmacro %}
 {% for b in v.blocks %}
-<section class="blk {{ b.type }} {{ 'sz-' ~ b.size if b.size }}" style="left: {{ b.left }}px; top: {{ b.top }}px; width: {{ b.width }}px; height: {{ b.height }}px; border-top-width: {{ b.line_top }}px; border-left-width: {{ b.line_left }}px">
+{% set cw = b.width - b.line_left - PAD_X.get(b.type, 0) %}
+{% set ch = b.height - b.line_top - PAD_Y.get(b.type, 0) %}
+<section class="blk {{ b.type }} {{ 'sz-' ~ b.size if b.size }}{% for t in (440, 420, 359, 330, 320, 280, 210, 200) if cw <= t %} w{{ t }}{% endfor %}" style="left: {{ b.left }}px; top: {{ b.top }}px; width: {{ b.width }}px; height: {{ b.height }}px; border-top-width: {{ b.line_top }}px; border-left-width: {{ b.line_left }}px">
 {% include "blocks/" ~ b.type ~ ".html.j2" %}
 </section>
 {% endfor %}

@@ -113,6 +113,11 @@ class Server:
             t.configure(cfg, self.opts["schedule"])
             self.targets[cfg["mac"]] = t
 
+    def rotate_for(self, t: Target) -> int:
+        """Otočení obrazu panelu (jak je pověšený); bez vlastního to z konfigurace add-onu."""
+        r = t.cfg.get("rotate")
+        return self.opts["rotate"] if r is None else r
+
     def layout_for(self, t: Target) -> dict:
         return self.layouts.get(t.cfg["layout"]) or next(iter(self.layouts.values()))
 
@@ -154,7 +159,7 @@ class Server:
                     # odhad; přesná doba se dokreslí, až se deska ozve (handle_device)
                     next_text = after(now, t.schedule.sleep_seconds(now))
                     t.preview, t.payload = await render.render(
-                        view, updated, self.opts["rotate"], self.opts["image_format"], next_text)
+                        view, updated, self.rotate_for(t), self.opts["image_format"], next_text)
                     t.view, t.view_hash, t.content_ts = view, digest, int(now.timestamp())
                     t.updated_text, t.next_text, t.error = updated, next_text, ""
                     print(f"[render] {t.cfg['name']}: nový obsah {digest[:8]} ({len(t.payload)} B)")
@@ -258,7 +263,7 @@ class Server:
                 async with self.lock:
                     try:
                         t.preview, t.payload = await render.render(
-                            t.view, t.updated_text, self.opts["rotate"], self.opts["image_format"], wanted)
+                            t.view, t.updated_text, self.rotate_for(t), self.opts["image_format"], wanted)
                         t.next_text = wanted
                     except Exception as e:  # noqa: BLE001 – raději starý odhad než nic
                         print(f"[render] patička: {e}")
@@ -400,6 +405,7 @@ class Server:
                     ("Velikost dat", f"{len(t.payload)} B ({self.opts['image_format']})"),
                     ("Režim teď", f"probouzení po {t.schedule.sleep_seconds(now)} s"
                                   + ("" if t.cfg["schedule"] else " (výchozí rozvrh)")),
+                    ("Otočení", f"{self.rotate_for(t)}°" + ("" if t.cfg.get("rotate") is not None else " (výchozí)")),
                     ("Zápis do HA", (f"MQTT ({mqtt_mod.node(t.cfg['mac'])})" if self.mqtt and t.cfg["mac"]
                                      else t.cfg["battery_sensor"] or "–")),
                     ("Chyba", t.error or "žádná"),
@@ -639,7 +645,8 @@ Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
         # povolené MAC bez panelu (zapsané ručně v Nastavení) – panel vznikne, až se deska ozve
         waiting = [{"mac": m, "allowed": True} for m in allowed - known]
         return {"panels": out, "pending": [p for p in self.pending.values() if p["mac"] not in known] + waiting,
-                "layouts": self.layout_list(), "default_schedule": self.opts["schedule"], "mqtt": bool(self.mqtt)}
+                "layouts": self.layout_list(), "default_schedule": self.opts["schedule"], "mqtt": bool(self.mqtt),
+                "default_rotate": self.opts["rotate"]}
 
     async def handle_panels(self, request: web.Request) -> web.Response:
         return web.json_response(self.panels_json(), headers={"Cache-Control": "no-store"})
@@ -657,10 +664,12 @@ Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
             raise bad_request("rozvržení neexistuje")
         if any(p["name"] == cfg["name"] and p["mac"] != mac for p in self.panels):
             raise bad_request(f"panel {cfg['name']} už existuje")
+        old_rotate = self.rotate_for(self.targets[mac])
         self.save_panels([cfg if p["mac"] == mac else p for p in self.panels])
         await self.announce(cfg)  # nový název zařízení v HA
-        # bez force: obrázek (a tím překreslení desky) se změní, jen když se změní obsah – např. jiné rozvržení
-        await self.rebuild(only=[self.targets[mac]])
+        # obrázek (a tím překreslení desky) se změní, jen když se změní obsah – např. jiné rozvržení;
+        # jiné otočení mění jen data pro desku (model zobrazení stejný) -> vynutit
+        await self.rebuild(force=self.rotate_for(self.targets[mac]) != old_rotate, only=[self.targets[mac]])
         print(f"[panels] panel {cfg['name']} uložen")
         return web.json_response(self.panels_json())
 

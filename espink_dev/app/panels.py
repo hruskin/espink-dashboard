@@ -46,8 +46,13 @@ def sanitize(raw: dict, layouts: dict) -> dict:
     sensor = str(raw.get("battery_sensor") or "").strip()
     if sensor and not ENTITY_RE.match(sensor):
         raise ValueError(f"neplatné ID entity: {sensor}")
+    rotate = raw.get("rotate")  # None = výchozí z konfigurace add-onu
+    if rotate in ("", None):
+        rotate = None
+    elif int(rotate) not in (90, 270):  # rozvržení je na výšku, displej nativně na šířku
+        raise ValueError(f"neplatné otočení: {rotate} (jen 90 nebo 270)")
     return {"mac": mac, "name": name, "layout": lid, "schedule": check_rules(raw.get("schedule")),
-            "battery_sensor": sensor}
+            "battery_sensor": sensor, "rotate": None if rotate is None else int(rotate)}
 
 
 def load(opts: dict, layouts: dict) -> list[dict]:

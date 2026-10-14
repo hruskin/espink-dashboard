@@ -1,178 +1,141 @@
 # ESPink Server
 
-> **Vývojová verze (DEV).** Běží vedle stabilního add-onu ESPink Server a desku
-> neobsluhuje (port 8099 je ve výchozím stavu vypnutý). Slouží k vývoji editoru
-> rozvržení: obsah dashboardu se skládá z bloků (`/data/layouts.json`). Dokud
-> rozvržení není uložené z editoru, odvozuje se z konfigurace níže, takže dashboard
-> vypadá stejně jako ve stabilní verzi.
->
-> **Editor** (panel ESPink DEV → Rozvržení): displej je mřížka 12 sloupců po 40 px,
-> svisle po 4 px. Bloky se tahají přímo v náhledu a roztahují za úchyty (šipky posouvají
-> vybraný blok, Shift+šipky mění velikost); přesné souřadnice jdou zadat v panelu.
-> Překryvy editor nedovolí, volná místa jsou šrafovaná. Obsah se přizpůsobí velikosti
-> bloku – Události a Odjezdy podle výšky spočítají, kolik řádků se vejde, úzké bloky
-> skryjí méně důležité detaily. „Seřadit pod sebe“ srovná bloky na celou šířku.
-> Náhled vykresluje server stejně jako pro desku. Po prvním uložení platí pro obsah jen
-> editor (entity z Konfigurace add-onu se pak už nepoužijí). Baterii v náhledu bere DEV
-> verze ze senzoru, který plní stabilní add-on. Starší rozvržení (bloky pod sebou) se
-> převede automaticky.
->
-> Bloky: Záhlaví (s počasím nebo bez), Počasí teď, Odjezdy, Události, Předpověď,
-> Patička (i s libovolnými entitami), Hodnota entity (stav nebo atribut, textové stavy
-přeložené, ikona, červeně pod/nad mezí), Text a Šablona (Jinja
-> v sandboxu + HTML; `states()`, `state_attr()`, `is_state()`, `now`, filtr `|num(1)`).
-> Dál: prohození stejně širokých pásů přetažením, dvojklik na úchyt = roztáhnout
-k sousedovi, duplikace, náhled „nejhorší případ“, mřížka sloupců, výběr ikon, export/import
-> JSON, historie posledních 15 uložených verzí, ochrana proti přepsání z jiné karty.
->
-> **Více panelů:** rozvržení může být víc (výběr nahoře v editoru: nové – prázdné
-> nebo kopie, přejmenovat, smazat). Na kartě **Panely** má každá deska (podle MAC)
-> název, přiřazené rozvržení, vlastní rozvrh probouzení (prázdné = výchozí ze Systému)
-> a senzor baterie (`sensor.espink_<název>_baterie`). Víc panelů může sdílet jedno
-> rozvržení. Nová deska, která se ozve, se objeví v Panelech pod *Nové desky* a po
-> „Povolit“ se zapíše do `allowed_devices`. Odebrání panelu desku zase zakáže.
-> Dosavadní `layout.json` se převezme jako rozvržení „Hlavní“ a povolené desky jako
-> panely (první s dosavadním `battery_sensor`). Panely jsou v `/data/panels.json`.
->
-> **Vykreslování: Typst** (místo Chromia – obraz add-onu ~80 MB místo ~800 MB).
-> Šablona `templates/dashboard.typ` dostane model zobrazení jako JSON a Typst ji
-> přeloží rovnou do PNG (~0,05 s). Fonty jsou statické řezy v `app/static/fonts/typst`
-> (vyrábí `tools/typst_fonts.py` z variabilních fontů v `tools/fonts`). Blok Šablona
-> (HTML) ukáže jen text. **Emoji** z tabulky v `app/emoji.py` (👟, ♻️, ⚠️, 🎂…) se
-> kreslí jako plné ikony MDI v barvě a velikosti textu; ostatní z fontu Noto Emoji
-> (černobílý, část znaků jen obrysem). Tabulku jde doplnit (emoji → název ikony MDI).
->
-> **Celý text událostí:** u kalendáře v bloku Události jde zaškrtnout „Celý text“ –
-> názvy jeho událostí se nezkracují, ale zalomí (nejvýš 8 řádků). Model spočítá řádky
-> stejným fontem (Pillow) a podle toho, kolik událostí se vejde; agenda drží pořadí –
-> od první události, která se nevejde, jde vše do „+N dalších“.
->
-> **Instalace firmwaru** z prohlížeče (karta Instalace, ESP Web Tools + Improv pro Wi-Fi) – viz stabilní DOCS.
->
-> API (jen přes Ingress, `?id=` = rozvržení): `GET layout.json`, `POST layout/preview`
-> (PNG), `POST layout` (uložení), `GET layout/history.json`, `POST layouts/create|rename|delete`,
-> `GET panels.json`, `POST panels/save|approve|delete`, `GET preview.png?panel=MAC`.
->
-> **Rozvrh probouzení** (Panely): průběh dne a 24 hodin, v každé interval (5–30 min,
-> 1× za hodinu v :00, nebo nebudit) – jako v Živém obrazu. Probuzení jsou zarovnaná na
-> násobky intervalu (:00, :05, …). Rozvrhy se dny v týdnu nebo minutami jdou upravit
-> v režimu Pokročilé (pravidla). Karta Systém zrušena – technické volby (formát dat,
-> interval kontroly, výchozí rozvrh a otočení pro nové panely) jsou v Konfiguraci add-onu v HA.
->
-> **Zaokrouhlení s hysterezí:** teplota (volba „Desetinná místa teploty“ u počasí, 0 = celé
-> stupně), vlhkost, tlak, Hodnota entity a položky patičky se zobrazují zaokrouhlené a nová
-> hodnota se ukáže, až se skutečná vzdálí o ¾ kroku (z 11 °C na 12 °C až od 11,75 °C) –
-> hodnota na hranici nepřeskakuje a nevynucuje překreslení. Paměť má každý panel svou.
+> **Vývojová verze (DEV).** Běží vedle stabilního add-onu a desky neobsluhuje
+> (port 8099 je ve výchozím stavu vypnutý). Rozvržení, panely i klíče desek má
+> vlastní, nezávislé na stabilní verzi.
 
-Lokální náhrada serveru [Živý obraz](https://zivyobraz.eu) pro e-paper ESPink.
-Add-on sbírá data z Home Assistantu (kalendáře, odjezdy, meteostanice, předpověď),
-vykreslí z nich dashboard 480×800 ve třech barvách a předá ho zařízení protokolem
-Živého obrazu. Zařízení běží na baterii a mezi probuzeními spí.
+Lokální náhrada serveru [Živý obraz](https://zivyobraz.eu) pro e-paper ESPink
+(7,5" GDEY075Z08, černá/bílá/červená). Add-on sbírá data z Home Assistantu
+(kalendáře, odjezdy, meteostanice, předpověď, libovolné entity), vykreslí z nich
+dashboard 480×800 a předá ho deskám protokolem Živého obrazu. Desky běží na baterii
+a mezi probuzeními spí.
 
-## Instalace (lokální add-on)
+## Instalace
 
-1. Zkopírujte složku `espink_server` do `/addons/` na HA OS (doplněk Samba nebo SSH).
+1. Zkopírujte složku add-onu do `/addons/` na HA OS (doplněk Samba nebo SSH).
 2. **Nastavení → Doplňky → Obchod s doplňky → ⋮ → Zkontrolovat aktualizace.**
-3. V sekci *Místní doplňky* nainstalujte **ESPink Server** a spusťte ho.
-4. V konfiguraci zkontrolujte entity (hlavně `meteo_temperature`/`meteo_humidity`).
-5. Náhled najdete v postranním panelu pod položkou **ESPink**.
+3. V sekci *Místní doplňky* nainstalujte add-on a spusťte ho.
+4. Otevřete panel **ESPink** v postranním panelu HA.
+5. Na kartě **Instalace** nahrajte firmware do desky (viz níže). Deska se pak objeví
+   v **Panelech** pod *Nové desky*; úplně první deska se povolí sama.
 
-Zařízení se připojuje na `http://<IP Home Assistantu>:8099/index.php`.
-Firmware s touto adresou připravíte podle `firmware/README.md`.
+Desky se připojují na `http://<IP Home Assistantu>:8099/index.php`.
+
+## Webové rozhraní
+
+### Rozvržení (editor)
+
+Displej je mřížka 12 sloupců po 40 px, svisle po 4 px. Bloky se přetahují přímo
+v náhledu a roztahují za úchyty; přesné souřadnice jdou zadat v nastavení bloku.
+Překryvy editor nedovolí, volná místa jsou šrafovaná a kliknutím do nich jde přidat
+blok. Obsah se přizpůsobí velikosti bloku (Události a Odjezdy podle výšky spočítají,
+kolik řádků se vejde). Náhled vykresluje server stejně jako pro desku.
+
+- **Uložit, Zpět, Znovu a Zahodit** jsou vpravo v horní liště; tečka a „Neuloženo“
+  ukazují rozepsané změny. Ctrl+S uloží, Ctrl+Z / Ctrl+Shift+Z vrací.
+- Klávesnice v náhledu: šipky posouvají vybraný blok, Shift+šipky mění velikost,
+  Enter otevře nastavení, Delete smaže, Esc zruší výběr.
+- Bloky: Záhlaví (s počasím nebo bez), Počasí teď, Odjezdy, Události, Předpověď,
+  Patička (i s entitami), Hodnota entity (stav nebo atribut, ikona, červeně pod/nad
+  mezí, desetinná místa), Text a Šablona (Jinja v sandboxu; `states()`,
+  `state_attr()`, `is_state()`, `now`, filtr `|num(1)`).
+- U kalendáře v Událostech jde zapnout **Celý text** – názvy se nezkracují, ale
+  zalomí (nejvýš 8 řádků).
+- Rozvržení může být víc (nové prázdné nebo kopie, přejmenovat, smazat), dále export
+  a import JSON, historie posledních 15 uložených verzí a ochrana proti přepsání
+  z jiné karty prohlížeče.
+
+### Panely
+
+Každá deska (podle MAC) je panel s názvem, přiřazeným rozvržením, otočením
+(normálně / vzhůru nohama), senzorem baterie a vlastním **rozvrhem probouzení**.
+Víc panelů může sdílet jedno rozvržení. Na širší obrazovce jsou karty vedle sebe.
+
+Rozvrh je pruh přes celý den po čtvrthodinách; barva udává interval (5–30 min,
+1× za hodinu v :00, nebo nebudit). Hranice úseků se posouvají tažením nebo šipkami
+(PageUp/PageDown po hodině), klepnutím na úsek jde změnit interval, čas od–do,
+úsek rozdělit nebo smazat (smazání i zánik úseku jde vrátit). Probuzení jsou
+zarovnaná na násobky intervalu (:00, :05, …). Rozvrhy se dny v týdnu nebo
+s minutami mimo čtvrthodiny jdou upravit v režimu **Pokročilé (pravidla)**:
+`[dny ]HH:MM-HH:MM=sekundy`, dny 1 = Po … 7 = Ne, platí první vyhovující pravidlo,
+mimo všechna okna deska spí. Panel bez vlastního rozvrhu používá výchozí `schedule`
+z konfigurace add-onu.
+
+### Instalace firmwaru
+
+Firmware (patchovaný Živý obraz) se nahraje přímo z prohlížeče (Chrome nebo Edge
+na počítači, deska připojená přes USB-C) pomocí ESP Web Tools; po nahrání instalátor
+nabídne připojení k Wi-Fi. Adresa serveru, port a heslo konfiguračního AP desky se
+do firmwaru vloží při stažení. Podporované desky: ESPink v3.6 (ESP32-S3) a ESPink 2.x
+(ESP32). Panel HA (iframe) přístup k USB nepovoluje – otevřete stránku v samostatném
+okně přes HTTPS.
+
+### Stav
+
+Přehled panelů: poslední kontakt, další probuzení, baterie, Wi-Fi, doba překreslení,
+důvod restartu a náhled. Tlačítko *Překreslit obsah teď* přepočítá obsah; desky si ho
+vyzvednou při příštím probuzení.
 
 ## Jak to funguje
 
 - Každých `render_interval` s add-on stáhne data a sestaví *model zobrazení*.
-  Obrázek se znovu vykreslí jen tehdy, když se model změní.
-- Hlavička `Timestamp` se mění jen při změně obsahu. Když se nic nezměnilo,
-  zařízení nepřekresluje a hned usne. To je hlavní úspora baterie.
-- Hlavička `PreciseSleep` určuje dobu spánku podle rozvrhu panelu (jinak `schedule`).
-- **Stav panelů v HA přes MQTT discovery** (potřebuje broker, např. doplněk Mosquitto
-  a integraci MQTT; add-on si přihlašovací údaje vezme od Supervisoru). Každý panel je
-  v HA zařízení *ESPink <název>* se senzory Baterie, Napětí baterie, Signál WiFi,
-  Doba překreslení, Teplota procesoru, Poslední kontakt, Další probuzení a Důvod
-  restartu. Zprávy jsou retained, takže entity i hodnoty přežijí restart HA.
-  Entity ID baterie = senzor baterie panelu (první panel `sensor.espink_baterie`);
-  starý stav zapsaný přes REST se před prvním ohlášením smaže, aby ID zůstalo stejné.
-  Přejmenování panelu přejmenuje zařízení, odebrání panelu zařízení z HA smaže.
-  Témata: `homeassistant/device/espink_<mac>/config`, `espink/espink_<mac>/state`.
-- Bez brokeru se stav zapisuje postaru přes REST API do senzoru baterie panelu
-  (atributy `voltage`, `rssi`, `last_seen`, `next_wake`, `refresh_ms`…); po restartu
-  HA zmizí, dokud se zařízení znovu neozve.
+  Obrázek se znovu vykreslí (Typst, ~0,05 s) jen tehdy, když se model změní.
+- Hlavička `Timestamp` se mění jen při změně obsahu. Když se nic nezměnilo, deska
+  nepřekresluje a hned usne – to je hlavní úspora baterie.
+- Číselné hodnoty se zaokrouhlují **s hysterezí**: nová hodnota se ukáže, až se
+  skutečná vzdálí o ¾ kroku (z 11 °C na 12 °C až od 11,75 °C), takže hodnota na
+  hranici nepřeskakuje a nevynucuje překreslení.
+- Hlavička `PreciseSleep` určuje dobu spánku podle rozvrhu panelu. Firmware ji omezí
+  na 1 min – 24 h.
+- **Stav panelů v HA přes MQTT discovery** (potřebuje broker, např. Mosquitto;
+  přihlašovací údaje add-on vezme od Supervisoru). Každý panel je zařízení
+  *ESPink <název>* se senzory Baterie, Napětí baterie, Signál WiFi, Doba překreslení,
+  Teplota procesoru, Poslední kontakt, Další probuzení a Důvod restartu. Zprávy jsou
+  retained. Bez brokeru se stav zapisuje přes REST API do senzoru baterie panelu.
+- Emoji z tabulky `app/emoji.py` (👟, ♻️, ⚠️, 🎂…) se kreslí jako plné ikony MDI.
 
 ## Bezpečnost
 
-- **Povolená zařízení:** port 8099 obsluhuje jen desky ze seznamu `allowed_devices`
-  (MAC adresy) **se známým klíčem**: firmware posílá v hlavičce `X-API-Key` náhodný
-  klíč uložený v desce; add-on si ho při povolení zapamatuje (`/data/security.json`)
-  a dál vyžaduje MAC i klíč. Desky povolené dřív se klíč naučí při prvním spojení.
-  Úplně první deska se zapíše sama (jen jednou – ne znovu po odebrání posledního
-  panelu); ostatní dostanou `403` a čekají v Panelech (*Nové desky*) na povolení.
-  Po smazání flash má deska nový klíč – v *Nových deskách* ji stačí znovu povolit.
-- **Vstupy od desky:** tělo nejvýš 16 kB, nevalidní JSON se tiše ignoruje, texty
-  (verze FW, důvod restartu) se zkracují; senzor baterie smí být jen `sensor.…`.
-- **Instalátor** má ESP Web Tools přibalené (`static/esp-web-tools`), nenačítá se nic z CDN.
-- **Lokální vývoj (`dev.sh`, DEV=1):** UI odpovídá jen na `localhost` (ochrana proti
-  DNS rebindingu); token v `.env.dev` dávej od uživatele bez administrátorských práv.
-- **Omezení rychlosti:** deska vynutí nové vykreslení nejvýš jednou za 30 s a zápis
-  do HA nejvýš jednou za minutu.
+- **Povolené desky:** port 8099 obsluhuje jen povolené desky (MAC) se známým klíčem
+  z hlavičky `X-API-Key` (náhodný klíč uložený v desce, `/data/security.json`, práva
+  0600). Nová deska čeká v Panelech na povolení; u čekající desky je vidět IP a konec
+  klíče, ať jde poznat ta pravá. Desky povolené před zavedením klíčů se ho naučí jen
+  během 14 dnů po aktualizaci. Po smazání flash má deska nový klíč – stačí ji znovu
+  povolit.
+- **Omezení pokusů:** po opakovaných chybných klíčích se MAC nebo IP na 15 minut
+  zablokuje; čekajících desek je nejvýš 10 (3 z jedné IP).
+- **Vstupy od desky:** tělo nejvýš 16 kB (i chunked), nevalidní JSON se ignoruje,
+  texty se zkracují, číselné hodnoty se kontrolují.
+- **Šablony** běží v sandboxu Jinja v odděleném procesu s limitem paměti a času (2 s).
+- **Typst** dostává text jen jako data, bez sítě a bez přístupu k souborům.
 - **Webové rozhraní** je dostupné jen přes Ingress (administrátoři HA); ukládání
-  vyžaduje `application/json` (ochrana proti CSRF).
-- **ID entit** se kontrolují (`doména.objekt`), takže se jimi nedá zavolat jiné API HA.
-- **Typst** dostává veškerý text jako data (řetězce v JSON), nikdy jako kód; běží
-  bez sítě a s prázdným kořenovým adresářem, takže nemůže číst soubory.
-- **Firmware** ignoruje pokyn k OTA aktualizaci ze serveru a konfigurační AP má
-  vlastní heslo (viz `firmware/README.md`).
+  vyžaduje `application/json` (ochrana proti CSRF). ID entit se kontrolují.
+- **Instalátor** má ESP Web Tools přibalené, nic se nenačítá z CDN.
+- **Firmware** ignoruje pokyn k OTA ze serveru a konfigurační AP má vlastní heslo.
 
-## Konfigurace
+## Konfigurace add-onu
 
-Nejpohodlnější je stránka **Nastavení** ve webovém rozhraní add-onu (odkaz pod náhledem).
-U entit nabízí našeptávač z Home Assistantu a pod polem ukáže název entity, nebo
-upozorní, že entita neexistuje. Uložení se zapíše do konfigurace add-onu a projeví
-se hned, bez restartu. Stejné volby jsou i na záložce *Konfigurace* add-onu:
+Obsah dashboardu se nastavuje v editoru. V *Konfiguraci* add-onu zůstávají
+technické volby a výchozí hodnoty:
 
 | Volba | Význam |
 |---|---|
-| `rotate` | Otočení obrazu pro panel (90/270). Je-li obraz vzhůru nohama, přepněte 90 ↔ 270. |
+| `rotate` | Výchozí otočení pro nové panely (90/270). |
 | `image_format` | `z2` (kompaktní, výchozí) nebo `png`. |
 | `render_interval` | Jak často add-on kontroluje data (s). |
-| `meteo_*`, `indoor_temperature` | Senzory meteostanice. Prázdná hodnota = nezobrazovat. |
-| `weather` | Zdroj počasí: entita `weather.*` pro ikonu a předpověď (denní, nebo dopočtená z hodinové). |
-| `departures`, `disruptions` | Senzory integrace [ha-pid-odjezdy](https://github.com/hruskin/ha-pid-odjezdy). Linky a nástupiště filtrujte přímo v integraci. |
-| `departures_count` | Počet zobrazených odjezdů (0 = sekci skrýt). |
-| `walk_minutes` | Nezobrazovat spoje, které už nestihnete. |
-| `calendars` | Seznam kalendářů: `entity`, volitelně `label` (štítek u události), `icon` (např. `mdi:soccer`; jinak ikona entity z HA) a `red: true` (zvýraznit červeně). |
-| `nameday_calendar`, `holiday_calendar` | Svátek a státní svátky v hlavičce dne. |
-| `event_days` | Kolik dní dopředu ukazovat události vždy; pokud zbývá místo, přidají se další dny (až 31). |
-| `schedule` | Výchozí rozvrh probouzení pro panely bez vlastního, viz níže. |
-| `allowed_devices` | MAC adresy povolených desek (viz Bezpečnost). |
+| `schedule` | Výchozí rozvrh probouzení pro panely bez vlastního. |
+| `allowed_devices` | MAC adresy povolených desek (spravuje karta Panely). |
+| ostatní (`meteo_*`, `weather`, `departures`, `calendars`…) | Výchozí obsah, dokud se rozvržení neuloží z editoru. |
 
-### Rozvrh probouzení
-
-Formát pravidla je `[dny ]HH:MM-HH:MM=sekundy`, kde dny jsou 1 = Po … 7 = Ne.
-Platí první pravidlo, které vyhovuje. Mimo všechna okna zařízení spí až do začátku
-nejbližšího okna.
-
-```yaml
-schedule:
-  - "1-5 05:45-08:30=300"   # pracovní dny ráno každých 5 min (autobusy)
-  - "06:00-22:30=1200"      # jinak přes den každých 20 min
-                            # v noci spí do 5:45 / 6:00
-```
-
-## Lokální náhled (vývoj)
+## Lokální vývoj
 
 ```bash
-./dev.sh          # skutečná data z HA → http://localhost:8099 (jen z tohoto počítače)
+./dev.sh          # skutečná data z HA → http://localhost:8098 (jen z tohoto počítače)
 ./dev.sh mock     # ukázková data, bez HA
 ./dev.sh once x.png
 ```
 
-První spuštění vytvoří `.venv` a `.env.dev`. Do `.env.dev` doplňte `HA_TOKEN`
-(HA → Profil → Zabezpečení → Dlouhodobé přístupové tokeny). Konfigurace náhledu
-je v `dev-options.json` a dá se měnit i přes stránku Nastavení. Úpravy šablony
-se v prohlížeči projeví hned po uložení, změny v Pythonu vyžadují restart skriptu.
-Soubory `.env.dev`, `dev-options.json` a `.venv` se necommitují.
-
-Panel s náhledem (`/`, `/preview.png`, `/view.json`) je dostupný jen přes Ingress.
-Na portu 8099 je z LAN dostupné pouze `/index.php` pro zařízení.
+První spuštění vytvoří `.venv` a `.env.dev`; do `.env.dev` doplňte `HA_TOKEN`
+od uživatele **bez** administrátorských práv. UI odpovídá jen na `localhost`
+(ochrana proti DNS rebindingu). Soubory `.env.dev`, `dev-*.json`, `security.json`
+a `.venv` se necommitují.

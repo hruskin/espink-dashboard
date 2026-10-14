@@ -106,7 +106,10 @@ class Server:
         self.auth_lock = asyncio.Lock()
         if not self.security["tofu_done"] and (opts.get("allowed_devices") or self.panels):
             self.security["tofu_done"] = True        # instalace z doby před klíči: první deska už je
+            # desky povolené před verzí s klíči se klíč naučí při prvním spojení – jen 14 dní
+            self.security["learn_until"] = time.time() + LEARN_DAYS * 86400
             self.save_security()
+        self.failures: dict[str, list[float]] = {}   # MAC/IP -> časy chybných pokusů (omezení hádání klíče)
 
     # ── panely ───────────────────────────────────────────────────────────
     def sync_targets(self) -> None:
@@ -210,8 +213,11 @@ class Server:
     async def handle_device(self, request: web.Request) -> web.Response:
         if (request.content_length or 0) > DEVICE_MAX_BODY:  # deska posílá ~1 kB JSON
             return web.Response(status=413)
+        raw = await request.content.read(DEVICE_MAX_BODY + 1)   # i při přenosu po částech (bez Content-Length)
+        if len(raw) > DEVICE_MAX_BODY:
+            return web.Response(status=413)
         try:
-            body = json.loads(await request.read() or b"{}") if request.can_read_body else {}
+            body = json.loads(raw or b"{}")
         except (ValueError, RecursionError):  # nevalidní JSON, UTF-8, zanoření – bez tracebacku v logu
             body = {}
         if not isinstance(body, dict):
@@ -242,8 +248,8 @@ class Server:
                 "fw": short_text(body.get("fwVersion")),
                 # deska posílá délku překreslení jen po probuzení, které následuje po překreslení –
                 # jinak ponechat poslední známou hodnotu (≈20 000 ms = vypršel limit ovladače panelu)
-                "refresh_ms": display.get("lastRefreshDuration") or prev.get("refresh_ms"),
-                "download_ms": network.get("lastDownloadDuration") or prev.get("download_ms"),
+                "refresh_ms": ms(display.get("lastRefreshDuration")) or prev.get("refresh_ms"),
+                "download_ms": ms(network.get("lastDownloadDuration")) or prev.get("download_ms"),
                 "cpu_temp": model.fnum(system.get("cpuTemp")),
                 "reset_reason": short_text(system.get("resetReason")),
                 "last_seen": now.isoformat(timespec="seconds"),
@@ -286,22 +292,45 @@ class Server:
                         print(f"[render] patička: {e}")
         t.served_ts = t.content_ts
 
+    def blocked(self, *who: str) -> bool:
+        """Příliš mnoho chybných pokusů z MAC nebo IP (hádání klíče) → na čas odmítat bez dalšího."""
+        now = time.time()
+        for w in who:
+            if w and len([t for t in self.failures.get(w, []) if now - t < FAIL_WINDOW]) >= (FAIL_MAX_MAC if ":" in w and len(w) == 17 else FAIL_MAX_IP):
+                return True
+        return False
+
+    def fail(self, *who: str) -> None:
+        now = time.time()
+        for w in who:
+            if w:
+                self.failures[w] = [t for t in self.failures.get(w, []) if now - t < FAIL_WINDOW] + [now]
+        if len(self.failures) > 500:   # paměť: zapomenout nejstarší
+            for k in sorted(self.failures, key=lambda k: self.failures[k][-1])[:250]:
+                del self.failures[k]
+
     async def device_allowed(self, mac: str | None, ip: str | None, body: dict, api_key: str) -> bool:
         """Jen zařízení ze seznamu allowed_devices se známým klíčem (X-API-Key). Úplně první
         deska se smí zapsat sama (trust on first use) – jen jednou za život instalace.
-        Ostatní (i deska se změněným klíčem, např. po smazání flash) čekají na povolení."""
+        Ostatní (i deska se změněným klíčem, např. po smazání flash) čekají na povolení.
+        Chybné pokusy se počítají – po několika se MAC/IP na čas odmítá (hádání klíče)."""
+        if self.blocked(mac, ip):
+            return False
         allowed = self.opts.get("allowed_devices") or []
         keys = self.security["keys"]
         if mac and mac in allowed:
             known = keys.get(mac)
             if known and known == api_key:
                 return True
-            if not known and api_key:  # deska povolená před verzí s klíči – zapamatovat si ho
+            # deska povolená před verzí s klíči: klíč se naučí při prvním spojení, ale jen v přechodném
+            # období po aktualizaci (jinak by si ho mohl „zabrat“ kdokoli, kdo zná MAC)
+            if not known and api_key and time.time() < self.security.get("learn_until", 0):
                 keys[mac] = api_key
                 self.save_security()
                 print(f"[security] zapamatován klíč desky {mac}")
                 return True
             reason = "key"
+            self.fail(mac, ip)
         elif mac and not allowed and not self.panels and not self.security["tofu_done"] and api_key:
             try:
                 await self.allow(mac, api_key)
@@ -312,15 +341,24 @@ class Server:
                 return False
         else:
             reason = "new"
+            self.fail(ip)
         key = mac or "(bez MAC)"
         seen = self.pending.get(key)
         if not seen or time.time() - seen["t"] > 600:
             print(f"[security] odmítnuto zařízení {key} z {ip}" + (" – nesouhlasí klíč" if reason == "key" else ""))
+        # klíč čekající desky nepřepisuje požadavek z jiné IP (podvržená „přeinstalovaná“ deska)
+        keep = seen and seen.get("key") and seen.get("ip") != ip and time.time() - seen["t"] < 3600
         system = body.get("system") if isinstance(body.get("system"), dict) else {}
-        self.pending[key] = {"mac": key, "ip": ip, "t": time.time(), "when": now_local().strftime("%d. %m. %H:%M:%S"),
-                             "fw": short_text(body.get("fwVersion")), "voltage": model.fnum(system.get("vccVoltage")),
-                             "reason": reason, "key": api_key or (seen or {}).get("key", "")}
-        if len(self.pending) > 10:  # nejvýš 10 posledních
+        entry = {"mac": key, "ip": seen["ip"] if keep else ip, "t": time.time(), "when": now_local().strftime("%d. %m. %H:%M:%S"),
+                 "fw": short_text(body.get("fwVersion")), "voltage": model.fnum(system.get("vccVoltage")),
+                 "reason": reason, "key": seen["key"] if keep else (api_key or (seen or {}).get("key", ""))}
+        entry["key_hint"] = entry["key"][-3:] if entry["key"] else ""
+        self.pending[key] = entry
+        # nejvýš 3 záznamy z jedné IP a 10 celkem – náhodné MAC nevytlačí skutečnou novou desku
+        from_ip = sorted((k for k, p in self.pending.items() if p["ip"] == ip), key=lambda k: self.pending[k]["t"])
+        for k in from_ip[:-3]:
+            del self.pending[k]
+        if len(self.pending) > 10:
             del self.pending[min(self.pending, key=lambda k: self.pending[k]["t"])]
         return False
 
@@ -335,6 +373,7 @@ class Server:
         self.security["tofu_done"] = True
         self.save_security()
         self.pending.pop(mac, None)
+        self.failures.pop(mac, None)
 
     async def persist_options(self, new: dict) -> None:
         if self.ha and self.ha.base.startswith("http://supervisor"):
@@ -637,9 +676,9 @@ class Server:
             raise bad_request("panel neexistuje")
         try:
             cfg = panels_mod.sanitize(data, self.layouts)
-        except ValueError as e:
+        except (ValueError, TypeError) as e:
             raise bad_request(str(e))
-        if data.get("layout") not in self.layouts:
+        if not isinstance(data.get("layout"), str) or data["layout"] not in self.layouts:
             raise bad_request("rozvržení neexistuje")
         if any(p["name"] == cfg["name"] and p["mac"] != mac for p in self.panels):
             raise bad_request(f"panel {cfg['name']} už existuje")
@@ -758,6 +797,14 @@ class Installer:
 
 
 DEVICE_MAX_BODY = 16 * 1024
+LEARN_DAYS = 14                          # přechodné období učení klíčů dříve povolených desek
+FAIL_WINDOW, FAIL_MAX_MAC, FAIL_MAX_IP = 900, 5, 20   # chybné pokusy za 15 min → dočasné odmítání
+
+
+def ms(value) -> int | None:
+    """Doba v ms od desky (překreslení, stažení): číslo v rozumném rozsahu, jinak nic."""
+    v = model.fnum(value)
+    return int(v) if v is not None and 0 < v <= 600_000 else None
 
 
 def short_text(value, limit: int = 40) -> str | None:

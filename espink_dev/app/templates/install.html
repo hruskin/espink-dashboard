@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,">
 <title>ESPink – instalace firmwaru</title>
 <link rel="stylesheet" href="static/mdi/css/materialdesignicons.min.css">
 <!-- ESP Web Tools přibalené v add-onu (static/esp-web-tools) – žádný cizí skript v originu HA -->
@@ -76,14 +77,14 @@
   <section class="card">
     <h2><i class="mdi mdi-cog-outline"></i>Nastavení firmwaru</h2>
     <div class="grid">
-      <label class="f"><span>Adresa serveru (Home Assistant)</span><input type="text" id="host" spellcheck="false" autocomplete="off">
+      <label class="f"><span>Adresa serveru (Home Assistant)</span><input type="text" id="host" spellcheck="false" autocomplete="off" aria-describedby="hostHelp host-err">
         <div class="help" id="hostHelp"></div></label>
-      <label class="f"><span>Port</span><input type="number" id="port" min="1" max="65535"></label>
+      <label class="f"><span>Port</span><input type="number" id="port" min="1" max="65535" aria-describedby="port-err"></label>
     </div>
     <label class="f"><span>Heslo konfiguračního AP desky</span>
-      <div class="withbtn"><input type="text" id="ap" spellcheck="false" autocomplete="off" maxlength="63">
+      <div class="withbtn"><input type="text" id="ap" spellcheck="false" autocomplete="off" maxlength="63" aria-describedby="apHelp ap-err">
         <button class="txtbtn" id="regen" title="Vygenerovat nové heslo" type="button"><i class="mdi mdi-dice-multiple-outline"></i>Nové heslo</button></div>
-      <div class="help">Když se deska nepřipojí k Wi-Fi, spustí vlastní přístupový bod <code>INK_…</code> s tímto heslem (ukáže ho i na displeji).</div></label>
+      <div class="help" id="apHelp">Když se deska nepřipojí k Wi-Fi, spustí vlastní přístupový bod <code>INK_…</code> s tímto heslem (ukáže ho i na displeji).</div></label>
     <div class="withbtn" style="gap:12px"><button class="primary" id="save" disabled>Uložit</button><span id="saveMsg" class="saved"></span></div>
     <p class="help">Hodnoty se vloží do firmwaru při stažení – binárka v add-onu sama žádnou adresu ani heslo neobsahuje. Zadej raději IP adresu než <code>homeassistant.local</code> (mDNS po probuzení zdržuje).</p>
   </section>
@@ -130,9 +131,15 @@ function show(d) {
   saved = d.settings;
   $("#host").value = saved.host; $("#port").value = saved.port; $("#ap").value = saved.ap_password;
   const det = saved.detected || {};
-  $("#hostHelp").textContent = det.host ? `Zjištěno ze Supervisoru: ${det.host}:${det.port}` : "Adresu HA se nepodařilo zjistit – zadej ji ručně.";
+  const hh = $("#hostHelp");
+  hh.textContent = det.host ? `Zjištěno ze Supervisoru: ${det.host}:${det.port} ` : "Adresu HA se nepodařilo zjistit – zadej ji ručně.";
+  if (det.host && (det.host !== saved.host || String(det.port) !== String(saved.port))) {
+    const use = Object.assign(document.createElement("button"), { type: "button", className: "txtbtn", textContent: "Použít", style: "padding:2px 6px" });
+    use.onclick = () => { $("#host").value = det.host; $("#port").value = det.port; syncState(); };
+    hh.append(use);
+  }
   const b = d.build || {};
-  $("#build").textContent = b.firmware ? `Živý obraz ${b.firmware} · ${(b.boards || ["ESPink v3.6"]).join(", ")} · ${(b.patches || []).length} patchů · sestaveno ${new Date(b.built).toLocaleDateString("cs-CZ")}` : "";
+  $("#build").textContent = b.firmware ? `Živý obraz ${b.firmware} · ${(b.boards || ["ESPink v3.6"]).join(", ")} · ${(b.patches || []).length} úprav pro ESPink Server · sestaveno ${new Date(b.built).toLocaleDateString("cs-CZ")}` : "";
   $("#noFw").hidden = d.available; $("#btn").hidden = !d.available;
   syncState();
 }
@@ -147,7 +154,7 @@ function validate() {
     const inp = $("#" + k); inp.setAttribute("aria-invalid", !!msg);
     const lab = inp.closest("label");
     let e = lab.querySelector(".ferr");
-    if (!e) { e = Object.assign(document.createElement("div"), { className: "ferr" }); lab.append(e); }
+    if (!e) { e = Object.assign(document.createElement("div"), { className: "ferr", id: k + "-err" }); lab.append(e); }
     e.textContent = msg;
   }
   return !Object.values(errs).some(Boolean);
@@ -172,6 +179,7 @@ $("#save").onclick = async () => {
     show(res); $("#saveMsg").textContent = "Uloženo – platí pro příští instalaci.";
   } catch (e) { syncState(); $("#saveMsg").className = "saved err"; $("#saveMsg").textContent = "Nelze uložit: " + e.message; }
 };
+addEventListener("beforeunload", e => { if (saved.host !== undefined && dirty()) e.preventDefault(); });
 // neuložené změny by instalace nepoužila
 $("#btn").addEventListener("click", e => { if (dirty()) { e.stopPropagation(); e.preventDefault(); } }, true);
 

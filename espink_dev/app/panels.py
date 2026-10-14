@@ -41,7 +41,7 @@ def sanitize(raw: dict, layouts: dict) -> dict:
     if not name:
         raise ValueError("panel musí mít název")
     lid = raw.get("layout")
-    if lid not in layouts:
+    if not isinstance(lid, str) or lid not in layouts:
         lid = next(iter(layouts))
     sensor = str(raw.get("battery_sensor") or "").strip()
     if sensor and not (ENTITY_RE.match(sensor) and sensor.startswith("sensor.")):
@@ -49,7 +49,7 @@ def sanitize(raw: dict, layouts: dict) -> dict:
     rotate = raw.get("rotate")  # None = výchozí z konfigurace add-onu
     if rotate in ("", None):
         rotate = None
-    elif int(rotate) not in (90, 270):  # rozvržení je na výšku, displej nativně na šířku
+    elif rotate not in (90, 270, "90", "270"):  # rozvržení je na výšku, displej nativně na šířku
         raise ValueError(f"neplatné otočení: {rotate} (jen 90 nebo 270)")
     return {"mac": mac, "name": name, "layout": lid, "schedule": check_rules(raw.get("schedule")),
             "battery_sensor": sensor, "rotate": None if rotate is None else int(rotate)}
@@ -101,15 +101,26 @@ def load_security() -> dict:
             data = json.load(f)
     except (FileNotFoundError, ValueError):
         data = {}
+    if not isinstance(data, dict):
+        data = {}
     keys = data.get("keys") if isinstance(data.get("keys"), dict) else {}
-    return {"tofu_done": bool(data.get("tofu_done")),
+    try:
+        learn_until = float(data.get("learn_until") or 0)
+    except (TypeError, ValueError):
+        learn_until = 0.0
+    return {"tofu_done": bool(data.get("tofu_done")), "learn_until": learn_until,
             "keys": {m: k for m, k in keys.items() if normalize_mac(m) == m and KEY_RE.match(str(k))}}
 
 
 def save_security(data: dict) -> None:
+    """Zápis rovnou s právy 0600 (klíče desek), atomicky."""
     path = security_path()
-    layout_mod._write(path, data)
-    os.chmod(path, 0o600)
+    tmp = path + ".tmp"
+    fd = os.open(tmp, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
 
 
 def clean_key(value) -> str:

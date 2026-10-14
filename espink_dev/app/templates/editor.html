@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,">
 <title>ESPink – rozvržení</title>
 <link rel="stylesheet" href="static/mdi/css/materialdesignicons.min.css">
 <style>
@@ -37,7 +38,7 @@
 
   /* layout */
   .seg { display: none; }
-  main { display: grid; grid-template-columns: 420px 1fr; gap: 16px; padding: 16px; align-items: start; padding-bottom: 96px; }
+  main { display: grid; grid-template-columns: 420px 1fr; gap: 16px; padding: 16px; align-items: start; padding-bottom: 48px; }
   .card { background: var(--card); border-radius: 12px; box-shadow: var(--shadow); border: 1px solid var(--line); }
   @media (max-width: 999px) {
     main { grid-template-columns: minmax(0, 1fr); padding: 12px 12px 96px; }
@@ -142,14 +143,16 @@
   .screen.failed .perr { display: block; }
 
   /* save bar + toast */
-  .savebar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--card); border-top: 1px solid var(--line);
-             display: flex; align-items: center; gap: 8px; padding: 10px 16px; transform: translateY(100%); transition: transform .2s; }
-  .savebar.show { transform: none; }
-  .savebar .st { flex: 1; display: flex; gap: 6px; align-items: center; }
-  .savebar .st::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+  .savectl { margin-left: auto; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .savectl .st { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); margin-right: 4px; }
+  .savectl.show .st { color: var(--ink); font-weight: 500; }
+  .savectl.show .st::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+  .savectl .primary { padding: 7px 16px; }
+  .savectl.show .primary:not(:disabled) { box-shadow: 0 0 0 3px rgba(2,119,189,.25); }
+  [hidden] { display: none !important; }
   .primary { background: var(--primary); color: var(--on-primary); border: 0; border-radius: 4px; padding: 9px 18px; font-weight: 500; }
   .primary:disabled { background: var(--line); color: var(--muted); cursor: not-allowed; }
-  .toast { position: fixed; left: 50%; bottom: 76px; transform: translateX(-50%); background: #323232; color: #fff; padding: 12px 16px; border-radius: 6px;
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #323232; color: #fff; padding: 12px 16px; border-radius: 6px;
            display: none; gap: 16px; align-items: center; z-index: 40; max-width: calc(100vw - 32px); }
   .toast.show { display: flex; }
   .toast button { background: none; border: 0; color: #4fc3f7; font-weight: 600; }
@@ -163,23 +166,27 @@
   .screen.busy img { opacity: .6; }
   .tabs a.dot::after { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--primary); margin-left: 6px; }
   .seg button.dot::after { content: " •"; }
-  .appbar .actions { margin-left: auto; display: flex; gap: 2px; }
+  .appbar .actions { display: flex; gap: 2px; }
   .appbar .tabs { min-width: 0; overflow-x: auto; }
-  #moreBtn { display: none; margin-left: auto; }
+  #moreBtn { display: none; }
   .actions .lbl { display: none; }
   .dlgerr { color: var(--err); font-size: 13px; min-height: 18px; }
   .primary.danger { background: var(--err); }
   /* telefon: akce v hlavičce do menu ⋮, lišta Uložit a nástroje náhledu se zalomí */
   @media (max-width: 600px) {
-    #moreBtn { display: grid; }
+    #moreBtn { display: grid; margin-left: auto; }
     .appbar .actions { display: none; position: absolute; right: 8px; top: 52px; flex-direction: column; align-items: stretch;
                        background: var(--card); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); padding: 4px 0; z-index: 25; }
     .appbar .actions.open { display: flex; }
     .appbar .actions .icon-btn { width: auto; height: 40px; border-radius: 0; display: flex; gap: 10px; padding: 0 16px; justify-content: flex-start; color: var(--ink); }
     .actions .lbl { display: inline; }
-    .savebar { flex-wrap: wrap; padding: 8px 12px; gap: 4px; }
-    .savebar .st { min-width: 0; flex-basis: 100%; font-size: 13px; }
-    .savebar .primary { margin-left: auto; }
+    /* uložení na telefonu ve druhém řádku hlavičky: stav vlevo, tlačítka vpravo */
+    .appbar { gap: 2px; padding: 0 8px; flex-wrap: wrap; height: auto; }
+    .appbar .tabs { height: 56px; }
+    .savectl { order: 3; flex-basis: calc(100% + 16px); height: 44px; margin: 0 -8px; padding: 0 8px; border-top: 1px solid var(--line); }
+    .savectl .st { margin-right: auto; }
+    .savectl .primary { padding: 7px 14px; }
+    .seg { top: 100px; }
     .ptool { flex-wrap: wrap; row-gap: 4px; }
     .ptool .st { flex-basis: 100%; }
   }
@@ -262,6 +269,14 @@
 <header class="appbar">
   <h1>ESPink</h1>
   <nav class="tabs"><a href="./" aria-current="page" id="tabLayout">Rozvržení</a><a href="panels">Panely</a><a href="install">Instalace</a><a href="status">Stav</a></nav>
+  <!-- uložení vždy na očích v horní liště (dřív lišta dole, která se přehlédla) -->
+  <div class="savectl" id="savebar" role="group" aria-label="Uložení rozvržení">
+    <span class="st" id="dirtyText" aria-live="polite">Uloženo</span>
+    <button class="icon-btn" id="undo" title="Zpět (Ctrl+Z)"><i class="mdi mdi-undo"></i></button>
+    <button class="icon-btn" id="redo" title="Znovu (Ctrl+Shift+Z)"><i class="mdi mdi-redo"></i></button>
+    <button class="txtbtn" id="discard" hidden>Zahodit</button>
+    <button class="primary" id="save" title="Uložit (Ctrl+S)">Uložit</button>
+  </div>
   <button class="icon-btn" id="moreBtn" title="Další akce" aria-label="Další akce" aria-haspopup="menu" aria-expanded="false"><i class="mdi mdi-dots-vertical"></i></button>
   <div class="actions" id="actions">
     <button class="icon-btn" id="histBtn" title="Historie uložených verzí" aria-label="Historie uložených verzí"><i class="mdi mdi-history"></i><span class="lbl">Historie verzí</span></button>
@@ -331,13 +346,6 @@
   </section>
 </main>
 
-<div class="savebar" id="savebar" role="region" aria-label="Neuložené změny">
-  <span class="st" id="dirtyText">Neuložené změny</span>
-  <button class="icon-btn" id="undo" title="Zpět (Ctrl+Z)"><i class="mdi mdi-undo"></i></button>
-  <button class="icon-btn" id="redo" title="Znovu (Ctrl+Shift+Z)"><i class="mdi mdi-redo"></i></button>
-  <button class="txtbtn" id="discard">Zahodit</button>
-  <button class="primary" id="save">Uložit</button>
-</div>
 <div class="toast" id="toast" role="status"><span id="toastText"></span><button id="toastAct" hidden>Vrátit</button></div>
 <div class="sr" aria-live="polite" id="live"></div>
 <dialog id="conflict"><h3 style="margin-top:0">Rozvržení bylo mezitím uloženo jinde</h3>
@@ -467,8 +475,8 @@ function renderStatus() {            // vrací true, když návrh nejde uložit 
   $("#stackBtn").hidden = !vis.length;
   msg.className = "budget-msg " + cls;
   msg.replaceChildren(icon(cls === "ok" ? "check-circle" : cls === "err" ? "alert-circle" : "alert"), el("span", {}, txt, " ", action));
-  $("#save").disabled = bad.length > 0;
-  $("#save").title = bad.length ? "Nelze uložit: bloky se překrývají" : "";
+  $("#save").disabled = bad.length > 0 || snap() === saved;   // bez změn není co ukládat
+  $("#save").title = bad.length ? "Nelze uložit: bloky se překrývají" : "Uložit (Ctrl+S)";
   return bad.length > 0;
 }
 
@@ -855,13 +863,25 @@ function renderMenu() {
       }
       addAt = null; blocks.push(nb); openId = nb.id; commit();
       if (shrink) toast(msg, shrink, "Zmenšit Události"); else toast(msg, undo ? () => travel(-1) : null);
-      requestAnimationFrame(() => document.querySelector(`li[data-id="${nb.id}"] .bbody input`)?.focus());
+      requestAnimationFrame(() => document.querySelector(`li[data-id="${nb.id}"] .bbody > :not(.pos):not(.lines2) :is(input, select, textarea)`)?.focus());
     };
     m.append(btn);
   }
 }
 const closeMenu = () => { $("#addMenu").hidden = true; $("#addBtn").setAttribute("aria-expanded", false); };
-$("#addBtn").onclick = e => { addAt = null; e.stopPropagation(); const m = $("#addMenu"); renderMenu(); m.hidden = !m.hidden; $("#addBtn").setAttribute("aria-expanded", !m.hidden); };
+const menuItems = () => [...$("#addMenu").querySelectorAll("button:not(:disabled)")];
+$("#addBtn").onclick = e => {
+  addAt = null; e.stopPropagation(); const m = $("#addMenu"); renderMenu(); m.hidden = !m.hidden;
+  $("#addBtn").setAttribute("aria-expanded", !m.hidden);
+  if (!m.hidden) requestAnimationFrame(() => menuItems()[0]?.focus());
+};
+// klávesnice v nabídce: šipky, Home/End, Esc zavře a vrátí fokus na tlačítko
+$("#addMenu").addEventListener("keydown", e => {
+  const items = menuItems(), i = items.indexOf(document.activeElement);
+  const to = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: items.length - 1 }[e.key];
+  if (to !== undefined) { e.preventDefault(); items[(to + items.length) % items.length]?.focus(); }
+  else if (e.key === "Escape" || e.key === "Tab") { closeMenu(); addAt = null; if (e.key === "Escape") { e.preventDefault(); $("#addBtn").focus(); } }
+});
 document.addEventListener("click", e => { if (!e.target.closest(".add") && !e.target.closest(".free")) { closeMenu(); addAt = null; } });
 
 // ───────── Náhled: server vykreslí neuložený návrh stejně jako pro desku ─────────
@@ -935,7 +955,10 @@ function select(id, { pane = false, focus = false } = {}) {
   if (id) document.querySelector(`li[data-id="${id}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   if (focus && id) document.querySelector(`.gbox[data-id="${id}"]`)?.focus({ preventScroll: true });
 }
-function openBlock(id) { select(id, { pane: true }); }
+function openBlock(id) {   // otevřít nastavení a zaostřit první parametr bloku (ne polohu)
+  select(id, { pane: true });
+  requestAnimationFrame(() => document.querySelector(`li[data-id="${id}"] .bbody > :not(.pos):not(.lines2) :is(input, select, textarea)`)?.focus());
+}
 
 // Kompaktní lišta pod náhledem (telefon): poloha vybraného bloku bez přepnutí na seznam
 function updateSelbar() {
@@ -1041,6 +1064,8 @@ function startDrag(e, b, d, mode) {
   d.onpointerup = () => {
     d.onpointermove = d.onpointerup = null; coords.hidden = true;
     document.body.classList.remove("dragging"); hole.remove(); land.remove(); minb.remove();
+    // klik/tažení myší: fokus na blok (po překreslení), ať hned fungují šipky, Enter a Delete
+    requestAnimationFrame(() => document.querySelector(`.gbox[data-id="${b.id}"]`)?.focus({ preventScroll: true }));
     if (!moved) {
       // dvojklik na úchyt: roztáhnout k nejbližšímu bloku (nebo okraji) v tom směru
       const now = Date.now(), dbl = mode !== "move" && lastHandle.id === b.id && lastHandle.mode === mode && now - lastHandle.t < 450;
@@ -1079,8 +1104,12 @@ function shake(b) {
 // Klávesnice: šipky posun (Alt = po 40 px), Shift+šipky pravá/dolní hrana, Ctrl+Shift+šipky levá/horní hrana,
 // Enter nastavení, Esc zrušit výběr, Delete odebrat
 function keyMove(e, b) {
-  if (e.key === "Escape") { select(null); return; }
-  if (e.key === "Delete") { e.preventDefault(); remove(b.id); return; }
+  if (e.key === "Escape") { select(null); requestAnimationFrame(() => document.querySelector(`.gbox[data-id="${b.id}"]`)?.focus({ preventScroll: true })); return; }
+  if (e.key === "Delete") {
+    e.preventDefault(); remove(b.id);
+    requestAnimationFrame(() => document.querySelector(".gbox")?.focus({ preventScroll: true }));   // fokus na další blok
+    return;
+  }
   if (e.key === "Enter") { openBlock(b.id); return; }
   const k = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
   if (!k) return;
@@ -1117,9 +1146,10 @@ function refresh(soft) {
   drawBoxes(); updateSelbar();
   const dirty = snap() !== saved;
   $("#savebar").classList.toggle("show", dirty);
+  $("#discard").hidden = !dirty;
   $("#tabLayout").classList.toggle("dot", dirty);
   const n = blocks.filter(invalid).length;
-  $("#dirtyText").textContent = "Neuložené změny" + (n ? ` · ${n} ${n > 1 ? "bloky" : "blok"} s neplatnou entitou` : "");
+  $("#dirtyText").textContent = dirty ? "Neuloženo" + (n ? ` · ${n} ${n > 1 ? "bloky" : "blok"} s neplatnou entitou` : "") : "Uloženo";
   $("#undo").disabled = hpos === 0; $("#redo").disabled = hpos === hist.length - 1;
   labelButtons();
   scheduleRender();
@@ -1229,6 +1259,9 @@ $("#discard").onclick = async () => {
   blocks = JSON.parse(saved); hist = [saved]; hpos = 0; openId = null; refresh(); toast("Změny zahozeny.");
 };
 $("#undo").onclick = () => travel(-1); $("#redo").onclick = () => travel(1);
+document.addEventListener("keydown", e => {   // Ctrl+S = uložit
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); if (!$("#save").disabled) doSave(false); }
+});
 document.addEventListener("keydown", e => {
   if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z" || e.target.matches("input,textarea")) return;
   e.preventDefault(); travel(e.shiftKey ? 1 : -1);

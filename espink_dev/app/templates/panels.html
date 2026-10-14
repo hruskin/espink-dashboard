@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,">
 <title>ESPink – panely</title>
 <link rel="stylesheet" href="static/mdi/css/materialdesignicons.min.css">
 <style>
@@ -27,7 +28,10 @@
   .tabs a { display: flex; align-items: center; padding: 0 16px; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; font-weight: 500; }
   .tabs a[aria-current] { color: var(--primary); border-color: var(--primary); }
   @media (max-width: 600px) { .appbar h1 { display: none; } .tabs a { padding: 0 10px; } }
-  main { max-width: 900px; margin: 0 auto; padding: 16px 16px 48px; }
+  main { max-width: 1480px; margin: 0 auto; padding: 16px 16px 48px; }
+  #list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 12px; align-items: start; }
+  #list > .card { margin: 0; container-type: inline-size; }
+  #pendingBox, main > .help, main > h2 { max-width: 900px; }
   h2 { font-size: 16px; font-weight: 500; margin: 20px 4px 8px; color: var(--muted); }
   .card { background: var(--card); border-radius: 12px; box-shadow: var(--shadow); border: 1px solid var(--line); margin-bottom: 12px; }
   .phead { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
@@ -41,6 +45,7 @@
   .pbody { display: grid; grid-template-columns: 150px 1fr; gap: 16px; padding: 16px; }
   .thumb { width: 150px; border: 1px solid var(--line); background: #fff; image-rendering: pixelated; align-self: start; }
   @media (max-width: 560px) { .pbody { grid-template-columns: 1fr; } .thumb { width: 120px; } }
+  @container (max-width: 600px) { .pbody { grid-template-columns: 1fr; } .grid2 { grid-template-columns: 1fr; } }
   .f { display: block; margin-bottom: 12px; }
   .f > span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
   .f input, .f select, .f textarea { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font: inherit; }
@@ -91,7 +96,8 @@
   .sched-bar > button { color: #fff; font-size: 12px; overflow: hidden; white-space: nowrap; font-weight: 500; display: flex; align-items: center; justify-content: center; border: 0; padding: 0; cursor: pointer;
                      white-space: nowrap; overflow: hidden; border-right: 1px solid var(--card); min-width: 0; }
   .sched-bar > button:last-child { border-right: 0; }
-  .sched-bar > button:hover, .sched-bar > button.on { filter: brightness(1.25); box-shadow: inset 0 -3px 0 #fff; }
+  .sched-bar > button:hover { filter: brightness(1.2); }
+  .sched-bar > button.on { box-shadow: inset 0 0 0 3px #fff, inset 0 0 0 5px #212121; font-weight: 700; }
   .sched-track { position: relative; touch-action: pan-y; }
   /* táhlo hranice: široká neviditelná plocha pro prst, uprostřed bílá čára s úchytem */
   .sched-hd { position: absolute; top: -4px; bottom: -4px; width: 22px; margin-left: -11px; cursor: ew-resize; touch-action: none; z-index: 2; }
@@ -198,12 +204,12 @@ const field = (label, input, help) => el("label", { className: "f" }, el("span",
 // Server dál dostává pravidla „HH:MM-HH:MM=sekundy“ (spojené stejné sousední hodiny);
 // probuzení jsou zarovnaná na násobky intervalu (5 min = :00, :05, …; hodina = v :00).
 const SLOTS = [   // sytější barva = budí častěji (víc baterie)
-  { v: 300, label: "každých 5 min", short: "5 min", color: "#0d47a1", ink: "#fff" },
+  { v: 300, label: "každých 5 min", short: "5 min", color: "#0a1f5c", ink: "#fff" },
   { v: 600, label: "každých 10 min", short: "10 min", color: "#1565c0", ink: "#fff" },
-  { v: 900, label: "každých 15 min", short: "15 min", color: "#1e88e5", ink: "#fff" },
-  { v: 1200, label: "každých 20 min", short: "20 min", color: "#64b5f6", ink: "#0b1e33" },
-  { v: 1800, label: "každých 30 min", short: "30 min", color: "#90caf9", ink: "#0b1e33" },
-  { v: 3600, label: "1× za hodinu (v :00)", short: "1×/h", color: "#c5e1f9", ink: "#0b1e33" },
+  { v: 900, label: "každých 15 min", short: "15 min", color: "#42a5f5", ink: "#0b1e33" },
+  { v: 1200, label: "každých 20 min", short: "20 min", color: "#7cc0f5", ink: "#0b1e33" },
+  { v: 1800, label: "každých 30 min", short: "30 min", color: "#a8d5f8", ink: "#0b1e33" },
+  { v: 3600, label: "1× za hodinu (v :00)", short: "1×/h", color: "#d6ebfb", ink: "#0b1e33" },
   { v: 0, label: "nebudí (spí)", short: "spí", color: "repeating-linear-gradient(45deg,#e0e0e0 0 4px,#f5f5f5 4px 8px)", ink: "#424242" },
 ];
 const slot = v => SLOTS.find(s => s.v === v) || SLOTS[SLOTS.length - 1];
@@ -265,6 +271,12 @@ function scheduleEditor(p, onChange) {
   const segsOf = qs => { const out = []; for (let q = 0; q < QN;) { let n = 1; while (q + n < QN && qs[q + n] === qs[q]) n++; out.push([q, q + n, qs[q]]); q += n; } return out; };
   const fromSegs = segs => { const n = []; segs.forEach(([a, b, v]) => { for (let q = a; q < b; q++) n[q] = v; }); return qToRules(n); };
   const slower = v => v === 0 ? 3600 : (SLOTS.filter(s => s.v > v && s.v).sort((a, b) => a.v - b.v)[0]?.v ?? 0);   // o stupeň úspornější
+  // interval pro druhou půlku rozděleného úseku: o stupeň úspornější, ale jiný než následující úsek
+  const splitVal = (v, next) => {
+    const i = SLOTS.findIndex(s => s.v === v);
+    for (const d of [1, 2, -1, -2, 3, -3]) { const s = SLOTS[i + d]; if (s && s.v !== next) return s.v; }
+    return slower(v);
+  };
   const dur = n => n % 4 ? `${Math.floor(n / 4) ? Math.floor(n / 4) + " h " : ""}${n % 4 * 15} min` : `${n / 4} h`;
   const head = el("small");
   const setCount = () => {
@@ -278,10 +290,11 @@ function scheduleEditor(p, onChange) {
     const qs = rulesToQ(rules), r = bar.getBoundingClientRect(), q = Math.round((clientX - r.left) / r.width * QN);
     const sg = qs && segsOf(qs).find(([a, b]) => q > a && q < b);
     if (!sg) return false;
-    const [, to, v] = sg, n = [...qs], nv = slower(v);
+    const [, to, v] = sg, n = [...qs], nv = splitVal(v, qs[to]);
     for (let k = q; k < to; k++) n[k] = nv;
     seg = [q, to]; setRules(qToRules(n), true);
-    toast(`Přidána hranice v ${qt(q)} – úsek ${qt(q)}–${qt(to)} je teď ${slot(nv).label}.`);
+    requestAnimationFrame(() => box.querySelector(".sched-seg select")?.focus());
+    toast(`Přidána hranice v ${qt(q)}: úsek ${qt(q)}–${qt(to)} je teď ${slot(nv).label}.`);
     return true;
   };
   let keyTimer = null;
@@ -319,6 +332,8 @@ function scheduleEditor(p, onChange) {
           lastClick = dbl ? { t: 0, x: -99 } : { t: now, x: e.clientX };
           if (dbl && splitAt(bar, e.clientX)) return;
           seg = on ? null : [from, to]; draw();
+          requestAnimationFrame(() => (seg ? box.querySelector(".sched-seg select")
+            : [...box.querySelectorAll(".sched-bar > button")].find(x => x.title.startsWith(qt(from) + "–")))?.focus());
         };
         bar.append(b);
         return b;
@@ -328,7 +343,12 @@ function scheduleEditor(p, onChange) {
       const fitLabels = () => btns.forEach(b => { b.textContent = b.offsetWidth >= b.dataset.short.length * 7 + 26 ? b.dataset.short : ""; });
       requestAnimationFrame(fitLabels);
       // hranice: táhnout myší/prstem (po 15 min), šipky ±15 min, PageUp/Down ±1 h, Home/End; úsek stažený na 0 zmizí
-      const apply = () => { focusQ = null; setRules(fromSegs(segs.filter(([a, b]) => b > a))); };
+      const commit = () => {
+        const prev = rules, gone = segs.some(([a, b]) => b <= a);
+        setRules(fromSegs(segs.filter(([a, b]) => b > a)));
+        if (gone) toast("Úsek zanikl – převzal ho soused.", () => { rules = prev; changed(); });
+      };
+      const apply = () => { focusQ = null; commit(); };
       const relabel = i => { const [a, b] = segs[i]; btns[i].style.flex = b - a; btns[i].style.display = b > a ? "" : "none"; fitLabels(); };
       if (!advanced) segs.slice(0, -1).forEach((_, i) => {
         const hd = el("div", { className: "sched-hd", tabIndex: 0 });
@@ -339,7 +359,7 @@ function scheduleEditor(p, onChange) {
         hd.append(tip);
         const place = q => {
           hd.style.left = (q / QN * 100) + "%"; hd.setAttribute("aria-valuenow", q); hd.setAttribute("aria-valuetext", qt(q));
-          tip.textContent = `${qt(q)} · ${dur(segs[i][1] - segs[i][0])} | ${dur(segs[i + 1][1] - segs[i + 1][0])}`;
+          tip.textContent = `${qt(q)} (před ${dur(segs[i][1] - segs[i][0])}, po ${dur(segs[i + 1][1] - segs[i + 1][0])})`;
         };
         const move = q => {
           q = Math.max(segs[i][0], Math.min(segs[i + 1][1], q));
@@ -364,7 +384,7 @@ function scheduleEditor(p, onChange) {
           keyTimer = setTimeout(() => {
             keyTimer = null;
             const keep = segs[i][1];
-            setRules(fromSegs(segs.filter(([a, b]) => b > a)));
+            commit();
             requestAnimationFrame(() => {   // zaostřit hranici na stejném místě (i když úsek zanikl)
               const hs = [...box.querySelectorAll(".sched-hd")];
               (hs.find(h => +h.getAttribute("aria-valuenow") === keep) || hs[Math.min(i, hs.length - 1)])?.focus();
@@ -432,9 +452,10 @@ function scheduleEditor(p, onChange) {
                        icon("table-split-cell"), "Rozdělit");
       split.onclick = () => {
         const len = to - from, mid = from + (len >= 8 ? Math.round(len / 8) * 4 : Math.floor(len / 2));   // dělit raději na celé hodiny
-        const n = [...qs], nv = slower(v); for (let q = mid; q < to; q++) n[q] = nv;
+        const n = [...qs], nv = splitVal(v, qs[to]); for (let q = mid; q < to; q++) n[q] = nv;
         seg = [mid, to]; setRules(qToRules(n), true);
         requestAnimationFrame(() => box.querySelector(".sched-seg select")?.focus());
+        toast(`Úsek rozdělen v ${qt(mid)}: ${qt(mid)}–${qt(to)} je teď ${slot(nv).label}.`);
       };
       const whole = from === 0 && to === QN;
       const del = el("button", { className: "txtbtn danger", type: "button", disabled: whole, title: "Smazat úsek (převezme interval souseda)" },
@@ -500,12 +521,12 @@ function panelCard(p) {
     try {
       DATA = await post("panels/save", { mac: p.mac, name: name.value, layout: lay.value, battery_sensor: sensor.value,
                                          schedule: sched.rules(), rotate: rot.value === "" ? null : +rot.value });
-      dirty.delete(p.mac); render(); toast(`Panel ${name.value.trim()} uložen. Změna se projeví při příštím probuzení desky.`);
+      dirty.delete(p.mac); render(); toast(`Panel „${name.value.trim()}“ uložen. Změna se projeví při příštím probuzení desky.`);
     } catch (e) { save.disabled = false; toast("Nelze uložit: " + e.message); }
   };
   del.onclick = async () => {
     if (!await ask(`Odebrat panel ${p.name}?`, `Deska ${p.mac} přestane dostávat obrázek. Až se znovu ozve, objeví se v Nových deskách a půjde znovu povolit.`, "Odebrat", true)) return;
-    try { DATA = await post("panels/delete", { mac: p.mac }); dirty.delete(p.mac); render(); toast(`Panel ${p.name} odebrán.`); }
+    try { DATA = await post("panels/delete", { mac: p.mac }); dirty.delete(p.mac); render(); toast(`Panel „${p.name}“ odebrán.`); }
     catch (e) { toast("Nelze odebrat: " + e.message); }
   };
   const src = `preview.png?panel=${encodeURIComponent(p.mac)}&${p.content_ts}`;
@@ -537,7 +558,7 @@ function panelCard(p) {
 function allowChip(p) {
   const b = el("button", { className: "chip bad act", type: "button", title: "Deska nedostává obrázek – povolit" }, icon("lock-alert"), "nepovolená · Povolit");
   b.onclick = async () => {
-    try { DATA = await post("panels/approve", { mac: p.mac }); render(); toast(`Deska panelu ${p.name} povolena.`); }
+    try { DATA = await post("panels/approve", { mac: p.mac }); render(); toast(`Deska panelu „${p.name}“ povolena.`); }
     catch (e) { toast("Nelze povolit: " + e.message); }
   };
   return b;
@@ -559,7 +580,8 @@ function pendingRow(p) {
   const panel = DATA.panels.find(x => x.mac === p.mac);
   const info = p.allowed ? "povolená, zatím se neozvala"
     : [panel ? `panel ${panel.name}: deska se ozvala s jiným klíčem (přeinstalovaná?)` : "",
-       p.when && "ozvala se " + p.when, p.ip, p.fw && "FW " + p.fw, p.voltage && p.voltage + " V"].filter(Boolean).join(" · ");
+       p.when && "ozvala se " + p.when, p.ip && "IP " + p.ip, p.key_hint && "klíč končí …" + p.key_hint,
+       p.fw && "FW " + p.fw, p.voltage && p.voltage + " V"].filter(Boolean).join(" · ");
   return el("div", { className: "pend" },
     el("div", {}, el("b", { textContent: p.mac }), el("div", { className: "help", textContent: info })),
     ...(p.allowed ? [el("span"), el("span"), el("span")] : panel ? [el("span"), el("span"), ok] : [field("Název panelu", name), field("Rozvržení", lay), ok]));
@@ -581,11 +603,13 @@ function render() {
     el("p", { className: "help", textContent: "Desky, které se ozvaly, ale nejsou povolené. Povolením dostanou obrázek a vlastní panel." }));
 }
 
+let lastJson = "";
 async function load() {
   try {
-    const [d, ents] = await Promise.all([fetch("panels.json").then(r => r.json()),
+    const [txt, ents] = await Promise.all([fetch("panels.json").then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); }),
       fetch("entities.json").then(r => r.ok ? r.json() : []).catch(() => [])]);
-    DATA = d;
+    if (txt === lastJson) return;   // nic nového – nepřekreslovat (zavřelo by vybraný úsek)
+    lastJson = txt; DATA = JSON.parse(txt);
     const dl = $("#dl-sensor"); dl.replaceChildren();
     (Array.isArray(ents) ? ents : []).filter(e => e.id.startsWith("sensor.espink")).forEach(e => dl.append(el("option", { value: e.id, textContent: e.name })));
     render();
@@ -595,7 +619,9 @@ async function load() {
 }
 addEventListener("beforeunload", e => { if (dirty.size) e.preventDefault(); });
 // nové desky a stav se objeví bez obnovení stránky
-setInterval(() => { if (!document.hidden && !document.activeElement.matches("input,textarea,select")) load(); }, 30000);
+// nepřekreslovat, když uživatel zrovna pracuje: fokus v kartě, vybraný úsek, tažení, otevřený dialog
+const busy = () => document.activeElement?.closest("#list, #pendingBox") || document.querySelector(".sched-seg, .sched-hd.drag, dialog[open]");
+setInterval(() => { if (!document.hidden && !busy()) load(); }, 30000);
 load();
 </script>
 </body>

@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,">
 <title>ESPink – stav</title>
 <link rel="stylesheet" href="static/mdi/css/materialdesignicons.min.css">
 <style>
@@ -108,9 +109,11 @@
   .sched-grid select { padding: 6px 8px; border-left-width: 6px; }
   .sched-note { font-size: 12px; color: var(--muted); margin: 6px 0; }
   .sched-note.warn { color: var(--ink); background: var(--warn-bg); padding: 6px 8px; border-radius: 6px; }
-  table.kv { border-collapse: collapse; width: 100%; font-size: 14px; }
-  table.kv th { text-align: left; font-weight: 500; color: var(--muted); padding: 5px 12px 5px 0; white-space: nowrap; vertical-align: top; }
-  table.kv td { padding: 5px 0; }
+  table.kv { border-collapse: collapse; width: 100%; font-size: 14px; table-layout: fixed; }
+  table.kv th { text-align: left; font-weight: 500; color: var(--muted); padding: 5px 12px 5px 0; vertical-align: top; width: 42%; }
+  table.kv td { padding: 5px 0; overflow-wrap: anywhere; }
+  .warnbar { margin: 12px 16px 0; padding: 8px 12px; border-radius: 8px; background: var(--err-bg); }
+  .warnbar a { font-weight: 500; }
   .bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0 12px; }
 </style>
 </head>
@@ -148,7 +151,7 @@ function render(D) {
   const L = Object.fromEntries(D.layouts.map(l => [l.id, l.name]));
   $("#list").replaceChildren(...(D.panels.length ? D.panels.map(p => {
     const d = p.device || {};
-    const rows = [["Rozvržení", L[p.layout] || "–"], ["Poslední kontakt", rel(d.last_seen)], ["Další probuzení", rel(p.next_wake, true)],
+    const rows = [["Rozvržení", L[p.layout] || "–"], ["Poslední kontakt", d.last_seen ? rel(d.last_seen) : "zatím se neozvala"], ["Další probuzení", rel(p.next_wake, true)],
       ["Rozvrh teď", every(p.interval_now) + (p.schedule.length ? "" : " · výchozí rozvrh")],
       ["Baterie", d.battery != null ? `${d.battery} % (${num(d.voltage, 2)} V)` : "–"], ["Wi-Fi", wifi(d.rssi)],
       ["Doba překreslení", d.refresh_ms ? num(d.refresh_ms / 1000) + " s" : "–"], ["Poslední restart", RESET[d.reset_reason] || d.reset_reason || "–"],
@@ -156,8 +159,9 @@ function render(D) {
       ["Data pro desku", p.size ? `${num(p.size / 1024)} kB (${D.image_format})` : "–"], ["Firmware", d.fw || "–"],
       ["Teplota procesoru", d.cpu_temp != null ? Math.round(d.cpu_temp) + " °C" : "–"], ["MAC", p.mac]];
     if (p.error) rows.push(["Chyba vykreslení", p.error]);
-    if (!p.allowed) rows.push(["Pozor", "deska není povolená – povol ji v Panelech"]);
-    return el("section", { className: "card" }, el("div", { className: "phead" }, el("b", { textContent: p.name })),
+    // nepovolená deska nedostává obrázek – upozornit hned nahoře, ne v tabulce
+    const warn = p.allowed ? null : el("div", { className: "warnbar" }, "Deska není povolená a nedostává obrázek. ", el("a", { href: "panels", textContent: "Povolit v Panelech" }));
+    return el("section", { className: "card" }, el("div", { className: "phead" }, el("b", { textContent: p.name })), warn,
       el("div", { className: "pbody" }, el("img", { className: "thumb", src: `preview.png?panel=${encodeURIComponent(p.mac)}&${p.content_ts}`, alt: "Náhled " + p.name }),
         el("table", { className: "kv" }, ...rows.map(([k, v]) => el("tr", {}, el("th", { textContent: k }), el("td", { textContent: v }))))));
   }) : [el("div", { className: "card empty", textContent: "Zatím žádný panel." })]));
@@ -165,7 +169,14 @@ function render(D) {
   $("#adv").replaceChildren(`Povolené desky: ${D.allowed_devices.join(", ") || "žádné"}. Nové desky čekající na povolení: ${waiting}. `,
     el("a", { href: "view.json", textContent: "Model zobrazení (JSON)" }));
 }
-async function load() { try { const D = await (await fetch("panels.json")).json(); if (D.content_ts !== ts) { ts = D.content_ts; render(D); } } catch (e) {} }
+// překreslit při jakékoli změně dat (kontakt, baterie…) a aspoň jednou za minutu kvůli „před X min“
+let lastAt = 0;
+async function load() {
+  try {
+    const txt = await (await fetch("panels.json")).text();
+    if (txt !== ts || Date.now() - lastAt > 55000) { ts = txt; lastAt = Date.now(); render(JSON.parse(txt)); }
+  } catch (e) {}
+}
 $("#refresh").onclick = async () => {
   await fetch("refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
   toast("Obsah přepočítán – desky si ho vyzvednou při příštím probuzení."); ts = null; load();

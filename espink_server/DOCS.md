@@ -69,8 +69,10 @@ okně přes HTTPS.
 ### Stav
 
 Přehled panelů: poslední kontakt, další probuzení, **poslední překreslení**, kolikrát
-se panel dnes probudil a kolikrát se z toho překreslil (zbytek = beze změny obsahu,
-deska jen usnula), baterie, Wi-Fi, doba překreslení, důvod restartu a náhled. Tlačítko *Překreslit obsah teď* přepočítá obsah; desky si ho
+se panel dnes probudil a kolikrát se z toho překreslil, nebo jen usnul beze změny.
+Překreslení potvrzuje deska až při dalším probuzení (pošle dobu posledního
+překreslení), proto jsou počty o jedno probuzení pozadu. Když deska dostala nový
+obsah a nepřekreslila se, ukáže se nahoře varování. Dále baterie, Wi-Fi, doba překreslení, důvod restartu a náhled. Tlačítko *Překreslit obsah teď* přepočítá obsah; desky si ho
 vyzvednou při příštím probuzení.
 
 ## Jak to funguje
@@ -89,7 +91,8 @@ vyzvednou při příštím probuzení.
   přihlašovací údaje add-on vezme od Supervisoru). Každý panel je zařízení
   *ESPink <název>* se senzory Baterie, Napětí baterie, Signál WiFi, Doba překreslení,
   Teplota procesoru, Poslední kontakt, Další probuzení, Důvod restartu, Poslední
-  překreslení, Překreslení dnes a Probuzení dnes (počty se o půlnoci nulují). Zprávy jsou
+  překreslení, Překreslení dnes, Probuzení dnes a Nepřekresleno dnes (počty se
+  o půlnoci nulují). Zprávy jsou
   retained. Bez brokeru se stav zapisuje přes REST API do senzoru baterie panelu.
 - Emoji z tabulky `app/emoji.py` (👟, ♻️, ⚠️, 🎂…) se kreslí jako plné ikony MDI.
 

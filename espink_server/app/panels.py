@@ -105,9 +105,14 @@ def load_stats() -> dict:
     out = {}
     for mac, s in (data.items() if isinstance(data, dict) else []):
         if normalize_mac(mac) == mac and isinstance(s, dict):
-            out[mac] = {"day": str(s.get("day") or ""), "wakes": int(s.get("wakes") or 0), "redraws": int(s.get("redraws") or 0),
-                        "last_redraw": s.get("last_redraw") if isinstance(s.get("last_redraw"), str) else None,
-                        "last_wake": float(s.get("last_wake") or 0)}
+            text = lambda k: s.get(k) if isinstance(s.get(k), str) else None  # noqa: E731
+            num = lambda k: int(s.get(k) or 0) if isinstance(s.get(k), (int, float)) else 0  # noqa: E731
+            out[mac] = {"day": str(s.get("day") or ""), "wakes": num("wakes"), "redraws": num("redraws"),
+                        "unchanged": num("unchanged"), "missed": num("missed"),
+                        "last_redraw": text("last_redraw"), "last_missed": text("last_missed"),
+                        # čekané překreslení z minulého probuzení (potvrdí ho až to další)
+                        "expect": s.get("expect") if isinstance(s.get("expect"), bool) else None,
+                        "expect_at": text("expect_at")}
     return out
 
 

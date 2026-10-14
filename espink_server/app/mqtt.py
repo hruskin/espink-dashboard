@@ -30,6 +30,7 @@ SENSORS = {
     "last_redraw": ("Poslední překreslení", {"dev_cla": "timestamp"}),
     "redraws_today": ("Překreslení dnes", {"stat_cla": "total_increasing", "ic": "mdi:monitor-shimmer"}),
     "wakes_today": ("Probuzení dnes", {"stat_cla": "total_increasing", "ic": "mdi:alarm", "ent_cat": "diagnostic"}),
+    "missed_today": ("Nepřekresleno dnes", {"stat_cla": "total_increasing", "ic": "mdi:monitor-off", "ent_cat": "diagnostic"}),
 }
 
 

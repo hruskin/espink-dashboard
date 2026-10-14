@@ -133,19 +133,29 @@ class Server:
         r = t.cfg.get("rotate")
         return self.opts["rotate"] if r is None else r
 
-    def count(self, mac: str, now: datetime, redraw: bool) -> None:
-        """Probuzení (dotaz na Timestamp) a překreslení (stažení obrázku) – počty za dnešek.
-        Deska, která obsah má, se jen zeptá a usne; stahuje, jen když se obsah změnil."""
-        s = self.stats.setdefault(mac, {"day": "", "wakes": 0, "redraws": 0, "last_redraw": None, "last_wake": 0.0})
+    def count(self, t: Target, now: datetime, expect: bool, confirmed: bool) -> None:
+        """Probuzení a překreslení za dnešek. Deska překreslí, když dostane jiný Timestamp, než má
+        (expect). Jestli to opravdu udělala, pozná server až při dalším probuzení: deska pošle
+        lastRefreshDuration jen po překreslení (confirmed). Nesoulad se zaloguje."""
+        mac, name = t.cfg["mac"], t.cfg["name"]
+        s = self.stats.setdefault(mac, {})
         day = now.date().isoformat()
-        if s["day"] != day:
-            s.update(day=day, wakes=0, redraws=0)
-        if not redraw or time.time() - s["last_wake"] > 120:   # stažení bez předchozího dotazu = i probuzení
-            s["wakes"] += 1
-            s["last_wake"] = time.time()
-        if redraw:
-            s["redraws"] += 1
-            s["last_redraw"] = now.isoformat(timespec="seconds")
+        if s.get("day") != day:
+            s.update(day=day, wakes=0, redraws=0, unchanged=0, missed=0)
+        prev = s.get("expect")   # co se čekalo při minulém probuzení (None = nevíme, např. první kontakt)
+        if confirmed:
+            s["redraws"] = s.get("redraws", 0) + 1
+            s["last_redraw"] = s.get("expect_at") or now.isoformat(timespec="seconds")
+            if prev is False:
+                print(f"[device] {name}: překreslila se, i když obsah byl stejný (reset desky?)")
+        elif prev:
+            s["missed"] = s.get("missed", 0) + 1
+            s["last_missed"] = s.get("expect_at")
+            print(f"[device] {name}: měla se překreslit ({s.get('expect_at')}), ale nepřekreslila")
+        elif prev is False:
+            s["unchanged"] = s.get("unchanged", 0) + 1
+        s["wakes"] = s.get("wakes", 0) + 1
+        s["expect"], s["expect_at"] = expect, now.isoformat(timespec="seconds")
         try:
             panels_mod.save_stats(self.stats)
         except OSError as e:
@@ -154,8 +164,9 @@ class Server:
     def stats_for(self, mac: str) -> dict:
         s = self.stats.get(mac) or {}
         today = s.get("day") == now_local().date().isoformat()
-        return {"wakes_today": s.get("wakes", 0) if today else 0, "redraws_today": s.get("redraws", 0) if today else 0,
-                "last_redraw": s.get("last_redraw")}
+        n = lambda k: s.get(k, 0) if today else 0  # noqa: E731
+        return {"wakes_today": n("wakes"), "redraws_today": n("redraws"), "unchanged_today": n("unchanged"),
+                "missed_today": n("missed"), "last_redraw": s.get("last_redraw"), "last_missed": s.get("last_missed")}
 
     def save_security(self) -> None:
         try:
@@ -277,8 +288,9 @@ class Server:
                 "mac": mac,
                 "ip": request.remote,  # skutečná adresa spojení, ne hodnota z JSONu
                 "fw": short_text(body.get("fwVersion")),
-                # deska posílá délku překreslení jen po probuzení, které následuje po překreslení –
-                # jinak ponechat poslední známou hodnotu (≈20 000 ms = vypršel limit ovladače panelu)
+                # deska posílá délku překreslení jen po probuzení, které následuje po překreslení
+                # (potvrzení pro count) – jinak ponechat poslední známou hodnotu
+                # (≈20 000 ms = vypršel limit ovladače panelu)
                 "refresh_ms": ms(display.get("lastRefreshDuration")) or prev.get("refresh_ms"),
                 "download_ms": ms(network.get("lastDownloadDuration")) or prev.get("download_ms"),
                 "cpu_temp": model.fnum(system.get("cpuTemp")),
@@ -292,19 +304,18 @@ class Server:
                                  and time.time() - t.last_device_rebuild > 30):
                 t.last_device_rebuild = time.time()
                 await self.rebuild(only=[t])
-            self.count(mac, now, redraw=False)
-            asyncio.create_task(self.publish_device(t, now, sleep))
-            print(f"[device] {t.cfg['name']} {t.device['ip']} {t.device['voltage']} V,"
-                  f" {t.device['rssi']} dBm, spánek {sleep} s")
 
         if not t.payload:
             await self.rebuild(force=True, only=[t])
         if check == "1":
+            # Deska překresluje, když dostane jiný Timestamp, než má – obrázek si přečte rovnou
+            # z této odpovědi (druhý požadavek s timestampCheck=0 posílá jen stránkovaný režim)
+            redraw = t.content_ts != t.served_ts
+            self.count(t, now, redraw, confirmed=bool(ms(display.get("lastRefreshDuration"))))
             await self.stamp_next_wake(t, now, sleep)
-        else:   # stažení obrázku = deska se překreslí
-            self.count(mac, now, redraw=True)
-            if t.device:
-                asyncio.create_task(self.publish_device(t, now, sleep, force=True))
+            asyncio.create_task(self.publish_device(t, now, sleep))
+            print(f"[device] {t.cfg['name']} {t.device['ip']} {t.device['voltage']} V,"
+                  f" {t.device['rssi']} dBm, spánek {sleep} s{', překreslí' if redraw else ''}")
         headers = {
             "Timestamp": str(t.content_ts),
             "PreciseSleep": str(sleep),
@@ -425,11 +436,11 @@ class Server:
             with open(os.environ.get("OPTIONS_PATH", "options.json"), "w", encoding="utf-8") as f:
                 json.dump(new, f, ensure_ascii=False, indent=2)
 
-    async def publish_device(self, t: Target, now: datetime, sleep: int, force: bool = False) -> None:
+    async def publish_device(self, t: Target, now: datetime, sleep: int) -> None:
         if MOCK or not self.ha:
             return
-        # nejvýš jeden zápis do HA za minutu; překreslení hned po dotazu smí (počty překreslení)
-        if time.time() - t.last_publish < (5 if force else 60):
+        # nejvýš jeden zápis do HA za minutu
+        if time.time() - t.last_publish < 60:
             return
         t.last_publish = time.time()
         d = t.device

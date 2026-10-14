@@ -142,16 +142,23 @@ function panelCard(p) {
   const sug = el("button", { className: "txtbtn", type: "button", title: "Navrhnout podle názvu panelu" }, icon("auto-fix"));
   sug.onclick = () => { sensor.value = suggest(name.value.trim() || p.name); mark(); };
   const sched = el("textarea", { value: p.schedule.join("\n"), placeholder: DATA.default_schedule.join("\n"), spellcheck: false });
+  // otočení obrazu podle toho, jak je panel pověšený (rozvržení je na výšku)
+  const rot = el("select");
+  // obraz na výšku: 90° a 270° se liší právě otočením o 180° (vzhůru nohama)
+  const flip = DATA.default_rotate === 270 ? 90 : 270, normal = flip === 270 ? 90 : 270;
+  for (const [v, t] of [["", `normálně (výchozí, ${DATA.default_rotate}°)`], [String(flip), `otočeno o 180° (${flip}°)`],
+                        [String(normal), `normálně, pevně (${normal}°)`]])
+    rot.append(el("option", { value: v, textContent: t, selected: String(p.rotate ?? "") === v }));
   const save = el("button", { className: "primary", textContent: "Uložit", disabled: true });
   const del = el("button", { className: "txtbtn danger" }, icon("delete-outline"), "Odebrat");
   const mark = () => { save.disabled = false; dirty.add(p.mac); };
-  [name, lay, sensor, sched].forEach(i => i.addEventListener("input", mark));
+  [name, lay, sensor, sched, rot].forEach(i => i.addEventListener("input", mark));
 
   save.onclick = async () => {
     save.disabled = true;
     try {
       DATA = await post("panels/save", { mac: p.mac, name: name.value, layout: lay.value, battery_sensor: sensor.value,
-                                         schedule: sched.value.split("\n") });
+                                         schedule: sched.value.split("\n"), rotate: rot.value === "" ? null : +rot.value });
       dirty.delete(p.mac); render(); toast(`Panel ${name.value.trim()} uložen. Změna se projeví při příštím probuzení desky.`);
     } catch (e) { save.disabled = false; toast("Nelze uložit: " + e.message); }
   };
@@ -165,6 +172,7 @@ function panelCard(p) {
     el("div", { className: "phead" }, icon("tablet"), el("div", {}, el("b", { textContent: p.name }), el("br"), el("small", { textContent: p.mac })), chips),
     el("div", { className: "pbody" }, el("a", { href: "status", title: "Stav panelu" }, img), el("div", {},
       el("div", { className: "grid2" }, field("Název", name), field("Rozvržení", el("div", { className: "withbtn" }, lay, edit))),
+      field("Otočení obrazu", rot, el("div", { className: "help", textContent: "Je-li obraz na panelu vzhůru nohama, zvol „otočeno o 180°“. Projeví se při příštím probuzení desky." })),
       field("Senzor baterie v HA", el("div", { className: "withbtn" }, sensor, sug),
             el("div", { className: "help", textContent: DATA.mqtt
         ? "Panel je v HA zařízení (MQTT) se senzory baterie, napětí, signálu, doby překreslení… Tohle je entity ID baterie – platí jen při prvním vytvoření, potom ho měň v HA."

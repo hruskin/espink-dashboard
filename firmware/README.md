@@ -14,6 +14,7 @@ Tento adresář obsahuje open-source firmware [Živý obraz](https://github.com/
 | `prepare.sh` | Stáhne upstream, aplikuje patche a přidá PlatformIO prostředí `espink_v36_gdey075z08` |
 | `patches/01-local-server.patch` | Umožní nastavit host (`ZO_HOST`) a port (`ZO_PORT`) při sestavení. Bez nich firmware zůstane beze změny. |
 | `patches/05-runtime-config.patch` | Host, port a heslo AP v bloku `ZOCFG1`, který webový instalátor add-onu přepíše přímo v binárce |
+| `patches/06-sleep-cap.patch` | Omezí spánek z hlavičky `PreciseSleep` na 60 s – 24 h (`-D ZO_MIN_SLEEP_S`, `-D ZO_MAX_SLEEP_S`), aby podvržená odpověď neuspala desku navždy ani ji nebudila dokola. Při oříznutí zapíše varování do logu. |
 | `build-addon.sh` | Sestaví neutrální binárky pro webový instalátor (ESPink v3.6 = ESP32-S3 a starší ESPink 2.x = ESP32, obě s GDEY075Z08) a zkopíruje je do `app/firmware/<čip>` add-onů |
 | `zivyobraz-fw/` | Vygenerovaný zdrojový kód. Needituj ho, `prepare.sh` ho při každém spuštění vrátí do čistého stavu. |
 

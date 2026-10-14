@@ -1,0 +1,40 @@
+diff --git a/src/http_client.cpp b/src/http_client.cpp
+index c4eb3d2..72c5259 100644
+--- a/src/http_client.cpp
++++ b/src/http_client.cpp
+@@ -9,6 +9,15 @@
+ 
+ #include <HTTPUpdate.h>
+ 
++// Meze pro spánek, který posílá server v hlavičce PreciseSleep (sekundy).
++// Lze přepsat při sestavení, např. -D ZO_MAX_SLEEP_S=43200
++#ifndef ZO_MAX_SLEEP_S
++#define ZO_MAX_SLEEP_S 86400 // 24 h
++#endif
++#ifndef ZO_MIN_SLEEP_S
++#define ZO_MIN_SLEEP_S 60
++#endif
++
+ // External configuration
+ extern const char *host;
+ extern const uint16_t serverPort;
+@@ -200,7 +209,18 @@ bool HttpClient::parseHeaders(bool checkTimestampOnly, uint64_t storedTimestamp)
+       // Is there another header (after the Sleep one) with sleep in Seconds?
+       if (line.startsWith("PreciseSleep"))
+       {
+-        m_sleepDuration = line.substring(14).toInt();
++        // ZO_MAX_SLEEP_S: hodnotě ze serveru nevěříme – podvržená odpověď v LAN by obrovským
++        // číslem uspala desku prakticky navždy, 0/záporné/nečíselné by ji budilo dokola
++        long precise = line.substring(14).toInt();
++        if (precise < ZO_MIN_SLEEP_S || precise > ZO_MAX_SLEEP_S)
++        {
++          long clamped = precise < ZO_MIN_SLEEP_S ? ZO_MIN_SLEEP_S : ZO_MAX_SLEEP_S;
++          Logger::log<Logger::Level::WARNING, Logger::Topic::HEADER>(
++            "PreciseSleep {} out of range {}..{}, using {}\n", precise, (long)ZO_MIN_SLEEP_S, (long)ZO_MAX_SLEEP_S,
++            clamped);
++          precise = clamped;
++        }
++        m_sleepDuration = (uint64_t)precise;
+         Logger::log<Logger::Topic::HEADER>("Precise Sleep in seconds: {}\n", m_sleepDuration);
+       }
+ 

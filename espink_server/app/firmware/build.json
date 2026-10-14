@@ -1,7 +1,7 @@
 {
   "firmware": "3.2",
   "upstream": "3d7a5a5",
-  "patches": ["01-local-server.patch","02-hardening.patch","03-busy-timeout.patch","04-no-light-sleep-refresh.patch","05-runtime-config.patch"],
+  "patches": ["01-local-server.patch","02-hardening.patch","03-busy-timeout.patch","04-no-light-sleep-refresh.patch","05-runtime-config.patch","06-sleep-cap.patch"],
   "boards": ["ESPink v3.6 (ESP32-S3)", "ESPink 2.x (ESP32)"],
-  "built": "2026-10-14T08:29:14+02:00"
+  "built": "2026-10-14T12:37:32+02:00"
 }

@@ -30,6 +30,8 @@ WEATHER_PARAMS = {
     "rain": ("", "entity"),
     "pressure": ("", "entity"),
     "indoor": ("", "entity"),
+    # 0 = celé stupně: méně změn obsahu => méně překreslení (úspora baterie)
+    "temp_decimals": (1, ("int", 0, 2)),
 }
 
 # Parametry: typ -> (výchozí hodnota, validátor)
@@ -421,8 +423,9 @@ def needs(layout: dict) -> dict:
         t = b["type"]
         if t in ("header", "weather_now"):
             if t == "weather_now" or b["show_weather"]:
-                for k in WEATHER_PARAMS:
-                    add(states, b[k])
+                for k, (_, kind) in WEATHER_PARAMS.items():
+                    if kind == "entity":
+                        add(states, b[k])
                 add(forecasts, b["weather"])
             if t == "header":
                 add(cals, b["nameday_calendar"])

@@ -227,7 +227,7 @@
   .pos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0 8px; }
   .lines2 { display: flex; gap: 16px; flex-wrap: wrap; }
   /* položka patičky: entita přes celou šířku, pod ní ikona · atribut · popisek · strana · pořadí · odebrat */
-  .itemrow { display: grid; grid-template-columns: 48px 1fr 1fr 74px 32px 32px; gap: 6px; align-items: start; padding: 8px 0; border-bottom: 1px dashed var(--line); }
+  .itemrow { display: grid; grid-template-columns: 48px 1fr 1fr 74px 52px 32px 32px; gap: 6px; align-items: start; padding: 8px 0; border-bottom: 1px dashed var(--line); }
   .itemrow .c1 { grid-column: 1 / -1; }
   .lsel { padding: 12px 16px; margin-bottom: 12px; }
   .lsel .withbtn select { flex: 1; min-width: 0; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font: inherit; font-weight: 500; }
@@ -555,13 +555,16 @@ function footerItems(b) {
     const side = el("select", { title: "Strana patičky" });
     for (const [v, t] of [["left", "vlevo"], ["right", "vpravo"]]) side.append(el("option", { value: v, textContent: t, selected: it.side === v }));
     side.onchange = () => { it.side = side.value; commit(); };
+    const dec = el("select", { title: "Desetinná místa u čísla (méně = méně překreslení)" });
+    for (const v of [0, 1, 2, 3]) dec.append(el("option", { value: v, textContent: v + " des.", selected: (it.decimals ?? 1) === v }));
+    dec.onchange = () => { it.decimals = +dec.value; commit(); };
     const up = el("button", { className: "icon-btn", title: "Posunout dřív", style: "width:32px;height:32px", disabled: i === 0 }, icon("arrow-up"));
     up.onclick = () => { b.p.items.splice(i - 1, 0, b.p.items.splice(i, 1)[0]); commit(); };
     const del = el("button", { className: "icon-btn", title: "Odebrat položku", style: "width:32px;height:32px" }, icon("close"));
     del.onclick = () => { b.p.items.splice(i, 1); commit(); };
     box.append(el("div", { className: "itemrow" },
       el("div", { className: "c1" }, ent, nm),
-      iconField("", it, "icon", "ikona", true), attrField(it, "attribute", it.entity, true), lab, side, up, del));
+      iconField("", it, "icon", "ikona", true), attrField(it, "attribute", it.entity, true), lab, side, dec, up, del));
   });
   const add = el("button", { className: "txtbtn" }, icon("plus"), "Přidat entitu");
   add.onclick = () => { b.p.items.push({ entity: "", side: "left", decimals: 1 }); commit();
@@ -573,7 +576,8 @@ const weatherFields = b => [
   entityField("Počasí (ikona, min/max)", b, "weather", "weather"),
   el("div", { className: "grid2" }, entityField("Venkovní teplota", b, "temperature", "sensor", "jinak z entity počasí"),
     entityField("Vlhkost", b, "humidity", "sensor", "jinak z entity počasí"),
-    entityField("Srážky dnes", b, "rain", "sensor"), entityField("Tlak", b, "pressure", "sensor"), entityField("Teplota doma", b, "indoor", "sensor"))];
+    entityField("Srážky dnes", b, "rain", "sensor"), entityField("Tlak", b, "pressure", "sensor"), entityField("Teplota doma", b, "indoor", "sensor"),
+    numField("Desetinná místa teploty", b, "temp_decimals", "0 = celé stupně, méně překreslení"))];
 
 function params(b) {
   switch (b.type) {
@@ -756,7 +760,7 @@ function newBlock(type) {
   for (const [k, d] of Object.entries(SCHEMA.types[type].params)) p[k] = JSON.parse(JSON.stringify(d.default));
   if ("weather" in p) p.weather = guess("weather");
   const hdr = blocks.find(b => b.type === "header");
-  if (type === "weather_now" && hdr) for (const k of ["weather", "temperature", "humidity", "rain", "pressure", "indoor"]) p[k] = hdr.p[k] || p[k];
+  if (type === "weather_now" && hdr) for (const k of ["weather", "temperature", "humidity", "rain", "pressure", "indoor", "temp_decimals"]) p[k] = hdr.p[k] ?? p[k];
   if (type === "forecast" && hdr && hdr.p.weather) p.weather = hdr.p.weather;
   if (type === "departures") { p.entity = guess("sensor", /_odjezdy$/); p.disruptions = guess("sensor", /_vyluky$/); }
   const [w, h] = SCHEMA.types[type].size;

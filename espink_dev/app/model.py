@@ -74,7 +74,10 @@ def num(value, decimals=1) -> str | None:
         v = float(value)
     except (TypeError, ValueError):
         return None
-    return f"{v:.{decimals}f}".replace(".", ",").replace("-", "−")
+    s = f"{v:.{decimals}f}"
+    if float(s) == 0:  # −0,3 zaokrouhlené na celé = „0“, ne „−0“
+        s = s.lstrip("-")
+    return s.replace(".", ",").replace("-", "−")
 
 
 def fnum(value) -> float | None:
@@ -133,11 +136,11 @@ def _weather(raw: dict, b: dict, now: datetime, tz) -> dict:
 
     out = {
         "icon": WEATHER_ICONS.get(cond or "", "weather-cloudy-alert"),
-        "temp": num(temp),
+        "temp": num(temp, b.get("temp_decimals", 1)),
         "humidity": num(hum, 0),
         "rain": num(rain) if rain and rain >= 0.1 else None,
         "pressure": num(st("pressure"), 0),
-        "indoor": num(st("indoor")),
+        "indoor": num(st("indoor"), b.get("temp_decimals", 1)),
         "min": None,
         "max": None,
         "minmax_label": "zítra" if minmax_day != today else "",

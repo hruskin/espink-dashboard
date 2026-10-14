@@ -153,7 +153,7 @@ function render(D) {
     const d = p.device || {}, s = p.stats || {};
     const rows = [["Rozvržení", L[p.layout] || "–"], ["Poslední kontakt", d.last_seen ? rel(d.last_seen) : "zatím se neozvala"], ["Další probuzení", rel(p.next_wake, true)],
       ["Poslední překreslení", s.last_redraw ? rel(s.last_redraw) : "–"],
-      ["Dnes", s.wakes_today ? `${s.wakes_today}× probuzení, ${s.redraws_today}× překreslení (${s.wakes_today - s.redraws_today}× beze změny)` : "zatím se neprobudila"],
+      ["Dnes", s.wakes_today ? `${s.wakes_today}× probuzení: ${s.redraws_today}× překreslení, ${s.unchanged_today}× beze změny` : "zatím se neprobudila"],
       ["Rozvrh teď", every(p.interval_now) + (p.schedule.length ? "" : " · výchozí rozvrh")],
       ["Baterie", d.battery != null ? `${d.battery} % (${num(d.voltage, 2)} V)` : "–"], ["Wi-Fi", wifi(d.rssi)],
       ["Doba překreslení", d.refresh_ms ? num(d.refresh_ms / 1000) + " s" : "–"], ["Poslední restart", RESET[d.reset_reason] || d.reset_reason || "–"],
@@ -162,7 +162,9 @@ function render(D) {
       ["Teplota procesoru", d.cpu_temp != null ? Math.round(d.cpu_temp) + " °C" : "–"], ["MAC", p.mac]];
     if (p.error) rows.push(["Chyba vykreslení", p.error]);
     // nepovolená deska nedostává obrázek – upozornit hned nahoře, ne v tabulce
-    const warn = p.allowed ? null : el("div", { className: "warnbar" }, "Deska není povolená a nedostává obrázek. ", el("a", { href: "panels", textContent: "Povolit v Panelech" }));
+    const warn = !p.allowed ? el("div", { className: "warnbar" }, "Deska není povolená a nedostává obrázek. ", el("a", { href: "panels", textContent: "Povolit v Panelech" }))
+      : s.missed_today ? el("div", { className: "warnbar" }, `Dnes se ${s.missed_today}× nepřekreslila, i když dostala nový obsah (naposledy ${rel(s.last_missed)}).`)
+      : null;
     return el("section", { className: "card" }, el("div", { className: "phead" }, el("b", { textContent: p.name })), warn,
       el("div", { className: "pbody" }, el("img", { className: "thumb", src: `preview.png?panel=${encodeURIComponent(p.mac)}&${p.content_ts}`, alt: "Náhled " + p.name }),
         el("table", { className: "kv" }, ...rows.map(([k, v]) => el("tr", {}, el("th", { textContent: k }), el("td", { textContent: v }))))));

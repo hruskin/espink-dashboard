@@ -92,6 +92,16 @@
                      white-space: nowrap; overflow: hidden; border-right: 1px solid var(--card); min-width: 0; }
   .sched-bar > button:last-child { border-right: 0; }
   .sched-bar > button:hover, .sched-bar > button.on { filter: brightness(1.25); box-shadow: inset 0 -3px 0 #fff; }
+  .sched-track { position: relative; touch-action: pan-y; }
+  /* táhlo hranice: široká neviditelná plocha pro prst, uprostřed bílá čára s úchytem */
+  .sched-hd { position: absolute; top: -4px; bottom: -4px; width: 22px; margin-left: -11px; cursor: ew-resize; touch-action: none; z-index: 2; }
+  .sched-hd::before { content: ""; position: absolute; left: 10px; top: 0; bottom: 0; width: 2px; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.35); }
+  .sched-hd::after { content: ""; position: absolute; left: 5px; top: calc(50% - 8px); width: 12px; height: 16px; border-radius: 4px;
+                     background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.45); }
+  .sched-hd:hover::after, .sched-hd.drag::after, .sched-hd:focus-visible::after { background: var(--primary); }
+  .sched-tip { display: none; position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); background: #323232; color: #fff;
+               font-size: 11px; padding: 1px 6px; border-radius: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .sched-hd:hover .sched-tip, .sched-hd.drag .sched-tip, .sched-hd:focus .sched-tip { display: block; }
   .sched-seg { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; margin: -4px 0 10px; padding: 8px 10px; border-radius: 8px; background: var(--hover); }
   .sched-seg select { width: auto; padding: 6px 8px; }
   details.sched-more > summary { cursor: pointer; color: var(--primary); font-weight: 500; font-size: 13px; padding: 4px 0; }
@@ -253,21 +263,56 @@ function scheduleEditor(p, onChange) {
         el("small", { textContent: count === null ? "· pravidla obsahují chybu" : `· ${exact ? "" : "přibližně "}${count} probuzení za den` })), toggle));
     if (inherited && !custom) box.append(el("div", { className: "sched-note", textContent: "Panel zatím používá výchozí rozvrh add-onu (Konfigurace add-onu v HA) – úpravou a uložením získá vlastní." }));
     if (hours) {
-      const bar = el("div", { className: "sched-bar" });
-      for (let h = 0; h < 24;) {                     // úseky po stejném intervalu
+      // úseky po stejném intervalu: [od, do, interval]
+      const segs = [];
+      for (let h = 0; h < 24;) {
         let n = 1;
         while (h + n < 24 && hours[h + n] === hours[h]) n++;
-        const s = slot(hours[h]);
-        const from = h, to = h + n;
+        segs.push([h, h + n, hours[h]]); h += n;
+      }
+      const track = el("div", { className: "sched-track" }), bar = el("div", { className: "sched-bar" });
+      const btns = segs.map(([from, to, v]) => {
+        const s = slot(v);
         const b = el("button", { type: "button", className: seg && seg[0] === from && seg[1] === to ? "on" : "",
-                                 style: `flex:${n};background:${s.color}`, title: `${from}:00–${to}:00 · ${s.label}${advanced ? "" : " (klikni pro změnu)"}`,
-                                 textContent: n >= 2 ? s.short : "" });
-        b.setAttribute("aria-label", `${from}:00 až ${to}:00, ${s.label}`);
+                                 style: `flex:${to - from};background:${s.color}`, title: `${from}:00–${to}:00 · ${s.label}`,
+                                 textContent: to - from >= 2 ? s.short : "" });
+        b.setAttribute("aria-label", `${from}:00 až ${to}:00, ${s.label}${advanced ? "" : " – vybrat úsek"}`);
         b.onclick = () => { if (advanced) return; seg = seg && seg[0] === from && seg[1] === to ? null : [from, to]; draw(); };
         bar.append(b);
-        h += n;
-      }
-      box.append(bar, el("div", { className: "sched-axis" }, ...[0, 3, 6, 9, 12, 15, 18, 21, 24].map(x => el("span", { textContent: x }))));
+        return b;
+      });
+      track.append(bar);
+      // hranice mezi úseky: táhnout myší/prstem (po hodinách), šipky na klávesnici; úsek stažený na 0 zmizí
+      const apply = () => { const hs = []; segs.forEach(([a, b, v]) => { for (let h = a; h < b; h++) hs[h] = v; }); rules = hoursToRules(hs); seg = null; changed(); };
+      const relabel = i => { const [a, b, v] = segs[i]; btns[i].style.flex = b - a; btns[i].textContent = b - a >= 2 ? slot(v).short : "";
+                             btns[i].style.display = b > a ? "" : "none"; };
+      if (!advanced) segs.slice(0, -1).forEach((_, i) => {
+        const hd = el("div", { className: "sched-hd", tabIndex: 0, title: "Táhni pro posun hranice (šipky = po hodině)" });
+        hd.setAttribute("role", "slider"); hd.setAttribute("aria-label", "Hranice úseků");
+        hd.setAttribute("aria-valuemin", segs[i][0]); hd.setAttribute("aria-valuemax", segs[i + 1][1]);
+        const tip = el("span", { className: "sched-tip" });
+        hd.append(tip);
+        const place = h => { hd.style.left = (h / 24 * 100) + "%"; tip.textContent = `${h}:00`; hd.setAttribute("aria-valuenow", h); };
+        const move = h => {
+          h = Math.max(segs[i][0], Math.min(segs[i + 1][1], h));
+          segs[i][1] = segs[i + 1][0] = h; relabel(i); relabel(i + 1); place(h);
+        };
+        place(segs[i][1]);
+        hd.onpointerdown = e => {
+          e.preventDefault(); hd.setPointerCapture(e.pointerId); hd.classList.add("drag");
+          const r = bar.getBoundingClientRect(), start = segs[i][1];
+          hd.onpointermove = ev => move(Math.round((ev.clientX - r.left) / r.width * 24));
+          hd.onpointerup = () => { hd.onpointermove = hd.onpointerup = null; hd.classList.remove("drag"); if (segs[i][1] !== start) apply(); };
+        };
+        hd.onkeydown = e => {
+          const d = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
+          if (!d) return;
+          e.preventDefault(); move(segs[i][1] + d); apply();
+          requestAnimationFrame(() => box.querySelectorAll(".sched-hd")[Math.min(i, box.querySelectorAll(".sched-hd").length - 1)]?.focus());
+        };
+        track.append(hd);
+      });
+      box.append(track, el("div", { className: "sched-axis" }, ...[0, 3, 6, 9, 12, 15, 18, 21, 24].map(x => el("span", { textContent: x }))));
       const used = [...new Set(hours)];
       box.append(el("div", { className: "sched-legend" }, ...SLOTS.filter(s => used.includes(s.v)).map(s =>
         el("span", {}, el("i", { style: "background:" + s.color }), s.label))));
@@ -299,9 +344,27 @@ function scheduleEditor(p, onChange) {
       sel.onchange = () => { const hs = [...hours]; for (let h = from; h < to; h++) hs[h] = +sel.value; rules = hoursToRules(hs); seg = null; changed(); };
       const close = el("button", { className: "txtbtn", type: "button", title: "Zavřít" }, icon("close"));
       close.onclick = () => { seg = null; draw(); };
-      box.append(el("div", { className: "sched-seg" }, el("b", { textContent: `${from}:00–${to - 1}:59` }), sel, close));
+      // rozdělit = přidat úsek (druhá půlka dostane jiný interval, aby byla vidět); smazat = sloučit se sousedem
+      const split = el("button", { className: "txtbtn", type: "button", disabled: to - from < 2, title: "Rozdělit úsek na dva (přidat úsek)" },
+                       icon("table-split-cell"), "Rozdělit");
+      split.onclick = () => {
+        const mid = from + Math.floor((to - from) / 2), v = hours[from];
+        const other = SLOTS.find(s => s.v !== v && s.v !== hours[to] && s.v)?.v ?? 3600;
+        const hs = [...hours]; for (let h = mid; h < to; h++) hs[h] = other;
+        rules = hoursToRules(hs); seg = [mid, to]; custom = true; onChange(); draw();
+      };
+      const whole = from === 0 && to === 24;
+      const del = el("button", { className: "txtbtn danger", type: "button", disabled: whole, title: "Smazat úsek (převezme interval souseda)" },
+                     icon("delete-outline"), "Smazat");
+      del.onclick = () => {
+        const v = from > 0 ? hours[from - 1] : hours[to];
+        const hs = [...hours]; for (let h = from; h < to; h++) hs[h] = v;
+        rules = hoursToRules(hs); seg = null; changed();
+      };
+      box.append(el("div", { className: "sched-seg" }, el("b", { textContent: `${from}:00–${to - 1}:59` }), sel, split, del, close));
       requestAnimationFrame(() => sel.focus());
-    } else box.append(el("div", { className: "help", style: "margin:-4px 0 8px" }, "Klikni na úsek pruhu a změň jeho interval, nebo uprav jednotlivé hodiny níže."));
+    } else box.append(el("div", { className: "help", style: "margin:-4px 0 8px" },
+      "Hranice mezi úseky táhni myší. Klikem na úsek změníš interval, rozdělíš ho (přidáš úsek) nebo smažeš."));
     const all = el("select");
     all.append(el("option", { value: "", textContent: "nastavit všechny hodiny…" }), ...SLOTS.map(s => el("option", { value: s.v, textContent: s.label })));
     all.onchange = () => { if (all.value === "") return; rules = hoursToRules(Array(24).fill(+all.value)); changed(); };

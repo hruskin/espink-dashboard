@@ -183,6 +183,10 @@ class Schedule:
             return FALLBACK_SLEEP
         return int(max(MIN_SLEEP, (nxt - now).total_seconds()))
 
+    def interval_at(self, now: datetime) -> int | None:
+        """Interval okna, které platí teď (None = mimo okna, deska spí do dalšího)."""
+        return next((w.interval for w in self.windows if w.contains(now)), None)
+
     def next_start(self, now: datetime) -> datetime | None:
         best = None
         for offset in range(0, 8):

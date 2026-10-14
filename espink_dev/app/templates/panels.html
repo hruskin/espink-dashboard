@@ -52,13 +52,25 @@
   .withbtn > :first-child { flex: 1; min-width: 0; }
   .help { font-size: 12px; color: var(--muted); margin-top: 4px; }
   .help code { background: var(--hover); padding: 0 3px; border-radius: 3px; }
-  .foot { display: flex; gap: 8px; align-items: center; border-top: 1px dashed var(--line); padding-top: 10px; }
+  .foot { display: flex; gap: 8px; align-items: center; border-top: 1px dashed var(--line); padding: 10px 0 0; flex-wrap: wrap; }
+  /* rozepsaný panel: lišta s Uložit/Zahodit zůstane vidět dole u okna */
+  .card.dirty .foot { position: sticky; bottom: 0; z-index: 5; background: var(--card); padding-bottom: 10px; box-shadow: 0 -6px 8px -6px rgba(0,0,0,.15); }
+  .foot .unsaved { display: none; color: var(--muted); font-size: 13px; gap: 6px; align-items: center; }
+  .card.dirty .foot .unsaved { display: inline-flex; }
+  .foot .unsaved::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+  .chip.act { cursor: pointer; border: 0; font: inherit; font-size: 12px; }
+  .thumbbtn { border: 0; padding: 0; background: none; cursor: zoom-in; align-self: start; }
+  dialog { border: 0; border-radius: 12px; background: var(--card); color: var(--ink); padding: 20px; max-width: min(520px, calc(100vw - 32px)); box-shadow: 0 10px 40px rgba(0,0,0,.4); }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  .dlg-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  .zoom img { width: 480px; max-width: 100%; height: auto; display: block; border: 1px solid var(--line); background: #fff; image-rendering: pixelated; }
   .foot .sp { flex: 1; }
   .txtbtn { background: none; border: 0; color: var(--primary); font-weight: 500; padding: 8px 10px; border-radius: 4px; display: inline-flex; gap: 4px; align-items: center; text-decoration: none; }
   .txtbtn:hover { background: var(--hover); }
   .txtbtn.danger { color: var(--err); }
   .primary { background: var(--primary); color: var(--on-primary); border: 0; border-radius: 4px; padding: 9px 18px; font-weight: 500; }
   .primary:disabled { background: var(--line); color: var(--muted); cursor: default; }
+  .primary.danger { background: var(--err); }
   .pend { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 8px; align-items: end; padding: 12px 16px; border-bottom: 1px solid var(--line); }
   .pend:last-child { border-bottom: 0; }
   .pend .f { margin: 0; }
@@ -75,16 +87,22 @@
   .sched-head b { font-weight: 500; }
   .sched-head small { color: var(--muted); }
   .sched-bar { display: flex; height: 34px; border-radius: 6px; overflow: hidden; }
-  .sched-bar > div { color: #fff; font-size: 11px; font-weight: 500; display: flex; align-items: center; justify-content: center;
+  .sched-bar > button { color: #fff; font-size: 12px; font-weight: 500; display: flex; align-items: center; justify-content: center; border: 0; padding: 0; cursor: pointer;
                      white-space: nowrap; overflow: hidden; border-right: 1px solid var(--card); min-width: 0; }
-  .sched-bar > div:last-child { border-right: 0; }
+  .sched-bar > button:last-child { border-right: 0; }
+  .sched-bar > button:hover, .sched-bar > button.on { filter: brightness(1.25); box-shadow: inset 0 -3px 0 #fff; }
+  .sched-seg { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; margin: -4px 0 10px; padding: 8px 10px; border-radius: 8px; background: var(--hover); }
+  .sched-seg select { width: auto; padding: 6px 8px; }
+  details.sched-more > summary { cursor: pointer; color: var(--primary); font-weight: 500; font-size: 13px; padding: 4px 0; }
+  details.sched-more[open] > summary { margin-bottom: 8px; }
   .sched-axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin: 2px 0 6px; font-variant-numeric: tabular-nums; }
   .sched-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: var(--muted); margin-bottom: 10px; }
   .sched-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
   .sched-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; }
   .sched-tools select { width: auto; padding: 6px 8px; }
-  .sched-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
-  @media (max-width: 560px) { .sched-grid { grid-template-columns: 1fr; } }
+  /* hodiny 0–23 v pořadí: na počítači dva sloupce (0–11 | 12–23), na telefonu pod sebou */
+  .sched-grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(12, auto); grid-auto-flow: column; gap: 6px 16px; }
+  @media (max-width: 560px) { .sched-grid { grid-template-columns: 1fr; grid-template-rows: none; grid-auto-flow: row; } }
   .sched-grid label { display: grid; grid-template-columns: 92px 1fr; align-items: center; font-size: 13px; font-variant-numeric: tabular-nums; }
   .sched-grid select { padding: 6px 8px; border-left-width: 6px; }
   .sched-note { font-size: 12px; color: var(--muted); margin: 6px 0; }
@@ -113,6 +131,19 @@ const $ = s => document.querySelector(s);
 const el = (t, a = {}, ...k) => { const e = Object.assign(document.createElement(t), a); k.forEach(x => x != null && e.append(x)); return e; };
 const icon = n => el("i", { className: "mdi mdi-" + n });
 let DATA = null, dirty = new Set();
+
+// potvrzovací dialog místo confirm() (v panelu HA nativní okna působí cize)
+function ask(title, text, okLabel, danger) {
+  return new Promise(res => {
+    const ok = el("button", { className: danger ? "primary danger" : "primary", textContent: okLabel });
+    const no = el("button", { className: "txtbtn", textContent: "Zrušit" });
+    const d = el("dialog", {}, el("h3", { textContent: title, style: "margin:0 0 8px" }), el("p", { textContent: text, style: "margin:0" }),
+                 el("div", { className: "dlg-foot" }, no, ok));
+    const done = v => { d.close(); d.remove(); res(v); };
+    ok.onclick = () => done(true); no.onclick = () => done(false); d.oncancel = () => done(false);
+    document.body.append(d); d.showModal(); ok.focus();
+  });
+}
 
 let tt;
 function toast(text) { const t = $("#toast"); t.textContent = text; t.classList.add("show"); clearTimeout(tt); tt = setTimeout(() => t.classList.remove("show"), 5000); }
@@ -145,13 +176,13 @@ const field = (label, input, help) => el("label", { className: "f" }, el("span",
 // Server dál dostává pravidla „HH:MM-HH:MM=sekundy“ (spojené stejné sousední hodiny);
 // probuzení jsou zarovnaná na násobky intervalu (5 min = :00, :05, …; hodina = v :00).
 const SLOTS = [
-  { v: 300, label: "každých 5 min", short: "à 5 min", color: "#0288d1" },
-  { v: 600, label: "každých 10 min", short: "à 10 min", color: "#00838f" },
-  { v: 900, label: "každých 15 min", short: "à 15 min", color: "#6a4fc8" },
-  { v: 1200, label: "každých 20 min", short: "à 20 min", color: "#8e44ad" },
-  { v: 1800, label: "každých 30 min", short: "à 30 min", color: "#689f38" },
-  { v: 3600, label: "1× za hodinu (v :00)", short: "v :00", color: "#388e3c" },
-  { v: 0, label: "nebudit", short: "spí", color: "#8d8d8d" },
+  { v: 300, label: "každých 5 min", short: "5 min", color: "#0d47a1" },
+  { v: 600, label: "každých 10 min", short: "10 min", color: "#0277bd" },
+  { v: 900, label: "každých 15 min", short: "15 min", color: "#4527a0" },
+  { v: 1200, label: "každých 20 min", short: "20 min", color: "#00695c" },
+  { v: 1800, label: "každých 30 min", short: "30 min", color: "#2e7d32" },
+  { v: 3600, label: "1× za hodinu (v :00)", short: "1×/h", color: "#5d4037" },
+  { v: 0, label: "nebudit", short: "spí", color: "#616161" },
 ];
 const slot = v => SLOTS.find(s => s.v === v) || SLOTS[SLOTS.length - 1];
 const RULE_RE = /^\s*(?:(\d)(?:-(\d))?\s+)?(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})\s*=\s*(\d+)\s*$/;
@@ -199,6 +230,7 @@ function scheduleEditor(p, onChange) {
   const inherited = !p.schedule.length;            // panel zatím jede podle výchozího rozvrhu add-onu
   let rules = inherited ? [...DATA.default_schedule] : [...p.schedule];
   let custom = !inherited, advanced = rulesToHours(rules) === null;
+  let seg = null, gridOpen = false, convert = false;   // vybraný úsek pruhu, rozbalená mřížka, dotaz na převod
   const box = el("div", { className: "sched" });
   const changed = () => { custom = true; onChange(); draw(); };
   function draw() {
@@ -207,16 +239,13 @@ function scheduleEditor(p, onChange) {
     box.replaceChildren();
     const count = hours ? Math.round(wakesPerDay(hours)) : null;
     const toggle = el("button", { className: "txtbtn", type: "button", style: "padding:2px 6px" },
-      icon(advanced ? "view-grid-outline" : "code-tags"), advanced ? "Hodiny" : "Pokročilé (pravidla)");
+      icon(advanced ? "view-grid-outline" : "code-tags"), advanced ? "Po hodinách" : "Pokročilé (pravidla)");
     toggle.onclick = () => {
       if (advanced && !rulesToHours(rules)) {
-        const approx = rulesToHours(rules, true);
-        if (!approx) { toast("Nejdřív oprav pravidla – některý řádek nedává smysl."); return; }
-        if (!confirm("Rozvrh obsahuje dny v týdnu nebo minuty, hodinová mřížka je nezná. Převést na hodiny? " +
-                     "Každá hodina dostane nejčastější interval, který v ní platí (podle pruhu nahoře).")) return;
-        rules = hoursToRules(approx); custom = true; onChange();
+        if (!rulesToHours(rules, true)) { toast("Nejdřív oprav pravidla – některý řádek nedává smysl."); return; }
+        convert = true; draw(); return;          // zeptat se přímo v rozvrhu
       }
-      advanced = !advanced; draw();
+      advanced = !advanced; seg = null; draw();
     };
     box.append(el("div", { className: "sched-head" },
       el("div", {}, el("b", { textContent: "Průběh dne" }), " ",
@@ -228,13 +257,28 @@ function scheduleEditor(p, onChange) {
         let n = 1;
         while (h + n < 24 && hours[h + n] === hours[h]) n++;
         const s = slot(hours[h]);
-        bar.append(el("div", { style: `flex:${n};background:${s.color}`, title: `${h}:00–${h + n}:00 ${s.label}`, textContent: n >= 2 ? s.short : "" }));
+        const from = h, to = h + n;
+        const b = el("button", { type: "button", className: seg && seg[0] === from && seg[1] === to ? "on" : "",
+                                 style: `flex:${n};background:${s.color}`, title: `${from}:00–${to}:00 · ${s.label}${advanced ? "" : " (klikni pro změnu)"}`,
+                                 textContent: n >= 2 ? s.short : "" });
+        b.setAttribute("aria-label", `${from}:00 až ${to}:00, ${s.label}`);
+        b.onclick = () => { if (advanced) return; seg = seg && seg[0] === from && seg[1] === to ? null : [from, to]; draw(); };
+        bar.append(b);
         h += n;
       }
       box.append(bar, el("div", { className: "sched-axis" }, ...[0, 3, 6, 9, 12, 15, 18, 21, 24].map(x => el("span", { textContent: x }))));
       const used = [...new Set(hours)];
       box.append(el("div", { className: "sched-legend" }, ...SLOTS.filter(s => used.includes(s.v)).map(s =>
         el("span", {}, el("i", { style: "background:" + s.color }), s.label))));
+    }
+    if (convert) {
+      const yes = el("button", { className: "primary", type: "button", textContent: "Převést na hodiny" });
+      const no = el("button", { className: "txtbtn", type: "button", textContent: "Ponechat pravidla" });
+      yes.onclick = () => { rules = hoursToRules(rulesToHours(rules, true)); custom = true; convert = false; advanced = false; onChange(); draw(); };
+      no.onclick = () => { convert = false; draw(); };
+      box.append(el("div", { className: "sched-note warn" },
+        "Rozvrh obsahuje dny v týdnu nebo minuty, hodinová mřížka je nezná. Při převodu dostane každá hodina nejčastější interval, který v ní platí – jako pruh nahoře.",
+        el("div", { className: "dlg-foot", style: "margin-top:8px" }, no, yes)));
     }
     if (advanced) {
       const ta = el("textarea", { value: rules.join("\n"), spellcheck: false, rows: Math.max(4, rules.length + 1) });
@@ -248,10 +292,21 @@ function scheduleEditor(p, onChange) {
       else if (!exact && custom) box.append(el("div", { className: "sched-note", textContent: "Rozvrh obsahuje dny v týdnu, minuty nebo jiný interval – v mřížce po hodinách ho nejde přesně zobrazit, pruh je přibližný." }));
       return;
     }
+    if (seg) {   // úprava vybraného úseku pruhu
+      const [from, to] = seg, sel = el("select");
+      SLOTS.forEach(s => sel.append(el("option", { value: s.v, textContent: s.label, selected: s.v === hours[from] })));
+      sel.onchange = () => { const hs = [...hours]; for (let h = from; h < to; h++) hs[h] = +sel.value; rules = hoursToRules(hs); seg = null; changed(); };
+      const close = el("button", { className: "txtbtn", type: "button", title: "Zavřít" }, icon("close"));
+      close.onclick = () => { seg = null; draw(); };
+      box.append(el("div", { className: "sched-seg" }, el("b", { textContent: `${from}:00–${to - 1}:59` }), sel, close));
+      requestAnimationFrame(() => sel.focus());
+    } else box.append(el("div", { className: "help", style: "margin:-4px 0 8px" }, "Klikni na úsek pruhu a změň jeho interval, nebo uprav jednotlivé hodiny níže."));
     const all = el("select");
     all.append(el("option", { value: "", textContent: "nastavit všechny hodiny…" }), ...SLOTS.map(s => el("option", { value: s.v, textContent: s.label })));
     all.onchange = () => { if (all.value === "") return; rules = hoursToRules(Array(24).fill(+all.value)); changed(); };
-    box.append(el("div", { className: "sched-tools" }, all));
+    const more = el("details", { className: "sched-more", open: gridOpen }, el("summary", { textContent: "Upravit po hodinách" }));
+    more.ontoggle = () => { gridOpen = more.open; };
+    more.append(el("div", { className: "sched-tools" }, all));
     const grid = el("div", { className: "sched-grid" });
     const row = h => {
       const sel = el("select", { style: "border-left-color:" + slot(hours[h]).color });
@@ -259,8 +314,9 @@ function scheduleEditor(p, onChange) {
       sel.onchange = () => { const hs = [...hours]; hs[h] = +sel.value; rules = hoursToRules(hs); changed(); };
       return el("label", {}, el("span", { textContent: `${h}:00–${h}:59` }), sel);
     };
-    for (let i = 0; i < 12; i++) grid.append(row(i), row(i + 12));   // dva sloupce: dopoledne | odpoledne
-    box.append(grid);
+    for (let h = 0; h < 24; h++) grid.append(row(h));   // pořadí 0–23, sloupce dělá CSS
+    more.append(grid);
+    box.append(more);
     if (!hours.some(Boolean)) box.append(el("div", { className: "sched-note warn", textContent: "Žádná hodina nebudí – panel by použil výchozí rozvrh add-onu." }));
   }
   draw();
@@ -270,7 +326,7 @@ function scheduleEditor(p, onChange) {
 function panelCard(p) {
   const d = p.device || {};
   const chips = el("div", { className: "chips" },
-    p.allowed ? null : el("span", { className: "chip bad", title: "MAC není mezi povolenými zařízeními – deska nedostane obrázek" }, icon("lock-alert"), "nepovolená"),
+    p.allowed ? null : allowChip(p),
     el("span", { className: "chip" }, icon("clock-outline"), ago(d.last_seen)),
     d.battery != null ? el("span", { className: "chip" + (d.battery <= 15 ? " warn" : "") }, icon("battery"), `${d.battery} % · ${d.voltage} V`) : null,
     d.rssi != null ? el("span", { className: "chip" }, icon("wifi"), `${d.rssi} dBm`) : null,
@@ -285,19 +341,20 @@ function panelCard(p) {
   lay.onchange = () => { edit.href = "./?l=" + encodeURIComponent(lay.value); };
   const sensor = el("input", { type: "text", value: p.battery_sensor, placeholder: "prázdné = nezapisovat", spellcheck: false });
   sensor.setAttribute("list", "dl-sensor");
-  const sug = el("button", { className: "txtbtn", type: "button", title: "Navrhnout podle názvu panelu" }, icon("auto-fix"));
+  const sug = el("button", { className: "txtbtn", type: "button", title: "Navrhnout název senzoru podle názvu panelu" }, icon("auto-fix"), "Navrhnout");
   sug.onclick = () => { sensor.value = suggest(name.value.trim() || p.name); mark(); };
   const sched = scheduleEditor(p, () => mark());
-  // otočení obrazu podle toho, jak je panel pověšený (rozvržení je na výšku)
+  // otočení obrazu podle toho, jak je panel pověšený: obraz na výšku, 90° ↔ 270° = vzhůru nohama
+  const flip = DATA.default_rotate === 270 ? 90 : 270;
   const rot = el("select");
-  // obraz na výšku: 90° a 270° se liší právě otočením o 180° (vzhůru nohama)
-  const flip = DATA.default_rotate === 270 ? 90 : 270, normal = flip === 270 ? 90 : 270;
-  for (const [v, t] of [["", `normálně (výchozí, ${DATA.default_rotate}°)`], [String(flip), `otočeno o 180° (${flip}°)`],
-                        [String(normal), `normálně, pevně (${normal}°)`]])
-    rot.append(el("option", { value: v, textContent: t, selected: String(p.rotate ?? "") === v }));
+  rot.append(el("option", { value: "", textContent: "Normálně" }),
+             el("option", { value: String(flip), textContent: "Vzhůru nohama (otočeno o 180°)", selected: (p.rotate ?? DATA.default_rotate) === flip }));
   const save = el("button", { className: "primary", textContent: "Uložit", disabled: true });
+  const discard = el("button", { className: "txtbtn", textContent: "Zahodit", hidden: true });
   const del = el("button", { className: "txtbtn danger" }, icon("delete-outline"), "Odebrat");
-  const mark = () => { save.disabled = false; dirty.add(p.mac); };
+  let card = null;
+  const mark = () => { save.disabled = false; discard.hidden = false; dirty.add(p.mac); card?.classList.add("dirty"); };
+  discard.onclick = () => { dirty.delete(p.mac); render(); toast("Změny panelu zahozeny."); };
   [name, lay, sensor, rot].forEach(i => i.addEventListener("input", mark));
 
   save.onclick = async () => {
@@ -309,23 +366,43 @@ function panelCard(p) {
     } catch (e) { save.disabled = false; toast("Nelze uložit: " + e.message); }
   };
   del.onclick = async () => {
-    if (!confirm(`Odebrat panel ${p.name}? Jeho deska (${p.mac}) přestane dostávat obrázek, dokud ji znovu nepovolíš.`)) return;
+    if (!await ask(`Odebrat panel ${p.name}?`, `Deska ${p.mac} přestane dostávat obrázek. Až se znovu ozve, objeví se v Nových deskách a půjde znovu povolit.`, "Odebrat", true)) return;
     try { DATA = await post("panels/delete", { mac: p.mac }); dirty.delete(p.mac); render(); toast(`Panel ${p.name} odebrán.`); }
     catch (e) { toast("Nelze odebrat: " + e.message); }
   };
-  const img = el("img", { className: "thumb", src: `preview.png?panel=${encodeURIComponent(p.mac)}&${p.content_ts}`, alt: "Náhled panelu " + p.name, loading: "lazy" });
-  return el("section", { className: "card" },
+  const src = `preview.png?panel=${encodeURIComponent(p.mac)}&${p.content_ts}`;
+  const img = el("img", { className: "thumb", src, alt: "Náhled panelu " + p.name, loading: "lazy" });
+  const zoom = el("button", { className: "thumbbtn", type: "button", title: "Zobrazit náhled ve skutečné velikosti" }, img);
+  zoom.onclick = () => {
+    const d = el("dialog", { className: "zoom" }, el("img", { src, alt: "Náhled panelu " + p.name }),
+      el("div", { className: "dlg-foot" }, el("a", { className: "txtbtn", href: "status", textContent: "Stav panelů" }),
+        el("button", { className: "primary", textContent: "Zavřít", onclick: () => { d.close(); d.remove(); } })));
+    d.onclick = e => { if (e.target === d) { d.close(); d.remove(); } };
+    document.body.append(d); d.showModal();
+  };
+  card = el("section", { className: "card" + (dirty.has(p.mac) ? " dirty" : "") },
     el("div", { className: "phead" }, icon("tablet"), el("div", {}, el("b", { textContent: p.name }), el("br"), el("small", { textContent: p.mac })), chips),
-    el("div", { className: "pbody" }, el("a", { href: "status", title: "Stav panelu" }, img), el("div", {},
+    el("div", { className: "pbody" }, zoom, el("div", {},
       el("div", { className: "grid2" }, field("Název", name), field("Rozvržení", el("div", { className: "withbtn" }, lay, edit))),
-      field("Otočení obrazu", rot, el("div", { className: "help", textContent: "Je-li obraz na panelu vzhůru nohama, zvol „otočeno o 180°“. Projeví se při příštím probuzení desky." })),
+      field("Otočení obrazu", rot, el("div", { className: "help", textContent: "Je-li obraz na panelu vzhůru nohama, zvol „Vzhůru nohama“. Projeví se při příštím probuzení desky." })),
       field("Senzor baterie v HA", el("div", { className: "withbtn" }, sensor, sug),
             el("div", { className: "help", textContent: DATA.mqtt
-        ? "Panel je v HA zařízení (MQTT) se senzory baterie, napětí, signálu, doby překreslení… Tohle je entity ID baterie – platí jen při prvním vytvoření, potom ho měň v HA."
-        : "Add-on ho vytvoří a plní přes REST API (napětí, signál, délka překreslení… v atributech)." })),
+        ? "Panel má v Home Assistantu vlastní zařízení se stavem baterie, signálu a překreslení. Tady je jen název (ID) senzoru baterie – použije se při prvním vytvoření, později ho přejmenuješ přímo v HA. Nech prázdné, pokud stav v HA nechceš."
+        : "Pod tímto názvem add-on zapisuje stav baterie do Home Assistantu. Nech prázdné, pokud ho nepotřebuješ." })),
       el("div", { className: "f" }, el("span", { textContent: "Rozvrh probouzení" }), sched.el,
         el("div", { className: "help", textContent: "Deska se jen zeptá na nový obsah; překresluje se, jen když se změnil. Méně probuzení = delší výdrž baterie." })),
-      el("div", { className: "foot" }, save, el("span", { className: "sp" }), del))));
+      el("div", { className: "foot" }, save, discard, el("span", { className: "unsaved", textContent: "Neuložené změny" }), el("span", { className: "sp" }), del))));
+  return card;
+}
+
+// nepovolená deska: povolit přímo z karty (klíč desky se vezme z jejího posledního pokusu o spojení)
+function allowChip(p) {
+  const b = el("button", { className: "chip bad act", type: "button", title: "Deska nedostává obrázek – povolit" }, icon("lock-alert"), "nepovolená · Povolit");
+  b.onclick = async () => {
+    try { DATA = await post("panels/approve", { mac: p.mac }); render(); toast(`Deska panelu ${p.name} povolena.`); }
+    catch (e) { toast("Nelze povolit: " + e.message); }
+  };
+  return b;
 }
 
 function pendingRow(p) {

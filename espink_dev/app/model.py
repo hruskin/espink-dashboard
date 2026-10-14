@@ -80,6 +80,26 @@ def num(value, decimals=1) -> str | None:
     return s.replace(".", ",").replace("-", "−")
 
 
+# Hystereze zaokrouhlených hodnot: zobrazená hodnota se změní, až se skutečná vzdálí
+# o ¾ kroku (u celých stupňů: z 11 na 12 až od 11,75, zpět pod 11,25) – hodnota na
+# hranici zaokrouhlení pak nepřeskakuje a nevynucuje překreslení. Paměť (co je na
+# displeji) má každý panel svou; během build() je v _memory, náhled ji nepoužívá.
+HYSTERESIS = 0.75
+_memory: dict | None = None
+
+
+def hnum(key: str, value, decimals: int = 1) -> str | None:
+    v = fnum(value)
+    if v is None:
+        return None
+    if _memory is not None and key:
+        k = f"{key}|{decimals}"
+        prev = _memory.get(k)
+        v = prev if prev is not None and abs(v - prev) < HYSTERESIS * 10 ** -decimals else round(v, decimals)
+        _memory[k] = v
+    return num(v, decimals)
+
+
 def fnum(value) -> float | None:
     try:
         return float(value)
@@ -136,11 +156,11 @@ def _weather(raw: dict, b: dict, now: datetime, tz) -> dict:
 
     out = {
         "icon": WEATHER_ICONS.get(cond or "", "weather-cloudy-alert"),
-        "temp": num(temp, b.get("temp_decimals", 1)),
-        "humidity": num(hum, 0),
+        "temp": hnum(f"temp:{b.get('temperature') or b.get('weather')}", temp, b.get("temp_decimals", 1)),
+        "humidity": hnum(f"hum:{b.get('humidity') or b.get('weather')}", hum, 0),
         "rain": num(rain) if rain and rain >= 0.1 else None,
-        "pressure": num(st("pressure"), 0),
-        "indoor": num(st("indoor"), b.get("temp_decimals", 1)),
+        "pressure": hnum(f"press:{b.get('pressure')}", st("pressure"), 0),
+        "indoor": hnum(f"indoor:{b.get('indoor')}", st("indoor"), b.get("temp_decimals", 1)),
         "min": None,
         "max": None,
         "minmax_label": "zítra" if minmax_day != today else "",
@@ -517,7 +537,7 @@ def format_state(s: dict | None, attribute: str = "", decimals: int = 1, maxlen:
     if v is not None:
         if isinstance(raw, int):  # celočíselný atribut (jas, počet…) bez desetinných míst
             decimals = 0
-        out.update(value=num(v, decimals), number=v,
+        out.update(value=hnum(f"{s.get('entity_id', '')}:{attribute}", v, decimals), number=v,
                    unit="" if attribute else (a.get("unit_of_measurement") or ""))
         return out
     text = str(raw)
@@ -617,7 +637,18 @@ def _header(raw: dict, b: dict, layout: dict, now: datetime, tz) -> dict:
     }
 
 
-def build(raw: dict, layout: dict, device: dict, now: datetime, worst: bool = False) -> dict:
+def build(raw: dict, layout: dict, device: dict, now: datetime, worst: bool = False,
+          memory: dict | None = None) -> dict:
+    """memory: hodnoty zobrazené na panelu (hystereze zaokrouhlení); None = bez hystereze."""
+    global _memory
+    _memory = memory
+    try:
+        return _build(raw, layout, device, now, worst)
+    finally:
+        _memory = None
+
+
+def _build(raw: dict, layout: dict, device: dict, now: datetime, worst: bool = False) -> dict:
     """Model zobrazení: bloky s hotovými daty a obdélníkem v px; obsah se přizpůsobí obdélníku.
     worst=True (jen náhled v editoru) vynutí upozornění v záhlaví a výluku v odjezdech."""
     tz = now.tzinfo

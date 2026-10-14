@@ -47,6 +47,11 @@ názvy jeho událostí se nezkracují, ale zalomí (nejvýš 8 řádků). Model 
 stejným fontem (Pillow) a podle toho, kolik událostí se vejde; agenda drží pořadí –
 od první události, která se nevejde, jde vše do „+N dalších“.
 
+**Zaokrouhlení s hysterezí:** teplota (volba „Desetinná místa teploty“ u počasí, 0 = celé
+stupně), vlhkost, tlak, Hodnota entity a položky patičky se zobrazují zaokrouhlené a nová
+hodnota se ukáže, až se skutečná vzdálí o ¾ kroku (z 11 °C na 12 °C až od 11,75 °C) –
+hodnota na hranici nepřeskakuje a nevynucuje překreslení. Paměť má každý panel svou.
+
 API (jen přes Ingress, `?id=` = rozvržení): `GET layout.json`, `POST layout/preview`
 (PNG), `POST layout` (uložení), `GET layout/history.json`, `POST layouts/create|rename|delete`,
 `GET panels.json`, `POST panels/save|approve|delete`, `GET preview.png?panel=MAC`.

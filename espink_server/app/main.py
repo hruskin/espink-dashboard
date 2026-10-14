@@ -75,6 +75,7 @@ class Target:
         self.next_text = ""       # „další obnova“ v aktuálním obrázku
         self.served_ts = None     # Timestamp, který deska naposledy dostala (= má na displeji)
         self.error = ""
+        self.shown: dict = {}     # zaokrouhlené hodnoty na displeji (hystereze, model.hnum)
         self.last_device_rebuild = 0.0
         self.last_publish = 0.0
         self.configure(cfg, default_schedule)
@@ -150,7 +151,7 @@ class Server:
                     if lay["id"] not in raws:
                         raws[lay["id"]] = await self.fetch_raw(lay, now)
                     device = t.device or await self.device_from_sensor(t.cfg["battery_sensor"])
-                    view = model.build(raws[lay["id"]], lay, device, now)
+                    view = model.build(raws[lay["id"]], lay, device, now, memory=t.shown)
                     digest = model.digest(view)
                     self.last_build = time.time()
                     if digest == t.view_hash and not force:

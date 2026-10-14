@@ -6,3 +6,5 @@ dev-layout.json
 layout-history.json
 dev-layouts.json
 dev-panels.json
+installer.json
+*.tmp

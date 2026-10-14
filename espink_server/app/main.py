@@ -228,7 +228,7 @@ class Server:
                 "sleep": sleep,
             }
             # Změna baterie o celý krok (5 %) se má projevit hned v tomto probuzení
-            # (nejvýš jednou za 30 s – jinak by šlo střídáním hodnot vynutit Chromium při každém požadavku)
+            # (nejvýš jednou za 30 s – jinak by šlo střídáním hodnot vynutit vykreslení při každém požadavku)
             if not t.payload or (model._device(t.device)["battery"] != old_bucket
                                  and time.time() - t.last_device_rebuild > 30):
                 t.last_device_rebuild = time.time()
@@ -596,7 +596,7 @@ Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
         draft = await self.read_layout(request, current)
         users = [t for t in self.targets.values() if self.layout_for(t)["id"] == current["id"]]
         t = users[0] if users else self.target(None)
-        async with self.draft_lock:  # Chromium je drahý – náhledy jeden po druhém
+        async with self.draft_lock:  # náhledy jeden po druhém
             now = now_local()
             try:
                 raw = await self.fetch_raw(draft, now)

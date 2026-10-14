@@ -34,6 +34,19 @@ rozvržení. Nová deska, která se ozve, se objeví v Panelech pod *Nové desky
 Dosavadní `layout.json` se převezme jako rozvržení „Hlavní“ a povolené desky jako
 panely (první s dosavadním `battery_sensor`). Panely jsou v `/data/panels.json`.
 
+**Vykreslování: Typst** (místo Chromia – obraz add-onu ~80 MB místo ~800 MB).
+Šablona `templates/dashboard.typ` dostane model zobrazení jako JSON a Typst ji
+přeloží rovnou do PNG (~0,05 s). Fonty jsou statické řezy v `app/static/fonts/typst`
+(vyrábí `tools/typst_fonts.py` z variabilních fontů v `tools/fonts`). Blok Šablona
+(HTML) ukáže jen text. **Emoji** z tabulky v `app/emoji.py` (👟, ♻️, ⚠️, 🎂…) se
+kreslí jako plné ikony MDI v barvě a velikosti textu; ostatní z fontu Noto Emoji
+(černobílý, část znaků jen obrysem). Tabulku jde doplnit (emoji → název ikony MDI).
+
+**Celý text událostí:** u kalendáře v bloku Události jde zaškrtnout „Celý text“ –
+názvy jeho událostí se nezkracují, ale zalomí (nejvýš 8 řádků). Model spočítá řádky
+stejným fontem (Pillow) a podle toho, kolik událostí se vejde; agenda drží pořadí –
+od první události, která se nevejde, jde vše do „+N dalších“.
+
 API (jen přes Ingress, `?id=` = rozvržení): `GET layout.json`, `POST layout/preview`
 (PNG), `POST layout` (uložení), `GET layout/history.json`, `POST layouts/create|rename|delete`,
 `GET panels.json`, `POST panels/save|approve|delete`, `GET preview.png?panel=MAC`.
@@ -93,8 +106,8 @@ Firmware s touto adresou připravíte podle `firmware/README.md`.
 - **Webové rozhraní** je dostupné jen přes Ingress (administrátoři HA); ukládání
   vyžaduje `application/json` (ochrana proti CSRF).
 - **ID entit** se kontrolují (`doména.objekt`), takže se jimi nedá zavolat jiné API HA.
-- **Chromium** běží pod neprivilegovaným uživatelem, bez sítě a stránka má
-  Content-Security-Policy, která blokuje skripty.
+- **Typst** dostává veškerý text jako data (řetězce v JSON), nikdy jako kód; běží
+  bez sítě a s prázdným kořenovým adresářem, takže nemůže číst soubory.
 - **Firmware** ignoruje pokyn k OTA aktualizaci ze serveru a konfigurační AP má
   vlastní heslo (viz `firmware/README.md`).
 

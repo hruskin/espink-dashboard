@@ -14,6 +14,17 @@ if [ ! -x "$VENV/bin/python" ]; then
   "$VENV/bin/pip" install -q aiohttp jinja2 pillow paho-mqtt
 fi
 
+# Typst stejné verze jako v add-onu (Alpine 3.21); statická binárka do .venv
+TYPST_VERSION=0.12.0
+if [ -z "${TYPST:-}" ]; then
+  if [ ! -x "$VENV/bin/typst" ]; then
+    echo "Stahuji Typst $TYPST_VERSION…"
+    curl -fsSL "https://github.com/typst/typst/releases/download/v$TYPST_VERSION/typst-$(uname -m)-unknown-linux-musl.tar.xz" \
+      | tar -xJ -C "$VENV/bin" --strip-components=1 "typst-$(uname -m)-unknown-linux-musl/typst"
+  fi
+  export TYPST="$VENV/bin/typst"
+fi
+
 if [ ! -f "$ENV_FILE" ]; then
   cat > "$ENV_FILE" <<'CFG'
 # Lokální náhled – NEcommitovat (je v .gitignore)

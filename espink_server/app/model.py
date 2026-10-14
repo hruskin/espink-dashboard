@@ -3,12 +3,15 @@
 Model obsahuje jen hotové řetězce/příznaky, které se opravdu vykreslí. Jeho hash
 proto přesně odpovídá tomu, zda se obrázek změnil (=> hlavička Timestamp).
 """
+import functools
 import hashlib
 import json
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 from jinja2.sandbox import SandboxedEnvironment
 from markupsafe import Markup
+from PIL import ImageFont
 
 import layout as layout_mod
 
@@ -41,12 +44,14 @@ LIPO_CURVE = [(4.20, 100), (4.15, 95), (4.11, 90), (4.08, 85), (4.02, 80), (3.98
               (3.80, 40), (3.79, 35), (3.77, 30), (3.75, 25), (3.73, 20), (3.71, 15),
               (3.69, 10), (3.61, 5), (3.27, 0)]
 
-# Výšky řádků agendy v px – musí sedět s CSS v šabloně (výšky bloků viz layout.py)
+# Výšky řádků agendy v px – musí sedět se šablonou dashboard.typ (výšky bloků viz layout.py)
 EVENTS_PAD = 6
 DAY_HEADER_H = 34
 EVENT_ROW_H = 29
 MORE_ROW_H = 22
 SEP_H = 1  # tenká čára mezi dny v agendě
+WRAP_MAX_LINES = 8  # „celý text“: nejvýš tolik řádků, delší název končí výpustkou
+FONTS = Path(__file__).resolve().parent / "static" / "fonts" / "typst"
 # Události se načítají až tak daleko dopředu; za hranicí event_days se přidávají
 # jen celé dny, které se ještě vejdou (aby sekce nezůstala prázdná)
 LOOKAHEAD_DAYS = 31
@@ -253,7 +258,66 @@ def calendar_icons(raw: dict, calendars: list) -> dict[str, str]:
     return out
 
 
-def _events(raw: dict, b: dict, now: datetime, tz, budget: int) -> dict:
+def agenda_metrics(cw: int, icons: bool) -> dict:
+    """Rozměry řádku události podle šířky obsahu – stejné prahy jako dashboard.typ."""
+    if cw <= 280:
+        dlw, tw, ss, gap, ci = 38, 44, 17, 4, False
+    elif cw <= 330:
+        dlw, tw, ss, gap, ci = 46, 44, 18, 5, icons
+    else:
+        dlw, tw, ss, gap, ci = 58, 50, 21, 8, icons
+    return {"dlw": dlw, "tw": tw, "ss": ss, "gap": gap, "ci": ci, "tags": cw > 330, "line_h": round(ss * 1.15)}
+
+
+@functools.lru_cache(maxsize=8)
+def _font(name: str, size: int):
+    return ImageFont.truetype(str(FONTS / name), size)
+
+
+def _text_width(text: str, font, size: int) -> float:
+    """Šířka textu v px; znaky mimo font (emoji, ikony) ~1,1 em – raději víc než méně."""
+    missing = font.getlength("\U0010FFFD")
+    total, run = 0.0, ""
+    for ch in text:
+        if ch.isascii() or font.getlength(ch) != missing:
+            run += ch
+        else:
+            total += font.getlength(run) + 1.1 * size
+            run = ""
+    return total + font.getlength(run)
+
+
+def wrap_lines(text: str, width: float, size: int, bold: bool) -> int:
+    """Kolik řádků zabere text při zalomení po slovech (jako Typst, linebreaks: simple)."""
+    font = _font(f"RobotoCondensed-{700 if bold else 500}.ttf", size)
+    width *= 0.98  # Pillow neumí kerning z GPOS – radši o kousek užší než Typst
+    lines, cur = 1, 0.0
+    space = font.getlength(" ")
+    for word in text.split():
+        w = _text_width(word, font, size)
+        if cur and cur + space + w > width:
+            lines += 1
+            cur = w
+        else:
+            cur = cur + space + w if cur else w
+    return lines
+
+
+def _row_height(it: dict, m: dict, cw: int) -> int:
+    """Výška řádku události; u kalendáře „celý text“ podle počtu řádků názvu."""
+    if not it.get("wrap"):
+        it["lines"] = 1
+        return EVENT_ROW_H
+    width = cw - m["dlw"] - m["tw"] - m["gap"] * 2 - ((18 + m["gap"]) if m["ci"] else 0)
+    if m["tags"] and it.get("label"):
+        tag = _text_width(it["label"], _font("Inter-700.ttf", 15), 15) + 12 + 2
+        width -= tag + m["gap"]
+    bold = bool(it.get("red") or it.get("allday"))
+    it["lines"] = min(WRAP_MAX_LINES, wrap_lines(it["summary"], width, m["ss"], bold))
+    return EVENT_ROW_H + (it["lines"] - 1) * m["line_h"]
+
+
+def _events(raw: dict, b: dict, now: datetime, tz, budget: int, cw: int) -> dict:
     EVENTS_HEIGHT = budget  # noqa: N806 – lokální rozpočet
     today = now.date()
     holidays = _special_days(raw, b.get("holiday_calendar"), tz)
@@ -267,7 +331,7 @@ def _events(raw: dict, b: dict, now: datetime, tz, budget: int) -> dict:
             if not n:
                 continue
             base = {"summary": n["summary"].strip() or "(bez názvu)", "label": cal.get("label") or "",
-                    "red": bool(cal.get("red")), "icon": icons.get(cal["entity"])}
+                    "red": bool(cal.get("red")), "icon": icons.get(cal["entity"]), "wrap": bool(cal.get("wrap"))}
             if n["all_day"]:
                 d = max(n["start"], today)
                 while d < n["end"] and d <= last:
@@ -282,7 +346,9 @@ def _events(raw: dict, b: dict, now: datetime, tz, budget: int) -> dict:
             elif st.date() <= last:
                 per_day.setdefault(st.date(), []).append({**base, "time": st.strftime("%H:%M"), "sort": st.strftime("%H:%M")})
 
+    m = agenda_metrics(cw, bool(icons))
     days, used, hidden = [], 0, 0
+    full = False  # první událost, která se nevešla – pozdější už se nepřeskakují dopředu
     for d in sorted(per_day):
         items = sorted(per_day[d], key=lambda x: (x["sort"], x["summary"]))
         # deduplikace (stejná událost ve více kalendářích)
@@ -301,21 +367,30 @@ def _events(raw: dict, b: dict, now: datetime, tz, budget: int) -> dict:
                             "time": "", "allday": True})
         if not uniq:
             continue
+        if full:
+            hidden += len(uniq)
+            continue
+        heights = [_row_height(it, m, cw) for it in uniq]
         # Agenda: Dnes má pruh, ostatní dny jen řádky oddělené tenkou čárou
         # čára jen mezi dvěma bloky řádků (stejně jako CSS .aday + .aday)
         head = DAY_HEADER_H if is_today else (SEP_H if days and days[-1]["rows"] else 0)
         if d > guaranteed:
             # navíc jen celé dny, které se vejdou (i s případným „+N dalších“)
-            if used + head + len(uniq) * EVENT_ROW_H + (MORE_ROW_H if hidden else 0) > EVENTS_HEIGHT:
+            if used + head + sum(heights) + (MORE_ROW_H if hidden else 0) > EVENTS_HEIGHT:
                 break
-        elif not is_today and used + head + EVENT_ROW_H > EVENTS_HEIGHT:
+        elif not is_today and used + head + heights[0] > EVENTS_HEIGHT:
             hidden += len(uniq)
+            full = True
             continue
         used += head
-        room = (EVENTS_HEIGHT - used) // EVENT_ROW_H
-        shown = uniq[:room]
-        used += len(shown) * EVENT_ROW_H
+        shown = []
+        for it, h in zip(uniq, heights):  # události v pořadí, dokud se vejdou
+            if used + h > EVENTS_HEIGHT:
+                break
+            shown.append(it)
+            used += h
         hidden += len(uniq) - len(shown)
+        full = len(shown) < len(uniq)
         days.append({
             "label": short_day_label(d, today),
             "date": f"{d.day}. {d.month}.",
@@ -325,7 +400,7 @@ def _events(raw: dict, b: dict, now: datetime, tz, budget: int) -> dict:
         })
     # „+N dalších“ potřebuje vlastní řádek – uvolnit místo poslední události, je-li třeba
     if hidden and used + MORE_ROW_H > EVENTS_HEIGHT and days and days[-1]["rows"]:
-        days[-1]["rows"].pop()
+        days[-1]["rows"].pop()  # každý řádek má aspoň EVENT_ROW_H > MORE_ROW_H
         hidden += 1
         if not days[-1]["rows"]:
             days.pop()
@@ -562,7 +637,7 @@ def build(raw: dict, layout: dict, device: dict, now: datetime, worst: bool = Fa
         elif t == "value":
             vb.update(_value(raw, b))
         elif t == "agenda":
-            vb.update(_events(raw, b, now, tz, inner_h - EVENTS_PAD))
+            vb.update(_events(raw, b, now, tz, inner_h - EVENTS_PAD, width - ll - 32))
         blocks.append(vb)
     return {"blocks": blocks, "device": _device(device)}
 

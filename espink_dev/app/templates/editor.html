@@ -732,7 +732,7 @@ function toggleHidden(b) {
 function remove(id) {
   const i = blocks.findIndex(b => b.id === id), b = blocks[i];
   blocks.splice(i, 1); openId = null; commit();
-  toast(`Blok ${name(b.type)} odebrán`, () => { blocks.splice(i, 0, b); commit(); });
+  toast(`Blok ${name(b.type)} odebrán`, () => travel(-1));
 }
 $("#stackBtn").onclick = () => {
   const vis = shown().sort((a, b) => a.y - b.y || a.x - b.x);
@@ -774,15 +774,15 @@ function openAddAt(r) {
 }
 function renderMenu() {
   const m = $("#addMenu"); m.replaceChildren();
-  const hasAgenda = blocks.some(b => b.type === "agenda");
+  const once = new Set(blocks.filter(b => b.type === "agenda" || b.type === "header").map(b => b.type));
   for (const [k, t] of Object.entries(TYPES)) {
-    const dis = k === "agenda" && hasAgenda;
+    const dis = once.has(k);
     const btn = el("button", { role: "menuitem", disabled: dis }, el("div", { className: "bicon" }, icon(t.icon)),
       el("div", {}, el("b", { textContent: name(k) }), el("small", { textContent: dis ? "Může být jen jednou" : t.desc })));
     btn.onclick = () => {
       closeMenu();
       const nb = newBlock(k);
-      let msg = "", undo = false;
+      let msg = "", undo = false, shrink = null;
       if (addAt) {
         Object.assign(nb, { x: addAt.x, y: addAt.y, w: addAt.w, h: Math.min(addAt.h, Math.max(nb.h, minOf(k)[1])) });
         if (!fits(nb)) nb.h = addAt.h;
@@ -790,13 +790,17 @@ function renderMenu() {
       } else {
         const spot = findSpot(k, nb.w, nb.h), ag = shown().find(b => b.type === "agenda");
         if (spot) { Object.assign(nb, spot); msg = `Blok ${name(k)} vložen na volné místo (${fmtPos(nb)}).`; }
-        else if (ag && ag.h - nb.h >= minOf("agenda")[1]) {   // Události jsou pružné: uberou místo novému bloku
-          ag.h -= nb.h; Object.assign(nb, { x: ag.x, w: ag.w, y: ag.y + ag.h });
-          msg = `Blok ${name(k)} vložen pod Události, ty se zmenšily o ${nb.h} px.`; undo = true;
-        } else { nb.hidden = true; msg = `Pro blok ${name(k)} není místo – vložen jako skrytý. Uvolni místo a zobraz ho okem.`; }
+        else {
+          nb.hidden = true; msg = `Pro blok ${name(k)} není místo – vložen jako skrytý. Uvolni místo a zobraz ho okem.`;
+          if (ag && ag.h - nb.h >= minOf("agenda")[1]) {   // Události jsou pružné – zmenšit je jen na přání
+            msg = `Pro blok ${name(k)} není místo – vložen jako skrytý. Můžu pro něj zmenšit Události o ${nb.h} px.`;
+            shrink = () => { ag.h -= nb.h; Object.assign(nb, { x: ag.x, w: ag.w, y: ag.y + ag.h, hidden: false }); commit();
+                             toast(`Události zmenšeny o ${nb.h} px, blok ${name(k)} je pod nimi.`, () => travel(-1)); };
+          }
+        }
       }
       addAt = null; blocks.push(nb); openId = nb.id; commit();
-      toast(msg, undo ? () => travel(-1) : null);
+      if (shrink) toast(msg, shrink, "Zmenšit Události"); else toast(msg, undo ? () => travel(-1) : null);
       requestAnimationFrame(() => document.querySelector(`li[data-id="${nb.id}"] .bbody input`)?.focus());
     };
     m.append(btn);
@@ -967,6 +971,7 @@ function startDrag(e, b, d, mode) {
     const py = (ev.clientY - scr.top) / s, px = (ev.clientX - scr.left) / s / D.col_w;
     target = mode === "move" && cl.length ? shown().find(t => t !== b && sameColumn(t, o) && py >= t.y && py < t.y + t.h && px >= t.x && px < t.x + t.w) || null : null;
     landing = cl.length && !target ? nearestFree(b, r) : null;
+    if (landing && landing.x === o.x && landing.y === o.y && landing.w === o.w && landing.h === o.h) landing = null;  // = původní místo
     d.classList.toggle("bad", cl.length > 0 && !target);
     d.classList.toggle("swap", !!target);
     document.querySelectorAll(".gbox.target").forEach(x => x.classList.remove("target"));
@@ -975,7 +980,8 @@ function startDrag(e, b, d, mode) {
     coords.hidden = false;
     coords.textContent = target ? `Prohodit s blokem ${name(target.type)}`
       : cl.length ? (landing ? "Překryv – položí se na čárkované místo" : "Překryv – není kam, vrátí se zpět") : fmtPos(b);
-    Object.assign(coords.style, { left: Math.min(ev.clientX - scr.left + 14, scr.width - 150) + "px", top: Math.max(0, ev.clientY - scr.top - 28) + "px" });
+    Object.assign(coords.style, { left: Math.min(ev.clientX - scr.left + 14, scr.width - 150) + "px", top: Math.max(0, ev.clientY - scr.top - 28) + "px",
+                                  right: "auto", bottom: "auto" });
     document.querySelectorAll(`li[data-id="${b.id}"] .pos input`).forEach(i => { i.value = i.dataset.k === "x" ? b.x + 1 : b[i.dataset.k]; });
   };
   d.onpointerup = () => {
@@ -990,12 +996,12 @@ function startDrag(e, b, d, mode) {
     }
     if (target) {
       if (swapInColumn(b, o, target)) { commit(); toast(`Prohozeno s blokem ${name(target.type)}.`); return; }
-      Object.assign(b, o); drawBoxes(); toast("Prohodit nejde – mezi bloky je něco v jiných sloupcích."); return;
+      Object.assign(b, o); select(b.id); toast("Prohodit nejde – mezi bloky je něco v jiných sloupcích."); return;
     }
     if (clashes(b).length) {
       if (landing) { Object.assign(b, landing); commit(); toast(`Místo bylo obsazené – blok ${name(b.type)} položen vedle.`); return; }
       const other = clashes(b).map(x => name(x.type)).join(", ");
-      Object.assign(b, o); drawBoxes(); toast(`Místo zabírá blok ${other} – vrácen zpět.`); return;
+      Object.assign(b, o); select(b.id); toast(`Místo zabírá blok ${other} – vrácen zpět.`); return;
     }
     commit(); say(`${name(b.type)}: ${fmtPos(b)}`);
   };
@@ -1208,7 +1214,7 @@ $("#lNew").onclick = () => {
 $("#newName").onkeydown = e => { if (e.key === "Enter") $("#newOk").click(); };
 $("#newOk").onclick = async () => {
   const name = $("#newName").value.trim();
-  if (!name) { $("#newName").focus(); return; }
+  if (!name) { $("#newName").focus(); toast("Zadej název rozvržení."); return; }
   try {
     const res = await post("layouts/create", { name, copy: $("#newFrom").value });
     LAYOUTS = res.layouts; $("#newDlg").close();
@@ -1217,7 +1223,8 @@ $("#newOk").onclick = async () => {
 };
 $("#lRename").onclick = async () => {
   const name = prompt("Nový název rozvržení:", current().name);
-  if (!name || !name.trim() || name.trim() === current().name) return;
+  if (name === null || name.trim() === current().name) return;
+  if (!name.trim()) { toast("Název rozvržení nesmí být prázdný."); return; }
   try { LAYOUTS = (await post("layouts/rename" + q(), { name })).layouts; renderLayouts(); toast("Přejmenováno."); }
   catch (e) { toast("Nelze přejmenovat: " + e.message); }
 };
@@ -1228,9 +1235,9 @@ $("#lDelete").onclick = async () => {
 };
 
 let tt;
-function toast(text, undo) {
+function toast(text, undo, label = "Vrátit") {
   $("#toastText").textContent = text; const a = $("#toastAct");
-  a.hidden = !undo; a.onclick = () => { undo(); $("#toast").classList.remove("show"); };
+  a.hidden = !undo; a.textContent = label; a.onclick = () => { undo(); $("#toast").classList.remove("show"); };
   $("#toast").classList.add("show"); clearTimeout(tt); tt = setTimeout(() => $("#toast").classList.remove("show"), undo ? 8000 : 5000);
 }
 function setPane(p) {

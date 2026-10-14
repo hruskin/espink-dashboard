@@ -157,7 +157,10 @@ const slot = v => SLOTS.find(s => s.v === v) || SLOTS[SLOTS.length - 1];
 const RULE_RE = /^\s*(?:(\d)(?:-(\d))?\s+)?(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})\s*=\s*(\d+)\s*$/;
 const pad2 = n => String(n).padStart(2, "0");
 
-// pravidla -> 24 hodin; null = nejde zobrazit (dny v týdnu, minuty, jiný interval)
+// pravidla -> 24 hodin; null = nejde zobrazit (dny v týdnu, minuty, jiný interval).
+// lossy: přibližně – za hodinu nejčastější interval, který v ní kdekoli platí (dny se ignorují),
+// takže převod nikdy nevytvoří hodinu „nebudit“ tam, kde se původně budilo
+const toSlot = v => SLOTS.filter(s => s.v && s.v <= v).reduce((a, s) => Math.max(a, s.v), 0) || 300;
 function rulesToHours(rules, lossy) {
   const wins = [];
   for (const r of rules.filter(x => x.trim())) {
@@ -167,12 +170,13 @@ function rulesToHours(rules, lossy) {
     const allDays = !d1 || (d1 === "1" && d2 === "7");
     const v = Math.max(60, +sec);
     if (!lossy && (!allDays || m1 !== "00" || m2 !== "00" || !SLOTS.some(s => s.v === v))) return null;
-    wins.push([+h1 * 60 + +m1, (+h2 % 24) * 60 + +m2, lossy ? SLOTS.reduce((a, s) => s.v && Math.abs(s.v - v) < Math.abs(a - v) ? s.v : a, 3600) : v]);
+    wins.push([+h1 * 60 + +m1, (+h2 % 24) * 60 + +m2, lossy ? toSlot(v) : v]);
   }
-  return Array.from({ length: 24 }, (_, h) => {   // první vyhovující pravidlo (jako server); lossy = v půlce hodiny
-    const t = h * 60 + (lossy ? 30 : 0);
-    const w = wins.find(([a, b]) => a < b ? t >= a && t < b : (t >= a || t < b));
-    return w ? w[2] : 0;
+  const at = t => wins.find(([a, b]) => a < b ? t >= a && t < b : (t >= a || t < b));   // první vyhovující (jako server)
+  return Array.from({ length: 24 }, (_, h) => {
+    if (!lossy) { const w = at(h * 60); return w ? w[2] : 0; }
+    const vs = Array.from({ length: 60 }, (_, mi) => at(h * 60 + mi)).filter(Boolean).map(w => w[2]);
+    return vs.length ? Math.min(...vs) : 0;
   });
 }
 // 24 hodin -> pravidla; stejné sousední hodiny (i přes půlnoc) v jednom pravidle
@@ -198,22 +202,26 @@ function scheduleEditor(p, onChange) {
   const box = el("div", { className: "sched" });
   const changed = () => { custom = true; onChange(); draw(); };
   function draw() {
-    const hours = rulesToHours(rules);
+    const exact = rulesToHours(rules);
+    const hours = exact || rulesToHours(rules, true);   // pokročilý rozvrh: pruh aspoň přibližně
     box.replaceChildren();
     const count = hours ? Math.round(wakesPerDay(hours)) : null;
     const toggle = el("button", { className: "txtbtn", type: "button", style: "padding:2px 6px" },
       icon(advanced ? "view-grid-outline" : "code-tags"), advanced ? "Hodiny" : "Pokročilé (pravidla)");
     toggle.onclick = () => {
       if (advanced && !rulesToHours(rules)) {
-        if (!confirm("Rozvrh obsahuje dny v týdnu nebo minuty, hodinová mřížka je nezná. Převést na hodiny (zaokrouhlí se)?")) return;
-        rules = hoursToRules(rulesToHours(rules, true)); custom = true; onChange();
+        const approx = rulesToHours(rules, true);
+        if (!approx) { toast("Nejdřív oprav pravidla – některý řádek nedává smysl."); return; }
+        if (!confirm("Rozvrh obsahuje dny v týdnu nebo minuty, hodinová mřížka je nezná. Převést na hodiny? " +
+                     "Každá hodina dostane nejčastější interval, který v ní platí (podle pruhu nahoře).")) return;
+        rules = hoursToRules(approx); custom = true; onChange();
       }
       advanced = !advanced; draw();
     };
     box.append(el("div", { className: "sched-head" },
       el("div", {}, el("b", { textContent: "Průběh dne" }), " ",
-        el("small", { textContent: count !== null ? `· ${count} probuzení za den` : "· pokročilý rozvrh" })), toggle));
-    if (inherited && !custom) box.append(el("div", { className: "sched-note", textContent: "Panel zatím používá výchozí rozvrh add-onu – úpravou a uložením získá vlastní." }));
+        el("small", { textContent: count === null ? "· pravidla obsahují chybu" : `· ${exact ? "" : "přibližně "}${count} probuzení za den` })), toggle));
+    if (inherited && !custom) box.append(el("div", { className: "sched-note", textContent: "Panel zatím používá výchozí rozvrh add-onu (Konfigurace add-onu v HA) – úpravou a uložením získá vlastní." }));
     if (hours) {
       const bar = el("div", { className: "sched-bar" });
       for (let h = 0; h < 24;) {                     // úseky po stejném intervalu
@@ -231,10 +239,13 @@ function scheduleEditor(p, onChange) {
     if (advanced) {
       const ta = el("textarea", { value: rules.join("\n"), spellcheck: false, rows: Math.max(4, rules.length + 1) });
       ta.oninput = () => { rules = ta.value.split("\n").map(x => x.trim()).filter(Boolean); custom = true; onChange(); };
+      ta.onblur = draw;
       ta.onchange = draw;
       box.append(el("label", { className: "f", style: "margin:0" }, ta), el("div", { className: "help", innerHTML:
         "Jedno pravidlo na řádek: <code>[dny ]HH:MM-HH:MM=sekundy</code>, dny 1=Po … 7=Ne, platí první vyhovující. Mimo pravidla deska spí." }));
-      if (!hours) box.append(el("div", { className: "sched-note warn", textContent: "Rozvrh obsahuje dny v týdnu, minuty nebo neobvyklý interval – zobrazí se jen jako pravidla." }));
+      const bad = rules.filter(r => !RULE_RE.test(r));
+      if (bad.length) box.append(el("div", { className: "sched-note warn", textContent: `Tenhle řádek nedává smysl: „${bad[0]}“ – formát je HH:MM-HH:MM=sekundy.` }));
+      else if (!exact && custom) box.append(el("div", { className: "sched-note", textContent: "Rozvrh obsahuje dny v týdnu, minuty nebo jiný interval – v mřížce po hodinách ho nejde přesně zobrazit, pruh je přibližný." }));
       return;
     }
     const all = el("select");
@@ -329,11 +340,14 @@ function pendingRow(p) {
       render(); toast("Deska povolena. Obrázek dostane při příštím probuzení.");
     } catch (e) { ok.disabled = false; toast("Nelze povolit: " + e.message); }
   };
-  const info = p.allowed ? "povolená v Systému, zatím se neozvala"
-    : [p.when && "ozvala se " + p.when, p.ip, p.fw && "FW " + p.fw, p.voltage && p.voltage + " V"].filter(Boolean).join(" · ");
+  // známý panel s jiným klíčem desky (např. po smazání flash) – jen znovu povolit
+  const panel = DATA.panels.find(x => x.mac === p.mac);
+  const info = p.allowed ? "povolená, zatím se neozvala"
+    : [panel ? `panel ${panel.name}: deska se ozvala s jiným klíčem (přeinstalovaná?)` : "",
+       p.when && "ozvala se " + p.when, p.ip, p.fw && "FW " + p.fw, p.voltage && p.voltage + " V"].filter(Boolean).join(" · ");
   return el("div", { className: "pend" },
     el("div", {}, el("b", { textContent: p.mac }), el("div", { className: "help", textContent: info })),
-    ...(p.allowed ? [el("span"), el("span"), el("span")] : [field("Název panelu", name), field("Rozvržení", lay), ok]));
+    ...(p.allowed ? [el("span"), el("span"), el("span")] : panel ? [el("span"), el("span"), ok] : [field("Název panelu", name), field("Rozvržení", lay), ok]));
 }
 
 function render() {

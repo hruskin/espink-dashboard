@@ -103,9 +103,17 @@ Firmware s touto adresou připravíte podle `firmware/README.md`.
 ## Bezpečnost
 
 - **Povolená zařízení:** port 8099 obsluhuje jen desky ze seznamu `allowed_devices`
-  (MAC adresy). Je-li seznam prázdný, první deska, která se ozve, se zapíše sama;
-  ostatní dostanou `403`. Odmítnuté desky jsou vidět v Panelech (*Nové desky*),
-  kde je jde jedním tlačítkem povolit.
+  (MAC adresy) **se známým klíčem**: firmware posílá v hlavičce `X-API-Key` náhodný
+  klíč uložený v desce; add-on si ho při povolení zapamatuje (`/data/security.json`)
+  a dál vyžaduje MAC i klíč. Desky povolené dřív se klíč naučí při prvním spojení.
+  Úplně první deska se zapíše sama (jen jednou – ne znovu po odebrání posledního
+  panelu); ostatní dostanou `403` a čekají v Panelech (*Nové desky*) na povolení.
+  Po smazání flash má deska nový klíč – v *Nových deskách* ji stačí znovu povolit.
+- **Vstupy od desky:** tělo nejvýš 16 kB, nevalidní JSON se tiše ignoruje, texty
+  (verze FW, důvod restartu) se zkracují; senzor baterie smí být jen `sensor.…`.
+- **Instalátor** má ESP Web Tools přibalené (`static/esp-web-tools`), nenačítá se nic z CDN.
+- **Lokální vývoj (`dev.sh`, DEV=1):** UI odpovídá jen na `localhost` (ochrana proti
+  DNS rebindingu); token v `.env.dev` dávej od uživatele bez administrátorských práv.
 - **Omezení rychlosti:** deska vynutí nové vykreslení nejvýš jednou za 30 s a zápis
   do HA nejvýš jednou za minutu.
 - **Webové rozhraní** je dostupné jen přes Ingress (administrátoři HA); ukládání

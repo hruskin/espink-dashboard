@@ -23,7 +23,7 @@ DEFAULTS = {
     "nameday_calendar": "",
     "holiday_calendar": "",
     "event_days": 7,
-    "schedule": ["06:00-22:30=1200"],
+    "schedule": ["06:00-08:00=300", "08:00-15:00=900", "15:00-18:00=300", "18:00-20:00=900", "20:00-06:00=3600"],
     "battery_sensor": "sensor.espink_baterie",
     "allowed_devices": [],
 }
@@ -57,6 +57,8 @@ def load(path: str | None = None) -> dict:
     except FileNotFoundError:
         pass
     opts["rotate"] = int(opts["rotate"])
+    # MAC z Konfigurace v jednotném tvaru (AA:BB:…), jinak by se nikdy neshodovala
+    opts["allowed_devices"] = [normalize_mac(m) or str(m) for m in opts.get("allowed_devices") or []]
     return opts
 
 

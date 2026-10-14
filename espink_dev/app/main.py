@@ -102,6 +102,11 @@ class Server:
         self.last_build = 0.0
         # bezpečnost: omezení rychlosti a odmítnutá zařízení (čekají na povolení v editoru)
         self.pending: dict[str, dict] = {}
+        self.security = panels_mod.load_security()   # klíče desek (X-API-Key), jednorázové TOFU
+        self.auth_lock = asyncio.Lock()
+        if not self.security["tofu_done"] and (opts.get("allowed_devices") or self.panels):
+            self.security["tofu_done"] = True        # instalace z doby před klíči: první deska už je
+            self.save_security()
 
     # ── panely ───────────────────────────────────────────────────────────
     def sync_targets(self) -> None:
@@ -118,6 +123,12 @@ class Server:
         """Otočení obrazu panelu (jak je pověšený); bez vlastního to z konfigurace add-onu."""
         r = t.cfg.get("rotate")
         return self.opts["rotate"] if r is None else r
+
+    def save_security(self) -> None:
+        try:
+            panels_mod.save_security(self.security)
+        except OSError as e:
+            print(f"[security] nelze uložit {panels_mod.security_path()}: {e}")
 
     def layout_for(self, t: Target) -> dict:
         return self.layouts.get(t.cfg["layout"]) or next(iter(self.layouts.values()))
@@ -197,9 +208,11 @@ class Server:
 
     # ── zařízení ─────────────────────────────────────────────────────────
     async def handle_device(self, request: web.Request) -> web.Response:
+        if (request.content_length or 0) > DEVICE_MAX_BODY:  # deska posílá ~1 kB JSON
+            return web.Response(status=413)
         try:
-            body = await request.json() if request.can_read_body else {}
-        except (json.JSONDecodeError, aiohttp.ContentTypeError):
+            body = json.loads(await request.read() or b"{}") if request.can_read_body else {}
+        except (ValueError, RecursionError):  # nevalidní JSON, UTF-8, zanoření – bez tracebacku v logu
             body = {}
         if not isinstance(body, dict):
             body = {}
@@ -207,7 +220,10 @@ class Server:
         system, network, display = part("system"), part("network"), part("display")
         check = request.query.get("timestampCheck", "1")
         mac = options.normalize_mac(network.get("mac"))
-        if not await self.device_allowed(mac, request.remote, body):
+        api_key = panels_mod.clean_key(request.headers.get("X-API-Key"))
+        async with self.auth_lock:  # souběžné požadavky nesmí obejít jednorázové povolení
+            ok = await self.device_allowed(mac, request.remote, body, api_key)
+        if not ok:
             return web.Response(status=403)
         if mac not in self.targets:  # povolená deska bez panelu (např. MAC zapsaná v Nastavení)
             self.add_panel(mac)
@@ -222,14 +238,14 @@ class Server:
                 "voltage": model.fnum(system.get("vccVoltage")),
                 "rssi": model.fnum(network.get("rssi")),
                 "mac": mac,
-                "ip": network.get("ipAddress") or request.remote,
-                "fw": body.get("fwVersion"),
+                "ip": request.remote,  # skutečná adresa spojení, ne hodnota z JSONu
+                "fw": short_text(body.get("fwVersion")),
                 # deska posílá délku překreslení jen po probuzení, které následuje po překreslení –
                 # jinak ponechat poslední známou hodnotu (≈20 000 ms = vypršel limit ovladače panelu)
                 "refresh_ms": display.get("lastRefreshDuration") or prev.get("refresh_ms"),
                 "download_ms": network.get("lastDownloadDuration") or prev.get("download_ms"),
                 "cpu_temp": model.fnum(system.get("cpuTemp")),
-                "reset_reason": system.get("resetReason"),
+                "reset_reason": short_text(system.get("resetReason")),
                 "last_seen": now.isoformat(timespec="seconds"),
                 "sleep": sleep,
             }
@@ -270,37 +286,54 @@ class Server:
                         print(f"[render] patička: {e}")
         t.served_ts = t.content_ts
 
-    async def device_allowed(self, mac: str | None, ip: str | None, body: dict) -> bool:
-        """Jen zařízení ze seznamu allowed_devices. Prázdný seznam = první zařízení,
-        které se ozve, se zapíše samo (trust on first use). Ostatní čekají na povolení v editoru."""
+    async def device_allowed(self, mac: str | None, ip: str | None, body: dict, api_key: str) -> bool:
+        """Jen zařízení ze seznamu allowed_devices se známým klíčem (X-API-Key). Úplně první
+        deska se smí zapsat sama (trust on first use) – jen jednou za život instalace.
+        Ostatní (i deska se změněným klíčem, např. po smazání flash) čekají na povolení."""
         allowed = self.opts.get("allowed_devices") or []
+        keys = self.security["keys"]
         if mac and mac in allowed:
-            return True
-        if mac and not allowed:
+            known = keys.get(mac)
+            if known and known == api_key:
+                return True
+            if not known and api_key:  # deska povolená před verzí s klíči – zapamatovat si ho
+                keys[mac] = api_key
+                self.save_security()
+                print(f"[security] zapamatován klíč desky {mac}")
+                return True
+            reason = "key"
+        elif mac and not allowed and not self.panels and not self.security["tofu_done"] and api_key:
             try:
-                await self.allow(mac)
+                await self.allow(mac, api_key)
                 print(f"[security] první zařízení {mac} ({ip}) zapsáno mezi povolená")
                 return True
             except Exception as e:  # noqa: BLE001
                 print(f"[security] nelze uložit povolené zařízení: {e}")
                 return False
+        else:
+            reason = "new"
         key = mac or "(bez MAC)"
         seen = self.pending.get(key)
         if not seen or time.time() - seen["t"] > 600:
-            print(f"[security] odmítnuto neznámé zařízení {key} z {ip}")
+            print(f"[security] odmítnuto zařízení {key} z {ip}" + (" – nesouhlasí klíč" if reason == "key" else ""))
         system = body.get("system") if isinstance(body.get("system"), dict) else {}
         self.pending[key] = {"mac": key, "ip": ip, "t": time.time(), "when": now_local().strftime("%d. %m. %H:%M:%S"),
-                             "fw": str(body.get("fwVersion") or "")[:40], "voltage": model.fnum(system.get("vccVoltage"))}
+                             "fw": short_text(body.get("fwVersion")), "voltage": model.fnum(system.get("vccVoltage")),
+                             "reason": reason, "key": api_key or (seen or {}).get("key", "")}
         if len(self.pending) > 10:  # nejvýš 10 posledních
             del self.pending[min(self.pending, key=lambda k: self.pending[k]["t"])]
         return False
 
-    async def allow(self, mac: str) -> None:
+    async def allow(self, mac: str, api_key: str = "") -> None:
         allowed = self.opts.get("allowed_devices") or []
         if mac not in allowed:
             new = dict(self.opts, allowed_devices=allowed + [mac])
             await self.persist_options(new)
             self.opts = new
+        if api_key:
+            self.security["keys"][mac] = api_key
+        self.security["tofu_done"] = True
+        self.save_security()
         self.pending.pop(mac, None)
 
     async def persist_options(self, new: dict) -> None:
@@ -359,7 +392,8 @@ class Server:
         self.legacy_checked.add(sensor)
         try:
             s = await self.ha.state(sensor)
-            if s and "voltage" in s.get("attributes", {}):
+            a = (s or {}).get("attributes", {})
+            if {"voltage", "last_seen", "next_wake"} <= a.keys():  # jen stav ve tvaru, který zapisoval add-on
                 await self.ha.delete_state(sensor)
                 print(f"[mqtt] smazán starý stav {sensor} zapsaný přes REST")
         except Exception as e:  # noqa: BLE001
@@ -380,8 +414,12 @@ class Server:
     # ── UI (jen přes Ingress) ────────────────────────────────────────────
     @web.middleware
     async def ingress_only(self, request: web.Request, handler):
-        if request.path != "/index.php" and not DEV and request.remote != INGRESS_IP:
-            raise web.HTTPForbidden(text="Pouze přes panel v Home Assistantu")
+        if request.path != "/index.php":
+            if DEV:  # lokální vývoj: jen localhost (ochrana proti DNS rebindingu z prohlížeče)
+                if (request.host or "").rsplit(":", 1)[0] not in ("localhost", "127.0.0.1", "[::1]"):
+                    raise web.HTTPForbidden(text="DEV server: jen přes localhost")
+            elif request.remote != INGRESS_IP:
+                raise web.HTTPForbidden(text="Pouze přes panel v Home Assistantu")
         return await handler(request)
 
     async def handle_index(self, request: web.Request) -> web.Response:
@@ -539,11 +577,17 @@ Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
                                               content_type="application/json")
         self.layouts, self.layout_saved = layouts, True
 
-    async def handle_layout_create(self, request: web.Request) -> web.Response:
-        data = await self.read_json(request)
-        name = layout_mod.clean_name(data.get("name"))
+    def check_layout_name(self, name: str, own_id: str = "") -> str:
+        name = layout_mod.clean_name(name)
         if not name:
             raise bad_request("rozvržení musí mít název")
+        if any(lay["name"].casefold() == name.casefold() and lid != own_id for lid, lay in self.layouts.items()):
+            raise bad_request(f"rozvržení s názvem {name} už existuje")
+        return name
+
+    async def handle_layout_create(self, request: web.Request) -> web.Response:
+        data = await self.read_json(request)
+        name = self.check_layout_name(data.get("name"))
         src = self.layouts.get(data.get("copy") or "")
         lid = layout_mod.new_id(self.layouts)
         new = dict(src, id=lid, name=name, rev=0) if src else layout_mod.sanitize({"id": lid, "name": name, "blocks": []})
@@ -553,9 +597,7 @@ Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
 
     async def handle_layout_rename(self, request: web.Request) -> web.Response:
         cur = self.layout_arg(request)
-        name = layout_mod.clean_name((await self.read_json(request)).get("name"))
-        if not name:
-            raise bad_request("rozvržení musí mít název")
+        name = self.check_layout_name((await self.read_json(request)).get("name"), cur["id"])
         await self.write_layouts({**self.layouts, cur["id"]: dict(cur, name=name)})
         self.sync_targets()
         return web.json_response({"layout": self.layouts[cur["id"]], "layouts": self.layout_list()})
@@ -620,9 +662,12 @@ Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
                         "error": t.error if t else "",
                         "device": {**d, "battery": model.battery_percent(d.get("voltage"))} if d else {}})
         known = {p["mac"] for p in self.panels}
-        # povolené MAC bez panelu (zapsané ručně v Nastavení) – panel vznikne, až se deska ozve
+        # povolené MAC bez panelu (zapsané ručně v Konfiguraci add-onu) – panel vznikne, až se deska ozve
         waiting = [{"mac": m, "allowed": True} for m in allowed - known]
-        return {"panels": out, "pending": [p for p in self.pending.values() if p["mac"] not in known] + waiting,
+        # čekající: nové desky a známé desky s jiným klíčem (přeinstalované); klíč do UI neposílat
+        pend = [{k: v for k, v in p.items() if k != "key"} for p in self.pending.values()
+                if p["mac"] not in known or p.get("reason") == "key"]
+        return {"panels": out, "pending": pend + waiting,
                 "layouts": self.layout_list(), "default_schedule": self.opts["schedule"], "mqtt": bool(self.mqtt),
                 "default_rotate": self.opts["rotate"]}
 
@@ -657,10 +702,14 @@ Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
         mac = options.normalize_mac(data.get("mac"))
         if not mac:
             raise bad_request("neplatná MAC adresa")
-        if any(p["name"] == layout_mod.clean_name(data.get("name")) for p in self.panels):
+        exists = any(p["mac"] == mac for p in self.panels)
+        if not exists and any(p["name"] == layout_mod.clean_name(data.get("name")) for p in self.panels):
             raise bad_request(f"panel {data.get('name')} už existuje")
+        api_key = (self.pending.get(mac) or {}).get("key", "")  # z posledního odmítnutého požadavku desky
+        if not api_key:
+            raise bad_request("deska se zatím neozvala se svým klíčem – povol ji, až se znovu probudí")
         try:
-            await self.allow(mac)
+            await self.allow(mac, api_key)
         except Exception as e:  # noqa: BLE001
             return web.json_response({"error": f"nelze uložit povolená zařízení: {e}"}, status=500)
         if not any(p["mac"] == mac for p in self.panels):
@@ -679,6 +728,8 @@ Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
                 self.opts = new
         except Exception as e:  # noqa: BLE001
             return web.json_response({"error": f"nelze uložit povolená zařízení: {e}"}, status=500)
+        if self.security["keys"].pop(mac, None):
+            self.save_security()
         self.save_panels([p for p in self.panels if p["mac"] != mac])
         self.forget(mac)
         print(f"[panels] panel {mac} odebrán")
@@ -748,6 +799,16 @@ class Installer:
         if request.match_info["name"] == "firmware.bin":
             print(f"[firmware] stažení pro instalaci ({request.match_info['chip']}): server {cfg['host']}:{cfg['port']}")
         return web.Response(body=data, content_type="application/octet-stream", headers={"Cache-Control": "no-store"})
+
+
+DEVICE_MAX_BODY = 16 * 1024
+
+
+def short_text(value, limit: int = 40) -> str | None:
+    """Text od desky (verze FW, důvod restartu): zkrátit a bez řídicích znaků (log, HA, MQTT)."""
+    if value is None:
+        return None
+    return "".join(ch for ch in str(value) if ch.isprintable())[:limit]
 
 
 def bad_request(text: str) -> web.HTTPBadRequest:

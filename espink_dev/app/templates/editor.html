@@ -1166,6 +1166,12 @@ document.addEventListener("keydown", e => {
   if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z" || e.target.matches("input,textarea")) return;
   e.preventDefault(); travel(e.shiftKey ? 1 : -1);
 });
+// Delete odebere vybraný blok, i když nemá fokus (výběr myší fokus nedává); ne při psaní do polí
+document.addEventListener("keydown", e => {
+  if (e.key !== "Delete" || !openId || e.defaultPrevented || e.target.matches("input,textarea,select,[contenteditable]")
+      || document.querySelector("dialog[open]")) return;
+  e.preventDefault(); remove(openId);
+});
 addEventListener("beforeunload", e => { if (!leaving && snap() !== saved) e.preventDefault(); });
 
 // ───────── Více rozvržení (každý panel zobrazuje jedno z nich) ─────────

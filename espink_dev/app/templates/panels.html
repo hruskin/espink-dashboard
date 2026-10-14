@@ -81,6 +81,7 @@
   .toast.show { display: block; }
   .banner { margin-bottom: 12px; padding: 10px 14px; border-radius: 8px; background: var(--err-bg); }
   :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  [hidden] { display: none !important; }  /* třídy s display (txtbtn…) jinak hidden přebijí */
   /* rozvrh probouzení: průběh dne + hodiny */
   .sched { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
   .sched-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }

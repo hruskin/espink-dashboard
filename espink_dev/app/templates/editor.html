@@ -159,6 +159,25 @@
   .tabs a.dot::after { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--primary); margin-left: 6px; }
   .seg button.dot::after { content: " •"; }
   .appbar .actions { margin-left: auto; display: flex; gap: 2px; }
+  .appbar .tabs { min-width: 0; overflow-x: auto; }
+  #moreBtn { display: none; margin-left: auto; }
+  .actions .lbl { display: none; }
+  .dlgerr { color: var(--err); font-size: 13px; min-height: 18px; }
+  .primary.danger { background: var(--err); }
+  /* telefon: akce v hlavičce do menu ⋮, lišta Uložit a nástroje náhledu se zalomí */
+  @media (max-width: 600px) {
+    #moreBtn { display: grid; }
+    .appbar .actions { display: none; position: absolute; right: 8px; top: 52px; flex-direction: column; align-items: stretch;
+                       background: var(--card); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); padding: 4px 0; z-index: 25; }
+    .appbar .actions.open { display: flex; }
+    .appbar .actions .icon-btn { width: auto; height: 40px; border-radius: 0; display: flex; gap: 10px; padding: 0 16px; justify-content: flex-start; color: var(--ink); }
+    .actions .lbl { display: inline; }
+    .savebar { flex-wrap: wrap; padding: 8px 12px; gap: 4px; }
+    .savebar .st { min-width: 0; flex-basis: 100%; font-size: 13px; }
+    .savebar .primary { margin-left: auto; }
+    .ptool { flex-wrap: wrap; row-gap: 4px; }
+    .ptool .st { flex-basis: 100%; }
+  }
   textarea.code { width: 100%; min-height: 120px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg);
                   color: var(--ink); font: 13px/1.45 ui-monospace, "JetBrains Mono", monospace; resize: vertical; }
   .f textarea:focus { outline: 2px solid var(--primary); border-color: transparent; }
@@ -238,10 +257,11 @@
 <header class="appbar">
   <h1>ESPink</h1>
   <nav class="tabs"><a href="./" aria-current="page" id="tabLayout">Rozvržení</a><a href="panels">Panely</a><a href="install">Instalace</a><a href="status">Stav</a></nav>
-  <div class="actions">
-    <button class="icon-btn" id="histBtn" title="Historie uložených verzí"><i class="mdi mdi-history"></i></button>
-    <button class="icon-btn" id="exportBtn" title="Exportovat rozvržení (JSON)"><i class="mdi mdi-download"></i></button>
-    <button class="icon-btn" id="importBtn" title="Importovat rozvržení ze souboru"><i class="mdi mdi-upload"></i></button>
+  <button class="icon-btn" id="moreBtn" title="Další akce" aria-label="Další akce" aria-haspopup="menu" aria-expanded="false"><i class="mdi mdi-dots-vertical"></i></button>
+  <div class="actions" id="actions">
+    <button class="icon-btn" id="histBtn" title="Historie uložených verzí" aria-label="Historie uložených verzí"><i class="mdi mdi-history"></i><span class="lbl">Historie verzí</span></button>
+    <button class="icon-btn" id="exportBtn" title="Exportovat rozvržení (JSON)" aria-label="Exportovat rozvržení"><i class="mdi mdi-download"></i><span class="lbl">Exportovat</span></button>
+    <button class="icon-btn" id="importBtn" title="Importovat rozvržení ze souboru" aria-label="Importovat rozvržení"><i class="mdi mdi-upload"></i><span class="lbl">Importovat</span></button>
     <input type="file" id="importFile" accept=".json,application/json" hidden>
   </div>
 </header>
@@ -315,9 +335,14 @@
   <input type="search" id="iconSearch" placeholder="Hledat anglicky: thermometer, bus, trash…" autocomplete="off">
   <div class="icons" id="iconGrid"></div>
   <div class="dlg-foot"><button class="txtbtn" id="iconNone">Bez vlastní ikony</button><button class="txtbtn" onclick="iconDlg.close()">Zavřít</button></div></dialog>
+<dialog id="renameDlg"><h3 style="margin:0 0 12px">Přejmenovat rozvržení</h3>
+  <label class="f"><span>Název</span><input type="text" id="renameName" maxlength="40"></label>
+  <div class="dlgerr" id="renameErr" role="alert"></div>
+  <div class="dlg-foot"><button class="txtbtn" onclick="renameDlg.close()">Zrušit</button><button class="primary" id="renameOk">Přejmenovat</button></div></dialog>
 <dialog id="newDlg"><h3 style="margin:0 0 12px">Nové rozvržení</h3>
   <label class="f"><span>Název</span><input type="text" id="newName" maxlength="40" placeholder="např. Kuchyň"></label>
   <label class="f"><span>Začít z</span><select id="newFrom"></select></label>
+  <div class="dlgerr" id="newErr" role="alert"></div>
   <div class="dlg-foot"><button class="txtbtn" onclick="newDlg.close()">Zrušit</button><button class="primary" id="newOk">Vytvořit</button></div></dialog>
 <dialog id="histDlg"><h3 style="margin:0">Uložené verze</h3>
   <ul class="hist" id="histList"></ul>
@@ -1167,8 +1192,8 @@ $("#gridBtn").onclick = () => {
   const on = !document.body.classList.contains("grid-on");
   document.body.classList.toggle("grid-on", on); $("#gridBtn").setAttribute("aria-pressed", on);
 };
-$("#discard").onclick = () => {
-  if (hpos > 3 && !confirm("Zahodit všechny neuložené změny?")) return;
+$("#discard").onclick = async () => {
+  if (hpos > 3 && !await ask("Zahodit změny?", "Všechny neuložené změny v tomto rozvržení se ztratí.", "Zahodit", true)) return;
   blocks = JSON.parse(saved); hist = [saved]; hpos = 0; openId = null; refresh(); toast("Změny zahozeny.");
 };
 $("#undo").onclick = () => travel(-1); $("#redo").onclick = () => travel(1);
@@ -1195,9 +1220,23 @@ function renderLayouts() {
   $("#lDelete").title = c.panels.length ? "Rozvržení používá panel – nejdřív mu v Panelech přiřaď jiné" : LAYOUTS.length < 2 ? "Poslední rozvržení nejde smazat" : "Smazat rozvržení";
   document.title = `ESPink – ${c.name}`;
 }
-function go(id) {                       // přepnout rozvržení = načíst editor znovu
-  if (snap() !== saved && !confirm("Neuložené změny v tomto rozvržení se ztratí. Pokračovat?")) { renderLayouts(); return false; }
+async function go(id) {                 // přepnout rozvržení = načíst editor znovu
+  if (snap() !== saved && !await ask("Přepnout rozvržení?", "Neuložené změny v tomto rozvržení se ztratí.", "Přepnout bez uložení", true)) {
+    renderLayouts(); return false;
+  }
   leaving = true; location.search = "?l=" + encodeURIComponent(id); return true;
+}
+// potvrzovací dialog místo confirm() (v panelu HA nativní okna působí cize)
+function ask(title, text, okLabel, danger) {
+  return new Promise(res => {
+    const ok = el("button", { className: "primary" + (danger ? " danger" : ""), textContent: okLabel });
+    const no = el("button", { className: "txtbtn", textContent: "Zrušit" });
+    const d = el("dialog", {}, el("h3", { textContent: title, style: "margin:0 0 8px" }), el("p", { textContent: text, style: "margin:0" }),
+                 el("div", { className: "dlg-foot" }, no, ok));
+    const done = v => { d.close(); d.remove(); res(v); };
+    ok.onclick = () => done(true); no.onclick = () => done(false); d.oncancel = () => done(false);
+    document.body.append(d); d.showModal(); ok.focus();
+  });
 }
 async function post(url, body) {
   const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
@@ -1206,30 +1245,42 @@ async function post(url, body) {
   return res;
 }
 $("#layoutSel").onchange = e => go(e.target.value);
+$("#moreBtn").onclick = e => {
+  e.stopPropagation(); const open = $("#actions").classList.toggle("open"); $("#moreBtn").setAttribute("aria-expanded", open);
+};
+$("#actions").addEventListener("click", () => { $("#actions").classList.remove("open"); $("#moreBtn").setAttribute("aria-expanded", false); });
+document.addEventListener("click", e => { if (!e.target.closest("#actions, #moreBtn")) { $("#actions").classList.remove("open"); $("#moreBtn").setAttribute("aria-expanded", false); } });
 $("#lNew").onclick = () => {
   const f = $("#newFrom"); f.replaceChildren(el("option", { value: "", textContent: "Prázdné rozvržení" }));
   for (const l of LAYOUTS) f.append(el("option", { value: l.id, textContent: "Kopie: " + l.name + (l.id === LID && snap() !== saved ? " (uložená verze)" : ""), selected: l.id === LID }));
-  $("#newName").value = ""; $("#newDlg").showModal(); $("#newName").focus();
+  $("#newName").value = ""; $("#newErr").textContent = ""; $("#newDlg").showModal(); $("#newName").focus();
 };
 $("#newName").onkeydown = e => { if (e.key === "Enter") $("#newOk").click(); };
 $("#newOk").onclick = async () => {
   const name = $("#newName").value.trim();
-  if (!name) { $("#newName").focus(); toast("Zadej název rozvržení."); return; }
+  if (!name) { $("#newName").focus(); $("#newErr").textContent = "Zadej název rozvržení."; return; }
   try {
     const res = await post("layouts/create", { name, copy: $("#newFrom").value });
     LAYOUTS = res.layouts; $("#newDlg").close();
-    if (!go(res.layout.id)) toast(`Rozvržení ${name} vytvořeno – najdeš ho v nabídce.`);
-  } catch (e) { toast("Nelze vytvořit: " + e.message); }
+    if (!await go(res.layout.id)) toast(`Rozvržení ${name} vytvořeno – najdeš ho v nabídce.`);
+  } catch (e) { $("#newErr").textContent = "Nelze vytvořit: " + e.message; $("#newName").focus(); }
 };
-$("#lRename").onclick = async () => {
-  const name = prompt("Nový název rozvržení:", current().name);
-  if (name === null || name.trim() === current().name) return;
-  if (!name.trim()) { toast("Název rozvržení nesmí být prázdný."); return; }
-  try { LAYOUTS = (await post("layouts/rename" + q(), { name })).layouts; renderLayouts(); toast("Přejmenováno."); }
-  catch (e) { toast("Nelze přejmenovat: " + e.message); }
+$("#lRename").onclick = () => {
+  $("#renameName").value = current().name; $("#renameErr").textContent = "";
+  $("#renameDlg").showModal(); $("#renameName").select();
+};
+$("#renameName").onkeydown = e => { if (e.key === "Enter") $("#renameOk").click(); };
+$("#renameOk").onclick = async () => {
+  const name = $("#renameName").value.trim();
+  if (name === current().name) { $("#renameDlg").close(); return; }
+  if (!name) { $("#renameErr").textContent = "Název nesmí být prázdný."; $("#renameName").focus(); return; }
+  try {
+    LAYOUTS = (await post("layouts/rename" + q(), { name })).layouts;
+    $("#renameDlg").close(); renderLayouts(); toast(`Přejmenováno na ${name}.`);
+  } catch (e) { $("#renameErr").textContent = e.message; $("#renameName").focus(); }
 };
 $("#lDelete").onclick = async () => {
-  if (!confirm(`Smazat rozvržení ${current().name}? Nejde to vrátit.`)) return;
+  if (!await ask(`Smazat rozvržení ${current().name}?`, "Smazání nejde vrátit (export JSON si můžeš udělat předem).", "Smazat", true)) return;
   try { const res = await post("layouts/delete" + q()); leaving = true; location.search = "?l=" + encodeURIComponent(res.layouts[0].id); }
   catch (e) { toast("Nelze smazat: " + e.message); }
 };

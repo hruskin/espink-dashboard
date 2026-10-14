@@ -1,6 +1,6 @@
 """Statické řezy fontů pro renderer Typst (Typst 0.12 nenačte variabilní fonty).
 
-Z app/static/fonts/*.ttf (variabilní) vyrobí app/static/fonts/typst/*.ttf:
+Z tools/fonts/*.ttf (variabilní, do obrazu add-onu nejdou) vyrobí app/static/fonts/typst/*.ttf:
 Inter 400–800 (opsz 14) a Inter Display (opsz 32, velká čísla), Roboto Condensed
 400–800, Noto Emoji 400/700 a Material Design Icons jako TTF. Text je oříznutý na
 latinku, řečtinu a cyrilici (menší add-on). Spuštění (potřebuje fonttools a brotli):
@@ -13,7 +13,7 @@ from fontTools.ttLib import TTFont
 from fontTools.varLib import instancer
 
 APP = Path(__file__).resolve().parent.parent / "app" / "static"
-SRC, OUT = APP / "fonts", APP / "fonts" / "typst"
+SRC, OUT = Path(__file__).resolve().parent / "fonts", APP / "fonts" / "typst"
 TEXT_RANGES = ("U+0020-024F,U+0250-02FF,U+0300-036F,U+0370-03FF,U+0400-04FF,U+1E00-1EFF,"
                "U+2000-206F,U+20A0-20CF,U+2100-214F,U+2190-21FF,U+2200-22FF,U+25A0-25FF,U+2600-26FF")
 

@@ -87,7 +87,6 @@ class Target:
 class Server:
     def __init__(self, opts: dict):
         self.opts = opts
-        render.ENGINE = opts.get("renderer") or "chromium"
         self.layouts, self.layout_saved, self.layout_error = layout_mod.load_all(opts)
         self.panels = panels_mod.load(opts, self.layouts)
         self.targets: dict[str, Target] = {}
@@ -229,7 +228,7 @@ class Server:
                 "sleep": sleep,
             }
             # Změna baterie o celý krok (5 %) se má projevit hned v tomto probuzení
-            # (nejvýš jednou za 30 s – jinak by šlo střídáním hodnot vynutit Chromium při každém požadavku)
+            # (nejvýš jednou za 30 s – jinak by šlo střídáním hodnot vynutit vykreslení při každém požadavku)
             if not t.payload or (model._device(t.device)["battery"] != old_bucket
                                  and time.time() - t.last_device_rebuild > 30):
                 t.last_device_rebuild = time.time()
@@ -487,7 +486,6 @@ Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
         except Exception as e:  # noqa: BLE001
             return web.json_response({"error": str(e)}, status=400)
         self.opts = new
-        render.ENGINE = new.get("renderer") or "chromium"
         if not self.layout_saved:  # rozvržení zatím odvozené z konfigurace
             self.layouts = {layout_mod.DEFAULT_ID: dict(layout_mod.from_options(new), name=layout_mod.DEFAULT_NAME)}
         self.sync_targets()  # výchozí rozvrh
@@ -598,16 +596,14 @@ Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
         draft = await self.read_layout(request, current)
         users = [t for t in self.targets.values() if self.layout_for(t)["id"] == current["id"]]
         t = users[0] if users else self.target(None)
-        async with self.draft_lock:  # Chromium je drahý – náhledy jeden po druhém
+        async with self.draft_lock:  # náhledy jeden po druhém
             now = now_local()
             try:
                 raw = await self.fetch_raw(draft, now)
                 device = t.device or await self.device_from_sensor(t.cfg["battery_sensor"])
                 view = model.build(raw, draft, device, now, worst=request.query.get("worst") == "1")
-                engine = request.query.get("engine")  # porovnání vykreslovačů v editoru
                 png, _ = await render.render(view, f"{now.day}. {now.month}. {now:%H:%M}",
-                                             self.opts["rotate"], "png", after(now, t.schedule.sleep_seconds(now)),
-                                             engine=engine if engine in render.ENGINES else None)
+                                             self.opts["rotate"], "png", after(now, t.schedule.sleep_seconds(now)))
             except Exception as e:  # noqa: BLE001
                 return web.json_response({"error": f"{type(e).__name__}: {e}"}, status=502)
         return web.Response(body=png, content_type="image/png", headers={

@@ -55,16 +55,16 @@ def raw(needs: dict, now: datetime) -> dict:
         ],
         "calendar.martin_hruska": [
             {"summary": "Servis auta – výměna pneumatik", "start": {"dateTime": at(1, 9)}, "end": {"dateTime": at(1, 10)}},
-            {"summary": "Porada", "start": {"dateTime": at(2, 8, 30)}, "end": {"dateTime": at(2, 9)}},
+            {"summary": "⚠️ Omezený provoz – 7:00–12:30", "start": {"dateTime": at(2, 8, 30)}, "end": {"dateTime": at(2, 9)}},
         ],
         "calendar.skolka": [
-            {"summary": "Fotografování", "start": {"dateTime": at(0, 23)}, "end": {"dateTime": at(0, 23, 30)}},
-            {"summary": "Divadlo ve školce – přinést 50 Kč", "start": {"dateTime": at(2, 9, 30)}, "end": {"dateTime": at(2, 11)}},
+            {"summary": "👟 Návštěva tělocvičny – sraz 7:40", "start": {"dateTime": at(0, 23)}, "end": {"dateTime": at(0, 23, 30)}},
+            {"summary": "♻️ Setkání malého Ekotýmu", "start": {"dateTime": at(2, 9, 30)}, "end": {"dateTime": at(2, 11)}},
         ],
         "calendar.plavani": [
             {"summary": "🏃 Atletika – závody 🏅", "start": {"dateTime": at(1, 16)}, "end": {"dateTime": at(1, 17)}},
         ],
-        "calendar.narozeniny_2": [{"summary": "Narozeniny – Petr", **allday(2)}],
+        "calendar.narozeniny_2": [{"summary": "🎂 Narozeniny – Petr", **allday(2)}],
         "calendar.svoz_popelnice": [{"summary": "Svoz – papír", **allday(1)}],
         "calendar.jmenne_svatky_ceske": [{"summary": "Štefan", **allday(0)}],
         "calendar.ceske_statni_svatky": [{"summary": "Den vzniku samostatného čs. státu", **allday(4)}],

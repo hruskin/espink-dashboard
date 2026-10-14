@@ -34,12 +34,13 @@ k sousedovi, duplikace, náhled „nejhorší případ“, mřížka sloupců, v
 > Dosavadní `layout.json` se převezme jako rozvržení „Hlavní“ a povolené desky jako
 > panely (první s dosavadním `battery_sensor`). Panely jsou v `/data/panels.json`.
 >
-> **Vykreslovače (zkouška, volba `renderer` v Systému):** `chromium` (původní),
-> `weasyprint` (stejná HTML šablona přes WeasyPrint 70 + pdftoppm, bez prohlížeče)
-> a `typst` (vlastní šablona `templates/dashboard.typ`, obrázek za ~0,05 s). V náhledu
-> editoru jde vykreslovač přepnout pro porovnání. Typst potřebuje statické řezy fontů
-> (`app/static/fonts/typst`, vyrábí `tools/typst_fonts.py`); blok Šablona (HTML)
-> ukáže v Typstu jen text. Cíl: odstranit Chromium (~750 MB) z obrazu.
+> **Vykreslování: Typst** (místo Chromia – obraz add-onu ~80 MB místo ~800 MB).
+> Šablona `templates/dashboard.typ` dostane model zobrazení jako JSON a Typst ji
+> přeloží rovnou do PNG (~0,05 s). Fonty jsou statické řezy v `app/static/fonts/typst`
+> (vyrábí `tools/typst_fonts.py` z variabilních fontů v `tools/fonts`). Blok Šablona
+> (HTML) ukáže jen text. **Emoji** z tabulky v `app/emoji.py` (👟, ♻️, ⚠️, 🎂…) se
+> kreslí jako plné ikony MDI v barvě a velikosti textu; ostatní z fontu Noto Emoji
+> (černobílý, část znaků jen obrysem). Tabulku jde doplnit (emoji → název ikony MDI).
 >
 > **Instalace firmwaru** z prohlížeče (karta Instalace, ESP Web Tools + Improv pro Wi-Fi) – viz stabilní DOCS.
 >
@@ -94,8 +95,8 @@ Firmware s touto adresou připravíte podle `firmware/README.md`.
 - **Webové rozhraní** je dostupné jen přes Ingress (administrátoři HA); ukládání
   vyžaduje `application/json` (ochrana proti CSRF).
 - **ID entit** se kontrolují (`doména.objekt`), takže se jimi nedá zavolat jiné API HA.
-- **Chromium** běží pod neprivilegovaným uživatelem, bez sítě a stránka má
-  Content-Security-Policy, která blokuje skripty.
+- **Typst** dostává veškerý text jako data (řetězce v JSON), nikdy jako kód; běží
+  bez sítě a s prázdným kořenovým adresářem, takže nemůže číst soubory.
 - **Firmware** ignoruje pokyn k OTA aktualizaci ze serveru a konfigurační AP má
   vlastní heslo (viz `firmware/README.md`).
 

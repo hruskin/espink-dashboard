@@ -7,7 +7,6 @@ from datetime import datetime, time, timedelta
 
 DEFAULTS = {
     "rotate": 90,
-    "renderer": "chromium",
     "image_format": "z2",
     "render_interval": 60,
     "meteo_temperature": "",
@@ -87,9 +86,6 @@ def sanitize(new: dict, current: dict) -> dict:
             v = macs
         elif key == "schedule":
             v = check_rules(v)
-        elif key == "renderer":
-            if v not in ("chromium", "weasyprint", "typst"):
-                raise ValueError(f"neznámý vykreslovač: {v}")
         else:
             v = str(v).strip()
             if key in ENTITY_KEYS:

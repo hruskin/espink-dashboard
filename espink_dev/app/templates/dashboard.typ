@@ -1,4 +1,4 @@
-// Dashboard pro renderer Typst – stejný vzhled jako dashboard.html.j2 (rozměry z jeho CSS).
+// Dashboard pro e-paper (Typst). Rozměry odpovídají dřívější HTML šabloně (Chromium).
 // Server před šablonu vloží: #let data = json.decode("…") s klíči view, updated,
 // updated_time, next_wake a icons (název ikony MDI -> kód znaku). Veškerý text jde
 // do šablony jako data (řetězce), nikdy jako kód Typstu.
@@ -7,9 +7,10 @@
 #let view = data.view
 #let ICONS = data.icons
 #let RED = rgb("#e00000")
-#let SANS = ("Inter", "Noto Emoji")
-#let DISP = ("Inter Display", "Noto Emoji")
-#let COND = ("RobotoCondensed", "Noto Emoji")
+// MDI v záložních fontech: emoji z tabulky (emoji.py) jsou v textu jako znaky ikon
+#let SANS = ("Inter", "Material Design Icons", "Noto Emoji")
+#let DISP = ("Inter Display", "Material Design Icons", "Noto Emoji")
+#let COND = ("RobotoCondensed", "Material Design Icons", "Noto Emoji")
 #let MDI = "Material Design Icons"
 
 #set page(width: 480pt, height: 800pt, margin: 0pt, fill: white)

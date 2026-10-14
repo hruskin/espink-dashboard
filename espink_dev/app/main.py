@@ -425,7 +425,7 @@ class Server:
  th{{font-weight:600;color:#444}} button{{margin-top:12px;padding:8px 14px;font-size:15px}}
  @media (prefers-color-scheme:dark){{body{{background:#111;color:#eee}} table{{background:#1c1c1c}} th{{color:#bbb}} th,td{{border-color:#333}}}}
 </style></head><body>
-<p><a href="./"><b>Editor rozvržení</b></a> · <a href="panels"><b>Panely</b></a> · <a href="install"><b>Instalace</b></a> · <a href="settings"><b>Nastavení</b></a> · <a href="view.json">Model zobrazení (JSON)</a></p>
+<p><a href="./"><b>Editor rozvržení</b></a> · <a href="panels"><b>Panely</b></a> · <a href="install"><b>Instalace</b></a> · <a href="view.json">Model zobrazení (JSON)</a></p>
 <p>Povolená zařízení: {html.escape(", ".join(self.opts.get("allowed_devices") or []) or "zatím žádné (první se zapíše samo)")}<br>
 Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
 <button onclick="fetch('refresh',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:'{{}}'}}).then(()=>location.reload())">Překreslit hned</button>
@@ -455,21 +455,14 @@ Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
         return web.json_response({"panel": t.cfg, "view": t.view, "device": t.device, "hash": t.view_hash},
                                  dumps=lambda o: json.dumps(o, ensure_ascii=False, indent=2, default=str))
 
-    # ── nastavení s našeptávačem ─────────────────────────────────────────
+    # ── stránky (jen přes Ingress) ───────────────────────────────────────
     async def handle_editor(self, request: web.Request) -> web.Response:
         return web.FileResponse(render.APP_DIR / "templates" / "editor.html",
-                                headers={"Cache-Control": "no-store"})
-
-    async def handle_settings_page(self, request: web.Request) -> web.Response:
-        return web.FileResponse(render.APP_DIR / "templates" / "settings.html",
                                 headers={"Cache-Control": "no-store"})
 
     async def handle_panels_page(self, request: web.Request) -> web.Response:
         return web.FileResponse(render.APP_DIR / "templates" / "panels.html",
                                 headers={"Cache-Control": "no-store"})
-
-    async def handle_options(self, request: web.Request) -> web.Response:
-        return web.json_response(self.opts)
 
     async def handle_entities(self, request: web.Request) -> web.Response:
         if MOCK:
@@ -483,22 +476,6 @@ Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
             return web.json_response(await self.ha.entities())
         except Exception as e:  # noqa: BLE001
             return web.json_response({"error": str(e)}, status=502)
-
-    async def handle_settings_save(self, request: web.Request) -> web.Response:
-        try:
-            if request.content_type != "application/json":  # formulář z cizí stránky neprojde
-                return web.json_response({"error": "očekávám application/json"}, status=415)
-            new = options.sanitize(await request.json(), self.opts)
-            await self.persist_options(new)
-        except Exception as e:  # noqa: BLE001
-            return web.json_response({"error": str(e)}, status=400)
-        self.opts = new
-        if not self.layout_saved:  # rozvržení zatím odvozené z konfigurace
-            self.layouts = {layout_mod.DEFAULT_ID: dict(layout_mod.from_options(new), name=layout_mod.DEFAULT_NAME)}
-        self.sync_targets()  # výchozí rozvrh
-        await self.rebuild(force=True)
-        print("[settings] konfigurace uložena")
-        return web.json_response({"options": self.opts, "error": self.last_error or None})
 
     # ── rozvržení (editor) ───────────────────────────────────────────────
     def layout_list(self) -> list[dict]:
@@ -809,9 +786,6 @@ async def main() -> None:
             web.get("/ts", srv.handle_ts),
             web.get("/view.json", srv.handle_view),
             web.post("/refresh", srv.handle_refresh),
-            web.get("/settings", srv.handle_settings_page),
-            web.post("/settings", srv.handle_settings_save),
-            web.get("/options.json", srv.handle_options),
             web.get("/entities.json", srv.handle_entities),
             web.get("/layout.json", srv.handle_layout),
             web.static("/static", render.STATIC_DIR),

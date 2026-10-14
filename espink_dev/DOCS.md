@@ -53,6 +53,12 @@ k sousedovi, duplikace, náhled „nejhorší případ“, mřížka sloupců, v
 > (PNG), `POST layout` (uložení), `GET layout/history.json`, `POST layouts/create|rename|delete`,
 > `GET panels.json`, `POST panels/save|approve|delete`, `GET preview.png?panel=MAC`.
 >
+> **Rozvrh probouzení** (Panely): průběh dne a 24 hodin, v každé interval (5–30 min,
+> 1× za hodinu v :00, nebo nebudit) – jako v Živém obrazu. Probuzení jsou zarovnaná na
+> násobky intervalu (:00, :05, …). Rozvrhy se dny v týdnu nebo minutami jdou upravit
+> v režimu Pokročilé (pravidla). Karta Systém zrušena – technické volby (formát dat,
+> interval kontroly, výchozí rozvrh a otočení pro nové panely) jsou v Konfiguraci add-onu v HA.
+>
 > **Zaokrouhlení s hysterezí:** teplota (volba „Desetinná místa teploty“ u počasí, 0 = celé
 > stupně), vlhkost, tlak, Hodnota entity a položky patičky se zobrazují zaokrouhlené a nová
 > hodnota se ukáže, až se skutečná vzdálí o ¾ kroku (z 11 °C na 12 °C až od 11,75 °C) –

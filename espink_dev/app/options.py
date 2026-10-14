@@ -167,8 +167,15 @@ class Schedule:
         for w in self.windows:
             if w.contains(now):
                 until_end = (w.end_at(now) - now).total_seconds()
+                # Zarovnat na násobky intervalu od půlnoci (5 min = :00, :05, …; hodina = v :00),
+                # aby se časy probuzení během dne neposouvaly. Probudí-li se deska o pár
+                # sekund dřív, nejbližší hranice se přeskočí (méně než MIN_SLEEP).
+                into_day = now.hour * 3600 + now.minute * 60 + now.second + now.microsecond / 1e6
+                wait = w.interval - into_day % w.interval
+                if wait < MIN_SLEEP:
+                    wait += w.interval
                 # Probudit se nejpozději na konci okna, aby platil další režim
-                return int(max(MIN_SLEEP, min(w.interval, until_end if until_end > 0 else w.interval)))
+                return int(round(max(MIN_SLEEP, min(wait, until_end if until_end > 0 else wait))))
         nxt = self.next_start(now)
         if nxt is None:
             return FALLBACK_SLEEP

@@ -322,9 +322,14 @@ class Server:
         Chybné pokusy se počítají – po několika se MAC/IP na čas odmítá (hádání klíče)."""
         allowed = self.opts.get("allowed_devices") or []
         keys = self.security["keys"]
+        # pořadí: blokace IP (hádání z jedné adresy) → správný klíč povolené desky → blokace MAC.
+        # Správný klíč projde i při blokaci MAC – jinak by šlo povolenou desku z jiné IP odříznout.
+        if self.blocked(ip):
+            return False
         if mac and mac in allowed and api_key and keys.get(mac) == api_key:
-            return True   # i když na MAC někdo zkoušel klíče: jinak by šlo povolenou desku odříznout
-        if self.blocked(mac, ip):
+            return True
+        if self.blocked(mac):
+            self.fail(ip)   # další pokusy na zablokovanou MAC se počítají IP (jinak by hádání pokračovalo)
             return False
         if mac and mac in allowed:
             known = keys.get(mac)

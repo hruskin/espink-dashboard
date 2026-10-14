@@ -753,13 +753,13 @@ class Installer:
         s = await self.settings()
         try:
             cfg = firmware_mod.check(s["host"], s["port"], s["ap_password"])
-            data = firmware_mod.part(request.match_info["name"], cfg)
+            data = firmware_mod.part(request.match_info["chip"], request.match_info["name"], cfg)
         except FileNotFoundError:
             raise web.HTTPNotFound()
         except ValueError as e:
             raise bad_request(f"nastavení firmwaru: {e}")
         if request.match_info["name"] == "firmware.bin":
-            print(f"[firmware] stažení pro instalaci: server {cfg['host']}:{cfg['port']}")
+            print(f"[firmware] stažení pro instalaci ({request.match_info['chip']}): server {cfg['host']}:{cfg['port']}")
         return web.Response(body=data, content_type="application/octet-stream", headers={"Cache-Control": "no-store"})
 
 
@@ -820,7 +820,7 @@ async def main() -> None:
             web.get("/firmware/info.json", inst.info),
             web.post("/firmware/settings", inst.save),
             web.get("/firmware/manifest.json", inst.manifest),
-            web.get(r"/firmware/{name:[a-z_0-9]+\.bin}", inst.part),
+            web.get(r"/firmware/{chip:esp32s3|esp32}/{name:[a-z_0-9]+\.bin}", inst.part),
         ])
         runner = web.AppRunner(app, access_log=None)
         await runner.setup()

@@ -20,12 +20,23 @@ MAGIC = b"ZOCFG1:espink\x00"
 FIELDS = (("host", 16, 64), ("port", 80, 8), ("ap_password", 88, 64))
 IMAGE_MAGIC = 0xE9
 HOST_RE = re.compile(r"^[A-Za-z0-9.-]{1,63}$")
-# Pořadí a adresy oddílů – stejně jako při nahrání přes PlatformIO
-PARTS = (("bootloader.bin", 0x0), ("partitions.bin", 0x8000), ("boot_app0.bin", 0xE000), ("firmware.bin", 0x10000))
+# Sestavení podle čipu (podadresář app/firmware, chipFamily pro ESP Web Tools) a adresy
+# oddílů – stejně jako při nahrání přes PlatformIO; ESP32 má zavaděč na 0x1000
+CHIPS = {
+    "esp32s3": ("ESP32-S3", (("bootloader.bin", 0x0), ("partitions.bin", 0x8000), ("boot_app0.bin", 0xE000),
+                             ("firmware.bin", 0x10000))),
+    "esp32": ("ESP32", (("bootloader.bin", 0x1000), ("partitions.bin", 0x8000), ("boot_app0.bin", 0xE000),
+                        ("firmware.bin", 0x10000))),
+}
+
+
+def chips() -> list[str]:
+    """Čipy, pro které je v add-onu sestavený firmware."""
+    return [c for c, (_, parts) in CHIPS.items() if all((DIR / c / name).is_file() for name, _ in parts)]
 
 
 def available() -> bool:
-    return all((DIR / name).is_file() for name, _ in PARTS)
+    return bool(chips())
 
 
 def build_info() -> dict:
@@ -116,10 +127,10 @@ def patch_image(img: bytes, cfg: dict) -> bytes:
     return bytes(out)
 
 
-def part(name: str, cfg: dict) -> bytes:
-    if name not in dict(PARTS):
+def part(chip: str, name: str, cfg: dict) -> bytes:
+    if chip not in chips() or name not in dict(CHIPS[chip][1]):
         raise FileNotFoundError(name)
-    data = (DIR / name).read_bytes()
+    data = (DIR / chip / name).read_bytes()
     return patch_image(data, cfg) if name == "firmware.bin" else data
 
 
@@ -129,5 +140,6 @@ def manifest(version: str) -> dict:
         "name": "ESPink (Živý obraz pro ESPink Server)",
         "version": version,
         "new_install_prompt_erase": True,
-        "builds": [{"chipFamily": "ESP32-S3", "parts": [{"path": name, "offset": off} for name, off in PARTS]}],
+        "builds": [{"chipFamily": CHIPS[c][0], "parts": [{"path": f"{c}/{name}", "offset": off} for name, off in CHIPS[c][1]]}
+                   for c in chips()],
     }

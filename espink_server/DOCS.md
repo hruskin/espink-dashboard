@@ -53,7 +53,7 @@ API (jen přes Ingress, `?id=` = rozvržení): `GET layout.json`, `POST layout/p
 
 ## Instalace firmwaru z prohlížeče
 
-Karta **Instalace** nahraje firmware do desky přes USB-C přímo z prohlížeče
+Karta **Instalace** nahraje firmware do desky (ESPink v3.6 s ESP32-S3 i starší ESPink 2.x s ESP32, displej GDEY075Z08) přes USB přímo z prohlížeče
 ([ESP Web Tools](https://esphome.github.io/esp-web-tools/); Chrome nebo Edge na počítači,
 Home Assistant otevřený přes HTTPS). Adresu serveru a port add-on zjistí sám od
 Supervisoru, heslo konfiguračního AP desky vygeneruje; obojí jde změnit. Hodnoty

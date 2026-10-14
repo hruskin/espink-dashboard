@@ -20,6 +20,7 @@ UPSTREAM_URL="https://github.com/MultiTricker/zivyobraz-fw.git"
 UPSTREAM_COMMIT="3d7a5a518df8deec32d5f53bd784c099857deeb8"
 SRC_DIR="zivyobraz-fw"
 ENV_NAME="espink_v36_gdey075z08"
+ENV_NAME_V2="espink_v2_gdey075z08"  # starší ESPink 2.x se stejným displejem
 
 # Konfigurace: config.env, ale proměnné prostředí mají přednost
 _env_host="${ZO_HOST:-}"
@@ -92,8 +93,26 @@ lib_deps =
     \${common.lib_deps_builtin}
     \${common.lib_deps}
 lib_ignore = \${common.lib_ignore}
+
+# LaskaKit ESPink 2.x (ESP32-WROOM-32, UART přes převodník) + GDEY075Z08
+[env:${ENV_NAME_V2}]
+board = esp32dev
+build_flags =
+    -D BOARD_TYPE=ESPink_V2
+    -D DISPLAY_TYPE=GDEY075Z08
+    -D COLOR_TYPE=3C
+    -D USE_CLIENT_HTTP
+    -D ZO_HOST=\\"${ZO_HOST}\\"
+    -D ZO_PORT=${ZO_PORT}
+    -D ZO_DISABLE_OTA
+    -D ZO_NO_LIGHT_SLEEP_REFRESH
+    -D ZO_AP_PASSWORD=\\"${ZO_AP_PASSWORD}\\"
+lib_deps =
+    \${common.lib_deps_builtin}
+    \${common.lib_deps}
+lib_ignore = \${common.lib_ignore}
 INI
 
-echo "Hotovo: server http://${ZO_HOST}:${ZO_PORT}, prostředí ${ENV_NAME}"
+echo "Hotovo: server http://${ZO_HOST}:${ZO_PORT}, prostředí ${ENV_NAME} a ${ENV_NAME_V2}"
 echo "Sestavení:  cd ${SRC_DIR} && pio run -e ${ENV_NAME}"
 echo "Nahrání:    cd ${SRC_DIR} && pio run -e ${ENV_NAME} -t upload"

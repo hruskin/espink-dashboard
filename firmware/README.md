@@ -14,7 +14,7 @@ Tento adresář obsahuje open-source firmware [Živý obraz](https://github.com/
 | `prepare.sh` | Stáhne upstream, aplikuje patche a přidá PlatformIO prostředí `espink_v36_gdey075z08` |
 | `patches/01-local-server.patch` | Umožní nastavit host (`ZO_HOST`) a port (`ZO_PORT`) při sestavení. Bez nich firmware zůstane beze změny. |
 | `patches/05-runtime-config.patch` | Host, port a heslo AP v bloku `ZOCFG1`, který webový instalátor add-onu přepíše přímo v binárce |
-| `build-addon.sh` | Sestaví neutrální binárku pro webový instalátor a zkopíruje ji do `app/firmware` add-onů |
+| `build-addon.sh` | Sestaví neutrální binárky pro webový instalátor (ESPink v3.6 = ESP32-S3 a starší ESPink 2.x = ESP32, obě s GDEY075Z08) a zkopíruje je do `app/firmware/<čip>` add-onů |
 | `zivyobraz-fw/` | Vygenerovaný zdrojový kód. Needituj ho, `prepare.sh` ho při každém spuštění vrátí do čistého stavu. |
 
 ## Nastavení serveru
@@ -31,6 +31,11 @@ Zadej IP adresu, ne `homeassistant.local`. Překlad mDNS po probuzení zdržuje,
 Jednorázově se dá hodnota přebít i proměnnou prostředí: `ZO_HOST=192.168.1.20 ./prepare.sh`.
 
 ## Webový instalátor (doporučeno)
+
+Instalátor obsahuje firmware pro **ESPink v3.6** (ESP32-S3, prostředí `espink_v36_gdey075z08`)
+i starší **ESPink 2.x** (ESP32-WROOM-32, `espink_v2_gdey075z08`), obojí s displejem
+GDEY075Z08; ESP Web Tools vybere podle připojeného čipu. Zdrojový kód a patche jsou
+stejné, liší se jen čip a piny desky (upstream `BOARD_TYPE=ESPink_V2`).
 
 V panelu ESPink → **Instalace** se firmware nahraje přes USB-C z prohlížeče (Chrome/Edge)
 a hned se zadá i Wi-Fi (Improv). Adresu serveru a heslo AP vloží add-on do binárky

@@ -87,7 +87,7 @@
     <h2><i class="mdi mdi-chip"></i>Nahrát do desky</h2>
     <ol>
       <li>Připoj ESPink datovým kabelem USB-C k tomuto počítači (Chrome nebo Edge).</li>
-      <li>Klikni na <b>Instalovat</b> a vyber port desky (<i>USB Single Serial</i> / CH343).</li>
+      <li>Klikni na <b>Instalovat</b> a vyber port desky (<i>USB Single Serial</i> / CH343, u starších desek CP210x / CH340). Firmware se vybere podle čipu: ESPink v3.6 (ESP32-S3) nebo ESPink 2.x (ESP32), obě s displejem GDEY075Z08.</li>
       <li>U nové nebo cizí desky zvol <b>smazat zařízení</b> (Erase) – smažou se i uložené údaje Wi-Fi.</li>
       <li>Po nahrání instalátor nabídne <b>připojení k Wi-Fi</b> – vyber síť a zadej heslo. (Nabídne ho, jen když deska Wi-Fi nezná.)</li>
       <li>Deska se připojí k serveru. Nová se objeví v <a href="panels">Panelech</a> pod <i>Nové desky</i>.</li>
@@ -126,7 +126,7 @@ function show(d) {
   const det = saved.detected || {};
   $("#hostHelp").textContent = det.host ? `Zjištěno ze Supervisoru: ${det.host}:${det.port}` : "Adresu HA se nepodařilo zjistit – zadej ji ručně.";
   const b = d.build || {};
-  $("#build").textContent = b.firmware ? `Živý obraz ${b.firmware} · upstream ${b.upstream} · ${(b.patches || []).length} patchů · sestaveno ${new Date(b.built).toLocaleDateString("cs-CZ")}` : "";
+  $("#build").textContent = b.firmware ? `Živý obraz ${b.firmware} · ${(b.boards || ["ESPink v3.6"]).join(", ")} · ${(b.patches || []).length} patchů · sestaveno ${new Date(b.built).toLocaleDateString("cs-CZ")}` : "";
   $("#noFw").hidden = d.available; $("#btn").hidden = !d.available;
   $("#save").disabled = true;
 }

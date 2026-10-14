@@ -221,7 +221,8 @@
             cells.push(box(stroke: 2pt + fill, radius: 4pt, inset: (x: 6pt), height: 24pt,
               align(horizon, text(size: 15pt, weight: 700, fill: fill, txt(e.label)))))
           }
-          box(width: 100%, height: pt(29 + (lines - 1) * line-h), clip: true,
+          // výška podle skutečného zalomení (model počítá s rezervou – případné místo navíc zůstane dole)
+          box(width: 100%, height: if e.at("wrap", default: false) { auto } else { 29pt }, clip: true,
             grid(columns: cols, column-gutter: pt(gap), align: top, ..cells))
         }
       }

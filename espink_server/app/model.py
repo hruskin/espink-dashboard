@@ -13,6 +13,7 @@ from jinja2.sandbox import SandboxedEnvironment
 from markupsafe import Markup
 from PIL import ImageFont
 
+import emoji
 import layout as layout_mod
 
 DAYS = ["pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota", "neděle"]
@@ -274,23 +275,40 @@ def _font(name: str, size: int):
     return ImageFont.truetype(str(FONTS / name), size)
 
 
+# neviditelné znaky v emoji (variační selektory, ZWJ, odstín pleti) – v Typstu nulová šířka
+_ZERO_WIDTH = {"\ufe0e", "\ufe0f", "\u200d", "\u200b", "\u20e3", *map(chr, range(0x1F3FB, 0x1F400))}
+
+
+@functools.lru_cache(maxsize=1)
+def _emoji_chars() -> dict[str, str]:
+    import render  # kódy ikon MDI z CSS (render nezávisí na modelu)
+    return emoji.icon_chars(render.mdi_codes())
+
+
 def _text_width(text: str, font, size: int) -> float:
-    """Šířka textu v px; znaky mimo font (emoji, ikony) ~1,1 em – raději víc než méně."""
+    """Šířka textu v px jako v Typstu: emoji z tabulky jako ikona MDI, ostatní z Noto Emoji."""
+    text = emoji.replace(text, _emoji_chars())
     missing = font.getlength("\U0010FFFD")
     total, run = 0.0, ""
     for ch in text:
-        if ch.isascii() or font.getlength(ch) != missing:
+        if ch in _ZERO_WIDTH:
+            continue
+        if ord(ch) >= 0xF0000:  # ikona MDI (soukromá oblast Unicode)
+            other = _font("MaterialDesignIcons.ttf", size)
+        elif ch.isascii() or font.getlength(ch) != missing:
             run += ch
+            continue
         else:
-            total += font.getlength(run) + 1.1 * size
-            run = ""
+            other = _font("NotoEmoji-400.ttf", size)
+        total += font.getlength(run) + other.getlength(ch)
+        run = ""
     return total + font.getlength(run)
 
 
 def wrap_lines(text: str, width: float, size: int, bold: bool) -> int:
     """Kolik řádků zabere text při zalomení po slovech (jako Typst, linebreaks: simple)."""
     font = _font(f"RobotoCondensed-{700 if bold else 500}.ttf", size)
-    width *= 0.98  # Pillow neumí kerning z GPOS – radši o kousek užší než Typst
+    width -= 0.5  # měření Pillow odpovídá Typstu (ověřeno); jen zaokrouhlení
     lines, cur = 1, 0.0
     space = font.getlength(" ")
     for word in text.split():
@@ -310,7 +328,7 @@ def _row_height(it: dict, m: dict, cw: int) -> int:
         return EVENT_ROW_H
     width = cw - m["dlw"] - m["tw"] - m["gap"] * 2 - ((18 + m["gap"]) if m["ci"] else 0)
     if m["tags"] and it.get("label"):
-        tag = _text_width(it["label"], _font("Inter-700.ttf", 15), 15) + 12 + 2
+        tag = _text_width(it["label"], _font("Inter-700.ttf", 15), 15) + 12  # inset 2 × 6 px (rámeček nezabírá místo)
         width -= tag + m["gap"]
     bold = bool(it.get("red") or it.get("allday"))
     it["lines"] = min(WRAP_MAX_LINES, wrap_lines(it["summary"], width, m["ss"], bold))

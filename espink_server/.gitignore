@@ -8,3 +8,4 @@ dev-layouts.json
 dev-panels.json
 installer.json
 *.tmp
+security.json

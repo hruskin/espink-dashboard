@@ -44,8 +44,8 @@ def sanitize(raw: dict, layouts: dict) -> dict:
     if lid not in layouts:
         lid = next(iter(layouts))
     sensor = str(raw.get("battery_sensor") or "").strip()
-    if sensor and not ENTITY_RE.match(sensor):
-        raise ValueError(f"neplatné ID entity: {sensor}")
+    if sensor and not (ENTITY_RE.match(sensor) and sensor.startswith("sensor.")):
+        raise ValueError(f"senzor baterie musí být entita sensor.…: {sensor}")
     rotate = raw.get("rotate")  # None = výchozí z konfigurace add-onu
     if rotate in ("", None):
         rotate = None
@@ -82,3 +82,36 @@ def load(opts: dict, layouts: dict) -> list[dict]:
 
 def save(panels: list[dict]) -> None:
     layout_mod._write(path(), {"panels": panels})
+
+
+# ── Zabezpečení desek: klíč (X-API-Key) a jednorázové automatické povolení ──
+# Firmware posílá v hlavičce X-API-Key náhodný 8místný klíč uložený v desce (nový po
+# smazání flash). Server si ho při povolení desky zapamatuje a dál vyžaduje MAC i klíč.
+# „tofu_done“: první deska se smí povolit sama jen jednou (ne po odebrání posledního panelu).
+KEY_RE = re.compile(r"^[0-9]{4,12}$")
+
+
+def security_path() -> str:
+    return layout_mod._sibling("SECURITY_PATH", "security.json")
+
+
+def load_security() -> dict:
+    try:
+        with open(security_path(), encoding="utf-8") as f:
+            data = json.load(f)
+    except (FileNotFoundError, ValueError):
+        data = {}
+    keys = data.get("keys") if isinstance(data.get("keys"), dict) else {}
+    return {"tofu_done": bool(data.get("tofu_done")),
+            "keys": {m: k for m, k in keys.items() if normalize_mac(m) == m and KEY_RE.match(str(k))}}
+
+
+def save_security(data: dict) -> None:
+    path = security_path()
+    layout_mod._write(path, data)
+    os.chmod(path, 0o600)
+
+
+def clean_key(value) -> str:
+    v = str(value or "").strip()
+    return v if KEY_RE.match(v) else ""

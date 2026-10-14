@@ -14,7 +14,7 @@ Překryvy editor nedovolí, volná místa jsou šrafovaná. Obsah se přizpůsob
 bloku – Události a Odjezdy podle výšky spočítají, kolik řádků se vejde, úzké bloky
 skryjí méně důležité detaily. „Seřadit pod sebe“ srovná bloky na celou šířku.
 Náhled vykresluje server stejně jako pro desku. Po prvním uložení platí pro obsah jen
-editor (entity v Systém → nastavení se pak už nepoužijí). Starší rozvržení (bloky pod sebou) se
+editor (entity z Konfigurace add-onu se pak už nepoužijí). Starší rozvržení (bloky pod sebou) se
 převede automaticky.
 
 Bloky: Záhlaví (s počasím nebo bez), Počasí teď, Odjezdy, Události, Předpověď,
@@ -47,14 +47,20 @@ názvy jeho událostí se nezkracují, ale zalomí (nejvýš 8 řádků). Model 
 stejným fontem (Pillow) a podle toho, kolik událostí se vejde; agenda drží pořadí –
 od první události, která se nevejde, jde vše do „+N dalších“.
 
+API (jen přes Ingress, `?id=` = rozvržení): `GET layout.json`, `POST layout/preview`
+(PNG), `POST layout` (uložení), `GET layout/history.json`, `POST layouts/create|rename|delete`,
+`GET panels.json`, `POST panels/save|approve|delete`, `GET preview.png?panel=MAC`.
+
+**Rozvrh probouzení** (Panely): průběh dne a 24 hodin, v každé interval (5–30 min,
+1× za hodinu v :00, nebo nebudit) – jako v Živém obrazu. Probuzení jsou zarovnaná na
+násobky intervalu (:00, :05, …). Rozvrhy se dny v týdnu nebo minutami jdou upravit
+v režimu Pokročilé (pravidla). Karta Systém zrušena – technické volby (formát dat,
+interval kontroly, výchozí rozvrh a otočení pro nové panely) jsou v Konfiguraci add-onu v HA.
+
 **Zaokrouhlení s hysterezí:** teplota (volba „Desetinná místa teploty“ u počasí, 0 = celé
 stupně), vlhkost, tlak, Hodnota entity a položky patičky se zobrazují zaokrouhlené a nová
 hodnota se ukáže, až se skutečná vzdálí o ¾ kroku (z 11 °C na 12 °C až od 11,75 °C) –
 hodnota na hranici nepřeskakuje a nevynucuje překreslení. Paměť má každý panel svou.
-
-API (jen přes Ingress, `?id=` = rozvržení): `GET layout.json`, `POST layout/preview`
-(PNG), `POST layout` (uložení), `GET layout/history.json`, `POST layouts/create|rename|delete`,
-`GET panels.json`, `POST panels/save|approve|delete`, `GET preview.png?panel=MAC`.
 
 ## Instalace firmwaru z prohlížeče
 
@@ -103,9 +109,17 @@ Firmware s touto adresou připravíte podle `firmware/README.md`.
 ## Bezpečnost
 
 - **Povolená zařízení:** port 8099 obsluhuje jen desky ze seznamu `allowed_devices`
-  (MAC adresy). Je-li seznam prázdný, první deska, která se ozve, se zapíše sama;
-  ostatní dostanou `403`. Odmítnuté desky jsou vidět v Panelech (*Nové desky*),
-  kde je jde jedním tlačítkem povolit.
+  (MAC adresy) **se známým klíčem**: firmware posílá v hlavičce `X-API-Key` náhodný
+  klíč uložený v desce; add-on si ho při povolení zapamatuje (`/data/security.json`)
+  a dál vyžaduje MAC i klíč. Desky povolené dřív se klíč naučí při prvním spojení.
+  Úplně první deska se zapíše sama (jen jednou – ne znovu po odebrání posledního
+  panelu); ostatní dostanou `403` a čekají v Panelech (*Nové desky*) na povolení.
+  Po smazání flash má deska nový klíč – v *Nových deskách* ji stačí znovu povolit.
+- **Vstupy od desky:** tělo nejvýš 16 kB, nevalidní JSON se tiše ignoruje, texty
+  (verze FW, důvod restartu) se zkracují; senzor baterie smí být jen `sensor.…`.
+- **Instalátor** má ESP Web Tools přibalené (`static/esp-web-tools`), nenačítá se nic z CDN.
+- **Lokální vývoj (`dev.sh`, DEV=1):** UI odpovídá jen na `localhost` (ochrana proti
+  DNS rebindingu); token v `.env.dev` dávej od uživatele bez administrátorských práv.
 - **Omezení rychlosti:** deska vynutí nové vykreslení nejvýš jednou za 30 s a zápis
   do HA nejvýš jednou za minutu.
 - **Webové rozhraní** je dostupné jen přes Ingress (administrátoři HA); ukládání

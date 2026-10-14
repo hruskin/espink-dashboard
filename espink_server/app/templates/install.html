@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ESPink – instalace firmwaru</title>
 <link rel="stylesheet" href="static/mdi/css/materialdesignicons.min.css">
-<script type="module" src="https://cdn.jsdelivr.net/npm/esp-web-tools@10.2.1/dist/web/install-button.js"></script>
+<!-- ESP Web Tools přibalené v add-onu (static/esp-web-tools) – žádný cizí skript v originu HA -->
+<script type="module" src="static/esp-web-tools/install-button.js"></script>
 <style>
   :root {
     --bg: #fafafa; --card: #fff; --ink: #212121; --muted: #727272; --line: #e0e0e0; --hover: rgba(0,0,0,.04);
@@ -60,7 +61,7 @@
 <body>
 <header class="appbar">
   <h1>ESPink</h1>
-  <nav class="tabs"><a href="./">Rozvržení</a><a href="panels">Panely</a><a href="install" aria-current="page">Instalace</a><a href="status">Stav</a><a href="settings">Systém</a></nav>
+  <nav class="tabs"><a href="./">Rozvržení</a><a href="panels">Panely</a><a href="install" aria-current="page">Instalace</a><a href="status">Stav</a></nav>
 </header>
 <main>
   <div class="banner err" id="noSerial" hidden><i class="mdi mdi-usb-port"></i><div>

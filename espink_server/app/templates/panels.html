@@ -69,12 +69,32 @@
   .toast.show { display: block; }
   .banner { margin-bottom: 12px; padding: 10px 14px; border-radius: 8px; background: var(--err-bg); }
   :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  /* rozvrh probouzení: průběh dne + hodiny */
+  .sched { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+  .sched-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .sched-head b { font-weight: 500; }
+  .sched-head small { color: var(--muted); }
+  .sched-bar { display: flex; height: 34px; border-radius: 6px; overflow: hidden; }
+  .sched-bar > div { color: #fff; font-size: 11px; font-weight: 500; display: flex; align-items: center; justify-content: center;
+                     white-space: nowrap; overflow: hidden; border-right: 1px solid var(--card); min-width: 0; }
+  .sched-bar > div:last-child { border-right: 0; }
+  .sched-axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin: 2px 0 6px; font-variant-numeric: tabular-nums; }
+  .sched-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: var(--muted); margin-bottom: 10px; }
+  .sched-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  .sched-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; }
+  .sched-tools select { width: auto; padding: 6px 8px; }
+  .sched-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
+  @media (max-width: 560px) { .sched-grid { grid-template-columns: 1fr; } }
+  .sched-grid label { display: grid; grid-template-columns: 92px 1fr; align-items: center; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .sched-grid select { padding: 6px 8px; border-left-width: 6px; }
+  .sched-note { font-size: 12px; color: var(--muted); margin: 6px 0; }
+  .sched-note.warn { color: var(--ink); background: var(--warn-bg); padding: 6px 8px; border-radius: 6px; }
 </style>
 </head>
 <body>
 <header class="appbar">
   <h1>ESPink</h1>
-  <nav class="tabs"><a href="./">Rozvržení</a><a href="panels" aria-current="page">Panely</a><a href="install">Instalace</a><a href="status">Stav</a><a href="settings">Systém</a></nav>
+  <nav class="tabs"><a href="./">Rozvržení</a><a href="panels" aria-current="page">Panely</a><a href="install">Instalace</a><a href="status">Stav</a></nav>
 </header>
 <main>
   <div id="banners"></div>
@@ -121,6 +141,132 @@ function layoutSelect(value) {
 }
 const field = (label, input, help) => el("label", { className: "f" }, el("span", { textContent: label }), input, help || null);
 
+// ───────── Rozvrh probouzení: 24 hodin, v každé interval (inspirace Živý obraz) ─────────
+// Server dál dostává pravidla „HH:MM-HH:MM=sekundy“ (spojené stejné sousední hodiny);
+// probuzení jsou zarovnaná na násobky intervalu (5 min = :00, :05, …; hodina = v :00).
+const SLOTS = [
+  { v: 300, label: "každých 5 min", short: "à 5 min", color: "#0288d1" },
+  { v: 600, label: "každých 10 min", short: "à 10 min", color: "#00838f" },
+  { v: 900, label: "každých 15 min", short: "à 15 min", color: "#6a4fc8" },
+  { v: 1200, label: "každých 20 min", short: "à 20 min", color: "#8e44ad" },
+  { v: 1800, label: "každých 30 min", short: "à 30 min", color: "#689f38" },
+  { v: 3600, label: "1× za hodinu (v :00)", short: "v :00", color: "#388e3c" },
+  { v: 0, label: "nebudit", short: "spí", color: "#8d8d8d" },
+];
+const slot = v => SLOTS.find(s => s.v === v) || SLOTS[SLOTS.length - 1];
+const RULE_RE = /^\s*(?:(\d)(?:-(\d))?\s+)?(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})\s*=\s*(\d+)\s*$/;
+const pad2 = n => String(n).padStart(2, "0");
+
+// pravidla -> 24 hodin; null = nejde zobrazit (dny v týdnu, minuty, jiný interval).
+// lossy: přibližně – za hodinu nejčastější interval, který v ní kdekoli platí (dny se ignorují),
+// takže převod nikdy nevytvoří hodinu „nebudit“ tam, kde se původně budilo
+const toSlot = v => SLOTS.filter(s => s.v && s.v <= v).reduce((a, s) => Math.max(a, s.v), 0) || 300;
+function rulesToHours(rules, lossy) {
+  const wins = [];
+  for (const r of rules.filter(x => x.trim())) {
+    const m = RULE_RE.exec(r);
+    if (!m) return null;
+    const [, d1, d2, h1, m1, h2, m2, sec] = m;
+    const allDays = !d1 || (d1 === "1" && d2 === "7");
+    const v = Math.max(60, +sec);
+    if (!lossy && (!allDays || m1 !== "00" || m2 !== "00" || !SLOTS.some(s => s.v === v))) return null;
+    wins.push([+h1 * 60 + +m1, (+h2 % 24) * 60 + +m2, lossy ? toSlot(v) : v]);
+  }
+  const at = t => wins.find(([a, b]) => a < b ? t >= a && t < b : (t >= a || t < b));   // první vyhovující (jako server)
+  return Array.from({ length: 24 }, (_, h) => {
+    if (!lossy) { const w = at(h * 60); return w ? w[2] : 0; }
+    const vs = Array.from({ length: 60 }, (_, mi) => at(h * 60 + mi)).filter(Boolean).map(w => w[2]);
+    return vs.length ? Math.min(...vs) : 0;
+  });
+}
+// 24 hodin -> pravidla; stejné sousední hodiny (i přes půlnoc) v jednom pravidle
+function hoursToRules(hours) {
+  if (hours.every(v => v === hours[0])) return hours[0] ? [`00:00-00:00=${hours[0]}`] : [];
+  const start = hours.findIndex((v, i) => v !== hours[(i + 23) % 24]);
+  const out = [];
+  for (let k = 0; k < 24;) {
+    const a = (start + k) % 24, v = hours[a];
+    let n = 1;
+    while (k + n < 24 && hours[(start + k + n) % 24] === v) n++;
+    if (v) out.push(`${pad2(a)}:00-${pad2((a + n) % 24)}:00=${v}`);
+    k += n;
+  }
+  return out.sort();
+}
+const wakesPerDay = hours => hours.reduce((s, v) => s + (v ? 3600 / v : 0), 0);
+
+function scheduleEditor(p, onChange) {
+  const inherited = !p.schedule.length;            // panel zatím jede podle výchozího rozvrhu add-onu
+  let rules = inherited ? [...DATA.default_schedule] : [...p.schedule];
+  let custom = !inherited, advanced = rulesToHours(rules) === null;
+  const box = el("div", { className: "sched" });
+  const changed = () => { custom = true; onChange(); draw(); };
+  function draw() {
+    const exact = rulesToHours(rules);
+    const hours = exact || rulesToHours(rules, true);   // pokročilý rozvrh: pruh aspoň přibližně
+    box.replaceChildren();
+    const count = hours ? Math.round(wakesPerDay(hours)) : null;
+    const toggle = el("button", { className: "txtbtn", type: "button", style: "padding:2px 6px" },
+      icon(advanced ? "view-grid-outline" : "code-tags"), advanced ? "Hodiny" : "Pokročilé (pravidla)");
+    toggle.onclick = () => {
+      if (advanced && !rulesToHours(rules)) {
+        const approx = rulesToHours(rules, true);
+        if (!approx) { toast("Nejdřív oprav pravidla – některý řádek nedává smysl."); return; }
+        if (!confirm("Rozvrh obsahuje dny v týdnu nebo minuty, hodinová mřížka je nezná. Převést na hodiny? " +
+                     "Každá hodina dostane nejčastější interval, který v ní platí (podle pruhu nahoře).")) return;
+        rules = hoursToRules(approx); custom = true; onChange();
+      }
+      advanced = !advanced; draw();
+    };
+    box.append(el("div", { className: "sched-head" },
+      el("div", {}, el("b", { textContent: "Průběh dne" }), " ",
+        el("small", { textContent: count === null ? "· pravidla obsahují chybu" : `· ${exact ? "" : "přibližně "}${count} probuzení za den` })), toggle));
+    if (inherited && !custom) box.append(el("div", { className: "sched-note", textContent: "Panel zatím používá výchozí rozvrh add-onu (Konfigurace add-onu v HA) – úpravou a uložením získá vlastní." }));
+    if (hours) {
+      const bar = el("div", { className: "sched-bar" });
+      for (let h = 0; h < 24;) {                     // úseky po stejném intervalu
+        let n = 1;
+        while (h + n < 24 && hours[h + n] === hours[h]) n++;
+        const s = slot(hours[h]);
+        bar.append(el("div", { style: `flex:${n};background:${s.color}`, title: `${h}:00–${h + n}:00 ${s.label}`, textContent: n >= 2 ? s.short : "" }));
+        h += n;
+      }
+      box.append(bar, el("div", { className: "sched-axis" }, ...[0, 3, 6, 9, 12, 15, 18, 21, 24].map(x => el("span", { textContent: x }))));
+      const used = [...new Set(hours)];
+      box.append(el("div", { className: "sched-legend" }, ...SLOTS.filter(s => used.includes(s.v)).map(s =>
+        el("span", {}, el("i", { style: "background:" + s.color }), s.label))));
+    }
+    if (advanced) {
+      const ta = el("textarea", { value: rules.join("\n"), spellcheck: false, rows: Math.max(4, rules.length + 1) });
+      ta.oninput = () => { rules = ta.value.split("\n").map(x => x.trim()).filter(Boolean); custom = true; onChange(); };
+      ta.onblur = draw;
+      ta.onchange = draw;
+      box.append(el("label", { className: "f", style: "margin:0" }, ta), el("div", { className: "help", innerHTML:
+        "Jedno pravidlo na řádek: <code>[dny ]HH:MM-HH:MM=sekundy</code>, dny 1=Po … 7=Ne, platí první vyhovující. Mimo pravidla deska spí." }));
+      const bad = rules.filter(r => !RULE_RE.test(r));
+      if (bad.length) box.append(el("div", { className: "sched-note warn", textContent: `Tenhle řádek nedává smysl: „${bad[0]}“ – formát je HH:MM-HH:MM=sekundy.` }));
+      else if (!exact && custom) box.append(el("div", { className: "sched-note", textContent: "Rozvrh obsahuje dny v týdnu, minuty nebo jiný interval – v mřížce po hodinách ho nejde přesně zobrazit, pruh je přibližný." }));
+      return;
+    }
+    const all = el("select");
+    all.append(el("option", { value: "", textContent: "nastavit všechny hodiny…" }), ...SLOTS.map(s => el("option", { value: s.v, textContent: s.label })));
+    all.onchange = () => { if (all.value === "") return; rules = hoursToRules(Array(24).fill(+all.value)); changed(); };
+    box.append(el("div", { className: "sched-tools" }, all));
+    const grid = el("div", { className: "sched-grid" });
+    const row = h => {
+      const sel = el("select", { style: "border-left-color:" + slot(hours[h]).color });
+      SLOTS.forEach(s => sel.append(el("option", { value: s.v, textContent: s.label, selected: s.v === hours[h] })));
+      sel.onchange = () => { const hs = [...hours]; hs[h] = +sel.value; rules = hoursToRules(hs); changed(); };
+      return el("label", {}, el("span", { textContent: `${h}:00–${h}:59` }), sel);
+    };
+    for (let i = 0; i < 12; i++) grid.append(row(i), row(i + 12));   // dva sloupce: dopoledne | odpoledne
+    box.append(grid);
+    if (!hours.some(Boolean)) box.append(el("div", { className: "sched-note warn", textContent: "Žádná hodina nebudí – panel by použil výchozí rozvrh add-onu." }));
+  }
+  draw();
+  return { el: box, rules: () => (custom ? rules : []) };
+}
+
 function panelCard(p) {
   const d = p.device || {};
   const chips = el("div", { className: "chips" },
@@ -141,7 +287,7 @@ function panelCard(p) {
   sensor.setAttribute("list", "dl-sensor");
   const sug = el("button", { className: "txtbtn", type: "button", title: "Navrhnout podle názvu panelu" }, icon("auto-fix"));
   sug.onclick = () => { sensor.value = suggest(name.value.trim() || p.name); mark(); };
-  const sched = el("textarea", { value: p.schedule.join("\n"), placeholder: DATA.default_schedule.join("\n"), spellcheck: false });
+  const sched = scheduleEditor(p, () => mark());
   // otočení obrazu podle toho, jak je panel pověšený (rozvržení je na výšku)
   const rot = el("select");
   // obraz na výšku: 90° a 270° se liší právě otočením o 180° (vzhůru nohama)
@@ -152,13 +298,13 @@ function panelCard(p) {
   const save = el("button", { className: "primary", textContent: "Uložit", disabled: true });
   const del = el("button", { className: "txtbtn danger" }, icon("delete-outline"), "Odebrat");
   const mark = () => { save.disabled = false; dirty.add(p.mac); };
-  [name, lay, sensor, sched, rot].forEach(i => i.addEventListener("input", mark));
+  [name, lay, sensor, rot].forEach(i => i.addEventListener("input", mark));
 
   save.onclick = async () => {
     save.disabled = true;
     try {
       DATA = await post("panels/save", { mac: p.mac, name: name.value, layout: lay.value, battery_sensor: sensor.value,
-                                         schedule: sched.value.split("\n"), rotate: rot.value === "" ? null : +rot.value });
+                                         schedule: sched.rules(), rotate: rot.value === "" ? null : +rot.value });
       dirty.delete(p.mac); render(); toast(`Panel ${name.value.trim()} uložen. Změna se projeví při příštím probuzení desky.`);
     } catch (e) { save.disabled = false; toast("Nelze uložit: " + e.message); }
   };
@@ -177,8 +323,8 @@ function panelCard(p) {
             el("div", { className: "help", textContent: DATA.mqtt
         ? "Panel je v HA zařízení (MQTT) se senzory baterie, napětí, signálu, doby překreslení… Tohle je entity ID baterie – platí jen při prvním vytvoření, potom ho měň v HA."
         : "Add-on ho vytvoří a plní přes REST API (napětí, signál, délka překreslení… v atributech)." })),
-      field("Rozvrh probouzení", sched, el("div", { className: "help", innerHTML:
-        "Jedno pravidlo na řádek: <code>[dny ]HH:MM-HH:MM=sekundy</code>, dny 1=Po … 7=Ne. Prázdné = výchozí rozvrh ze Systému (šedě)." })),
+      el("div", { className: "f" }, el("span", { textContent: "Rozvrh probouzení" }), sched.el,
+        el("div", { className: "help", textContent: "Deska se jen zeptá na nový obsah; překresluje se, jen když se změnil. Méně probuzení = delší výdrž baterie." })),
       el("div", { className: "foot" }, save, el("span", { className: "sp" }), del))));
 }
 
@@ -194,11 +340,14 @@ function pendingRow(p) {
       render(); toast("Deska povolena. Obrázek dostane při příštím probuzení.");
     } catch (e) { ok.disabled = false; toast("Nelze povolit: " + e.message); }
   };
-  const info = p.allowed ? "povolená v Systému, zatím se neozvala"
-    : [p.when && "ozvala se " + p.when, p.ip, p.fw && "FW " + p.fw, p.voltage && p.voltage + " V"].filter(Boolean).join(" · ");
+  // známý panel s jiným klíčem desky (např. po smazání flash) – jen znovu povolit
+  const panel = DATA.panels.find(x => x.mac === p.mac);
+  const info = p.allowed ? "povolená, zatím se neozvala"
+    : [panel ? `panel ${panel.name}: deska se ozvala s jiným klíčem (přeinstalovaná?)` : "",
+       p.when && "ozvala se " + p.when, p.ip, p.fw && "FW " + p.fw, p.voltage && p.voltage + " V"].filter(Boolean).join(" · ");
   return el("div", { className: "pend" },
     el("div", {}, el("b", { textContent: p.mac }), el("div", { className: "help", textContent: info })),
-    ...(p.allowed ? [el("span"), el("span"), el("span")] : [field("Název panelu", name), field("Rozvržení", lay), ok]));
+    ...(p.allowed ? [el("span"), el("span"), el("span")] : panel ? [el("span"), el("span"), ok] : [field("Název panelu", name), field("Rozvržení", lay), ok]));
 }
 
 function render() {

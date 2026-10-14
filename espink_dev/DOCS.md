@@ -13,7 +13,7 @@
 > bloku – Události a Odjezdy podle výšky spočítají, kolik řádků se vejde, úzké bloky
 > skryjí méně důležité detaily. „Seřadit pod sebe“ srovná bloky na celou šířku.
 > Náhled vykresluje server stejně jako pro desku. Po prvním uložení platí pro obsah jen
-> editor (entity v Systém → nastavení se pak už nepoužijí). Baterii v náhledu bere DEV
+> editor (entity z Konfigurace add-onu se pak už nepoužijí). Baterii v náhledu bere DEV
 > verze ze senzoru, který plní stabilní add-on. Starší rozvržení (bloky pod sebou) se
 > převede automaticky.
 >

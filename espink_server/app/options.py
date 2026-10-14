@@ -23,7 +23,7 @@ DEFAULTS = {
     "nameday_calendar": "",
     "holiday_calendar": "",
     "event_days": 7,
-    "schedule": ["06:00-22:30=1200"],
+    "schedule": ["06:00-08:00=300", "08:00-15:00=900", "15:00-18:00=300", "18:00-20:00=900", "20:00-06:00=3600"],
     "battery_sensor": "sensor.espink_baterie",
     "allowed_devices": [],
 }
@@ -57,6 +57,8 @@ def load(path: str | None = None) -> dict:
     except FileNotFoundError:
         pass
     opts["rotate"] = int(opts["rotate"])
+    # MAC z Konfigurace v jednotném tvaru (AA:BB:…), jinak by se nikdy neshodovala
+    opts["allowed_devices"] = [normalize_mac(m) or str(m) for m in opts.get("allowed_devices") or []]
     return opts
 
 
@@ -167,8 +169,15 @@ class Schedule:
         for w in self.windows:
             if w.contains(now):
                 until_end = (w.end_at(now) - now).total_seconds()
+                # Zarovnat na násobky intervalu od půlnoci (5 min = :00, :05, …; hodina = v :00),
+                # aby se časy probuzení během dne neposouvaly. Probudí-li se deska o pár
+                # sekund dřív, nejbližší hranice se přeskočí (méně než MIN_SLEEP).
+                into_day = now.hour * 3600 + now.minute * 60 + now.second + now.microsecond / 1e6
+                wait = w.interval - into_day % w.interval
+                if wait < MIN_SLEEP:
+                    wait += w.interval
                 # Probudit se nejpozději na konci okna, aby platil další režim
-                return int(max(MIN_SLEEP, min(w.interval, until_end if until_end > 0 else w.interval)))
+                return int(round(max(MIN_SLEEP, min(wait, until_end if until_end > 0 else wait))))
         nxt = self.next_start(now)
         if nxt is None:
             return FALLBACK_SLEEP

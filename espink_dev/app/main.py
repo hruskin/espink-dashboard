@@ -109,6 +109,11 @@ class Server:
             # desky povolené před verzí s klíči se klíč naučí při prvním spojení – jen 14 dní
             self.security["learn_until"] = time.time() + LEARN_DAYS * 86400
             self.save_security()
+        elif "learn_until" not in self.security:
+            # aktualizace z verze bez okna pro učení: desky bez klíče ho mají 14 dní na naučení;
+            # nová instalace okno nepotřebuje (desky dostanou klíč při povolení)
+            self.security["learn_until"] = time.time() + LEARN_DAYS * 86400 if self.security["tofu_done"] else 0
+            self.save_security()
         self.failures: dict[str, list[float]] = {}   # MAC/IP -> časy chybných pokusů (omezení hádání klíče)
 
     # ── panely ───────────────────────────────────────────────────────────
@@ -165,7 +170,8 @@ class Server:
                     if lay["id"] not in raws:
                         raws[lay["id"]] = await self.fetch_raw(lay, now)
                     device = t.device or await self.device_from_sensor(t.cfg["battery_sensor"])
-                    view = model.build(raws[lay["id"]], lay, device, now, memory=t.shown)
+                    # ve vlákně: šablona může běžet až 2 s a smyčka serveru (desky) musí odpovídat dál
+                    view = await asyncio.to_thread(model.build, raws[lay["id"]], lay, device, now, memory=t.shown)
                     digest = model.digest(view)
                     self.last_build = time.time()
                     if digest == t.view_hash and not force:
@@ -314,10 +320,12 @@ class Server:
         deska se smí zapsat sama (trust on first use) – jen jednou za život instalace.
         Ostatní (i deska se změněným klíčem, např. po smazání flash) čekají na povolení.
         Chybné pokusy se počítají – po několika se MAC/IP na čas odmítá (hádání klíče)."""
-        if self.blocked(mac, ip):
-            return False
         allowed = self.opts.get("allowed_devices") or []
         keys = self.security["keys"]
+        if mac and mac in allowed and api_key and keys.get(mac) == api_key:
+            return True   # i když na MAC někdo zkoušel klíče: jinak by šlo povolenou desku odříznout
+        if self.blocked(mac, ip):
+            return False
         if mac and mac in allowed:
             known = keys.get(mac)
             if known and known == api_key:
@@ -615,7 +623,7 @@ class Server:
             try:
                 raw = await self.fetch_raw(draft, now)
                 device = t.device or await self.device_from_sensor(t.cfg["battery_sensor"])
-                view = model.build(raw, draft, device, now, worst=request.query.get("worst") == "1")
+                view = await asyncio.to_thread(model.build, raw, draft, device, now, worst=request.query.get("worst") == "1")
                 png, _ = await render.render(view, f"{now.day}. {now.month}. {now:%H:%M}",
                                              self.opts["rotate"], "png", after(now, t.schedule.sleep_seconds(now)))
             except Exception as e:  # noqa: BLE001

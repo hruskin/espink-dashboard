@@ -178,8 +178,11 @@ async function load() {
   } catch (e) {}
 }
 $("#refresh").onclick = async () => {
-  await fetch("refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-  toast("Obsah přepočítán – desky si ho vyzvednou při příštím probuzení."); ts = null; load();
+  try {
+    const r = await fetch("refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    toast("Obsah přepočítán – desky si ho vyzvednou při příštím probuzení."); ts = null; load();
+  } catch (e) { toast("Přepočet se nepovedl: " + e.message); }
 };
 load(); setInterval(load, 30000);
 </script>

@@ -620,7 +620,8 @@ async function load() {
 addEventListener("beforeunload", e => { if (dirty.size) e.preventDefault(); });
 // nové desky a stav se objeví bez obnovení stránky
 // nepřekreslovat, když uživatel zrovna pracuje: fokus v kartě, vybraný úsek, tažení, otevřený dialog
-const busy = () => document.activeElement?.closest("#list, #pendingBox") || document.querySelector(".sched-seg, .sched-hd.drag, dialog[open]");
+const busy = () => document.activeElement?.matches("#list :is(input, textarea, select, .sched-hd), #pendingBox :is(input, select)")
+  || document.querySelector(".sched-seg, .sched-hd.drag, dialog[open]");
 setInterval(() => { if (!document.hidden && !busy()) load(); }, 30000);
 load();
 </script>

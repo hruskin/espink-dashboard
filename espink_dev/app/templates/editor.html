@@ -42,7 +42,7 @@
   .card { background: var(--card); border-radius: 12px; box-shadow: var(--shadow); border: 1px solid var(--line); }
   @media (max-width: 999px) {
     main { grid-template-columns: minmax(0, 1fr); padding: 12px 12px 96px; }
-    .seg { display: flex; position: sticky; top: 56px; z-index: 15; background: var(--bg); padding: 8px 12px; gap: 0; }
+    .seg { display: flex; position: sticky; top: var(--hdr, 56px); z-index: 15; background: var(--bg); padding: 8px 12px; gap: 0; }
     .seg button { flex: 1; padding: 8px; border: 1px solid var(--primary); background: transparent; color: var(--primary); font-weight: 500; }
     .seg button:first-child { border-radius: 18px 0 0 18px; } .seg button:last-child { border-radius: 0 18px 18px 0; }
     .seg button[aria-pressed=true] { background: var(--primary); color: var(--on-primary); }
@@ -107,7 +107,7 @@
   .calrow { display: grid; grid-template-columns: 1fr 70px 48px auto auto 32px; gap: 6px; align-items: start; margin-bottom: 6px; }
   .calrow input { padding: 7px 8px !important; }
   .calrow .cbx { display: flex; flex-direction: column; align-items: center; gap: 1px; cursor: pointer; font-size: 11px; color: var(--muted); padding-top: 4px; white-space: nowrap; }
-  .bfoot { display: flex; gap: 4px; align-items: center; border-top: 1px dashed var(--line); padding-top: 10px; margin-top: 4px; }
+  .bfoot { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; border-top: 1px dashed var(--line); padding-top: 10px; margin-top: 4px; }
   .bfoot .sp { flex: 1; }
   .txtbtn { background: none; border: 0; color: var(--primary); font-weight: 500; padding: 8px 10px; border-radius: 4px; display: inline-flex; gap: 4px; align-items: center; }
   .txtbtn:hover { background: var(--hover); }
@@ -143,10 +143,12 @@
   .screen.failed .perr { display: block; }
 
   /* save bar + toast */
-  .savectl { margin-left: auto; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
-  .savectl .st { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); margin-right: 4px; }
+  .savectl { margin-left: auto; display: flex; align-items: center; gap: 4px; white-space: nowrap; min-width: 0; }
+  .savectl > button { flex-shrink: 0; }
+  .appbar .tabs { flex-shrink: 0; }
+  .savectl .st { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 13px; color: var(--muted); margin-right: 4px; }
   .savectl.show .st { color: var(--ink); font-weight: 500; }
-  .savectl.show .st::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+  .savectl.show .st::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); margin-right: 6px; vertical-align: 1px; }
   .savectl .primary { padding: 7px 16px; }
   .savectl.show .primary:not(:disabled) { box-shadow: 0 0 0 3px rgba(2,119,189,.25); }
   [hidden] { display: none !important; }
@@ -183,10 +185,11 @@
     /* uložení na telefonu ve druhém řádku hlavičky: stav vlevo, tlačítka vpravo */
     .appbar { gap: 2px; padding: 0 8px; flex-wrap: wrap; height: auto; }
     .appbar .tabs { height: 56px; }
+    @media (max-width: 360px) { .tabs a { padding: 0 6px; } }
     .savectl { order: 3; flex-basis: calc(100% + 16px); height: 44px; margin: 0 -8px; padding: 0 8px; border-top: 1px solid var(--line); }
     .savectl .st { margin-right: auto; }
     .savectl .primary { padding: 7px 14px; }
-    .seg { top: 100px; }
+
     .ptool { flex-wrap: wrap; row-gap: 4px; }
     .ptool .st { flex-basis: 100%; }
   }
@@ -385,7 +388,7 @@ const TYPES = {
 const SIZES = { s: "Malá", m: "Střední", l: "Velká" };
 let SCHEMA = null, D = null;          // popis bloků a rozměry ze serveru
 let ENT = null;                       // id → {name, state, unit}; null = HA nedostupné
-let unsavedBanner = null, rev = 0, leaving = false;
+let unsavedBanner = null, rev = 0, leaving = false, typing = false;   // typing: rozepsané pole (zapíše se při change)
 let LID = new URLSearchParams(location.search).get("l") || "", LAYOUTS = [];
 const q = () => LID ? "?id=" + encodeURIComponent(LID) : "";
 let blocks = [], saved = "[]", hist = [], hpos = 0, openId = null;
@@ -1136,6 +1139,8 @@ function fit() {
 document.querySelectorAll("[data-z]").forEach(b => b.onclick = () => {
   zoom = b.dataset.z; document.querySelectorAll("[data-z]").forEach(x => x.setAttribute("aria-pressed", x === b)); fit(); });
 addEventListener("resize", fit);
+const hdr = () => document.documentElement.style.setProperty("--hdr", $(".appbar").offsetHeight + "px");
+addEventListener("resize", hdr); hdr();
 $("#refresh").onclick = () => scheduleRender(true);
 $("#perr").onclick = () => scheduleRender(true);
 
@@ -1150,6 +1155,8 @@ function refresh(soft) {
   $("#tabLayout").classList.toggle("dot", dirty);
   const n = blocks.filter(invalid).length;
   $("#dirtyText").textContent = dirty ? "Neuloženo" + (n ? ` · ${n} ${n > 1 ? "bloky" : "blok"} s neplatnou entitou` : "") : "Uloženo";
+  $("#dirtyText").title = $("#dirtyText").textContent;
+  if (!dirty) typing = false;
   $("#undo").disabled = hpos === 0; $("#redo").disabled = hpos === hist.length - 1;
   labelButtons();
   scheduleRender();
@@ -1260,7 +1267,18 @@ $("#discard").onclick = async () => {
 };
 $("#undo").onclick = () => travel(-1); $("#redo").onclick = () => travel(1);
 document.addEventListener("keydown", e => {   // Ctrl+S = uložit
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); if (!$("#save").disabled) doSave(false); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+    e.preventDefault();
+    const a = document.activeElement;
+    let back = null;
+    if (a?.matches("input, textarea, select")) {   // blur → change → commit; po překreslení vrátit fokus na stejné pole
+      const li = a.closest("li[data-id]"), i = li ? [...li.querySelectorAll("input, textarea, select")].indexOf(a) : -1;
+      a.blur();
+      back = () => (li && document.querySelector(`li[data-id="${li.dataset.id}"]`)?.querySelectorAll("input, textarea, select")[i] || a).focus({ preventScroll: true });
+      back();
+    }
+    if (!$("#save").disabled) doSave(false).then(() => back?.());
+  }
 });
 document.addEventListener("keydown", e => {
   if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z" || e.target.matches("input,textarea")) return;
@@ -1272,7 +1290,15 @@ document.addEventListener("keydown", e => {
       || document.querySelector("dialog[open]")) return;
   e.preventDefault(); remove(openId);
 });
-addEventListener("beforeunload", e => { if (!leaving && snap() !== saved) e.preventDefault(); });
+$("#editCol").addEventListener("input", e => {
+  if (!e.target.matches("input:not([type=checkbox]):not([type=radio]), textarea")) return;
+  typing = true; $("#savebar").classList.add("show"); $("#discard").hidden = false;
+  $("#dirtyText").textContent = "Neuloženo"; $("#save").disabled = false;
+});
+$("#editCol").addEventListener("change", () => { typing = false; });
+// pole opuštěno beze změny (vráceno na původní hodnotu) – stav zase podle skutečnosti
+$("#editCol").addEventListener("focusout", () => { if (typing) { typing = false; refresh(true); } });
+addEventListener("beforeunload", e => { if (!leaving && (typing || snap() !== saved)) e.preventDefault(); });
 
 // ───────── Více rozvržení (každý panel zobrazuje jedno z nich) ─────────
 const current = () => LAYOUTS.find(l => l.id === LID) || { name: "", panels: [] };

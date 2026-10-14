@@ -104,12 +104,14 @@ def load_security() -> dict:
     if not isinstance(data, dict):
         data = {}
     keys = data.get("keys") if isinstance(data.get("keys"), dict) else {}
-    try:
-        learn_until = float(data.get("learn_until") or 0)
-    except (TypeError, ValueError):
-        learn_until = 0.0
-    return {"tofu_done": bool(data.get("tofu_done")), "learn_until": learn_until,
-            "keys": {m: k for m, k in keys.items() if normalize_mac(m) == m and KEY_RE.match(str(k))}}
+    out = {"tofu_done": bool(data.get("tofu_done")),
+           "keys": {m: k for m, k in keys.items() if normalize_mac(m) == m and KEY_RE.match(str(k))}}
+    if "learn_until" in data:   # chybí = soubor ze starší verze (main.py okno pro učení klíče otevře)
+        try:
+            out["learn_until"] = float(data.get("learn_until") or 0)
+        except (TypeError, ValueError):
+            out["learn_until"] = 0.0
+    return out
 
 
 def save_security(data: dict) -> None:

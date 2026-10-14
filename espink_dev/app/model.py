@@ -9,7 +9,7 @@ import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from jinja2.sandbox import SandboxedEnvironment
+from jinja2.sandbox import SandboxedEnvironment, SecurityError
 from markupsafe import Markup
 from PIL import ImageFont
 
@@ -597,7 +597,21 @@ def _text(b: dict) -> dict:
 
 # Šablona běží v sandboxu Jinja: žádný přístup k Pythonu ani souborům; výstup je HTML
 # (vykresluje se v Chromiu s CSP bez skriptů a sítě), hodnoty entit se escapují.
-_tpl_env = SandboxedEnvironment(autoescape=True)
+class _LimitedSandbox(SandboxedEnvironment):
+    """Sandbox šablony bez obřích výsledků: 'a' * 10**9 ani 9**9**9 nezablokují server."""
+    intercepted_binops = frozenset({"*", "**"})
+
+    def call_binop(self, context, operator, left, right):
+        if operator == "**" and isinstance(right, (int, float)) and abs(right) > 64:
+            raise SecurityError("příliš velká mocnina")
+        if operator == "*":
+            seq, n = (left, right) if isinstance(left, (str, list, tuple)) else (right, left)
+            if isinstance(seq, (str, list, tuple)) and isinstance(n, int) and n * len(seq) > 10000:
+                raise SecurityError("příliš dlouhý výsledek")
+        return super().call_binop(context, operator, left, right)
+
+
+_tpl_env = _LimitedSandbox(autoescape=True)
 _tpl_env.filters["num"] = lambda v, decimals=1: num(v, decimals) or "—"  # „11,6“ jako zbytek displeje
 
 

@@ -8,13 +8,13 @@
 <style>
   :root {
     --bg: #fafafa; --card: #fff; --ink: #212121; --muted: #727272; --line: #e0e0e0; --hover: rgba(0,0,0,.04);
-    --primary: #03a9f4; --on-primary: #fff; --err: #db4437; --warn: #ffa600; --ok: #43a047;
+    --primary: #0277bd; --on-primary: #fff; --err: #db4437; --warn: #ffa600; --ok: #43a047;
     --warn-bg: #fff4e0; --err-bg: #fdecea; --shadow: 0 2px 2px rgba(0,0,0,.14), 0 1px 5px rgba(0,0,0,.12);
     --seg-a: #90caf9; --seg-b: #b0bec5;
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg: #111; --card: #1c1c1c; --ink: #e1e1e1; --muted: #9b9b9b; --line: #333; --hover: rgba(255,255,255,.05);
-            --primary: #03a9f4; --warn-bg: #3a2c10; --err-bg: #3b1714; --shadow: none; --seg-a: #1e5f8f; --seg-b: #455a64; }
+            --primary: #4fc3f7; --on-primary: #00111c; --warn-bg: #3a2c10; --err-bg: #3b1714; --shadow: none; --seg-a: #1e5f8f; --seg-b: #455a64; }
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.4 Roboto, system-ui, sans-serif; }
@@ -60,6 +60,10 @@
   .budget-msg { margin-top: 8px; font-size: 13px; display: flex; gap: 6px; align-items: flex-start; }
   .budget-msg.warn .mdi { color: var(--warn); } .budget-msg.err { color: var(--err); } .budget-msg.ok .mdi { color: var(--ok); }
   .budget-msg .mdi { font-size: 18px; }
+  .keys { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .keys summary { cursor: pointer; }
+  .keys ul { margin: 6px 0 0; padding-left: 18px; }
+  @media (pointer: coarse) { .keys { display: none; } }
 
   /* blocks */
   .blocks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -101,6 +105,7 @@
   .segbtn button[aria-pressed=true] { background: var(--primary); color: var(--on-primary); }
   .calrow { display: grid; grid-template-columns: 1fr 70px 48px auto auto 32px; gap: 6px; align-items: start; margin-bottom: 6px; }
   .calrow input { padding: 7px 8px !important; }
+  .calrow .cbx { display: flex; flex-direction: column; align-items: center; gap: 1px; cursor: pointer; font-size: 11px; color: var(--muted); padding-top: 4px; white-space: nowrap; }
   .bfoot { display: flex; gap: 4px; align-items: center; border-top: 1px dashed var(--line); padding-top: 10px; margin-top: 4px; }
   .bfoot .sp { flex: 1; }
   .txtbtn { background: none; border: 0; color: var(--primary); font-weight: 500; padding: 8px 10px; border-radius: 4px; display: inline-flex; gap: 4px; align-items: center; }
@@ -281,8 +286,15 @@
         <div class="help" id="lUsers"></div></div>
     </div>
     <div class="card budget">
-      <div class="budget-head"><span>Mřížka 12 sloupců po 40 px, krok 4 px</span><span id="cover"></span></div>
+      <div class="budget-head"><span>Displej 480 × 800</span><span id="cover"></span></div>
       <div class="budget-msg" id="budgetMsg" aria-live="polite"></div>
+      <details class="keys"><summary>Ovládání a klávesové zkratky</summary>
+        <ul>
+          <li>Tažení bloku přesouvá, úchyty na okrajích mění velikost (po 40 px do stran, po 4 px svisle); dvojklik na úchyt roztáhne blok k sousedovi.</li>
+          <li>Stejně široký blok přetažený na jiný je prohodí.</li>
+          <li>Šipky posouvají vybraný blok (Alt = po 40 px), Shift+šipky mění velikost, Ctrl+Shift+šipky levou/horní hranu.</li>
+          <li>Enter otevře nastavení, Esc zruší výběr, Delete odebere, Ctrl+Z / Ctrl+Shift+Z zpět / znovu.</li>
+        </ul></details>
       <div class="tools">
         <button class="txtbtn" id="stackBtn" title="Viditelné bloky srovná pod sebe na celou šířku (v pořadí shora)"><i class="mdi mdi-view-sequential-outline"></i>Seřadit pod sebe</button>
       </div>
@@ -440,13 +452,21 @@ function renderStatus() {            // vrací true, když návrh nejde uložit 
   const cut = vis.filter(b => b.type === "text" && textFit(b) < textLines(b));
   $("#cover").textContent = `pokryto ${Math.min(100, Math.round(used / area * 100))} %`;
   const msg = $("#budgetMsg");
-  let cls = "ok", txt = "Bloky tahej v náhledu, roztahuj za úchyty (dvojklik na úchyt = až k sousedovi). Stejně široké pásy se přetažením prohodí. Šipky posouvají (Alt po 40 px), Shift+šipky mění velikost, Esc zruší výběr, Delete odebere.";
+  let cls = "ok", txt = "Bloky přesouvej a zvětšuj tažením v náhledu.", action = null;
+  const top = vis.length ? Math.min(...vis.map(b => b.y)) : 0;
   if (bad.length) { cls = "err"; txt = `Bloky ${[...new Set(bad.map(b => name(b.type)))].join(", ")} se překrývají – posuň je, jinak nejde uložit.`; }
   else if (small.length) { cls = "warn"; txt = small.map(b => `${name(b.type)}: doporučeno aspoň ${minOf(b.type)[0]} sloupců × ${minOf(b.type)[1]} px`).join("; ") + " – jinak se obsah nemusí vejít."; }
   else if (cut.length) { cls = "warn"; txt = cut.map(b => `Text: vejde se ${textFit(b)} z ${textLines(b)} řádků`).join("; ") + " – zvětši blok nebo zmenši písmo."; }
-  else if (used < area) txt = "Volná místa jsou v náhledu šrafovaná. " + txt;
+  else if (!vis.length) { cls = "warn"; txt = blocks.length ? "Všechny bloky jsou skryté – zobraz je okem v seznamu, nebo přidej nový." : "Rozvržení je prázdné – přidej první blok tlačítkem Přidat blok."; }
+  else if (top > 0) {   // pás nahoře zůstal volný (např. po smazání bloku)
+    cls = "warn"; txt = `Nahoře je ${top} px volných.`;
+    action = el("button", { className: "txtbtn", type: "button", style: "padding:0 6px" }, icon("arrow-collapse-up"), "Posunout vše nahoru");
+    action.onclick = () => { shown().forEach(b => { b.y -= top; }); commit(); toast(`Bloky posunuty o ${top} px nahoru.`, () => travel(-1)); };
+  }
+  else if (used < area) txt = "Volná místa jsou šrafovaná – klikni do nich a přidej blok. " + txt;
+  $("#stackBtn").hidden = !vis.length;
   msg.className = "budget-msg " + cls;
-  msg.replaceChildren(icon(cls === "ok" ? "check-circle" : cls === "err" ? "alert-circle" : "alert"), el("span", { textContent: txt }));
+  msg.replaceChildren(icon(cls === "ok" ? "check-circle" : cls === "err" ? "alert-circle" : "alert"), el("span", {}, txt, " ", action));
   $("#save").disabled = bad.length > 0;
   $("#save").title = bad.length ? "Nelze uložit: bloky se překrývají" : "";
   return bad.length > 0;
@@ -530,8 +550,9 @@ const chk = (label, b, key) => {
 function calRows(b) {
   const box = el("div", { className: "f" }, el("span", { textContent: "Kalendáře" }));
   box.append(el("div", { className: "calrow", style: "font-size:12px;color:var(--muted)" },
-    el("span", { textContent: "Entita" }), el("span", { textContent: "Štítek" }), el("span", { textContent: "Ikona" }), el("span", { textContent: "Červeně" }),
-    el("span", { textContent: "Celý text", title: "Nezkracovat názvy událostí – zalomí se do více řádků" }), el("span")));
+    el("span", { textContent: "Entita" }), el("span", { textContent: "Štítek" }), el("span", { textContent: "Ikona" }), el("span"), el("span"), el("span")));
+  const count = {};
+  b.p.calendars.forEach(c => { if (c.entity) count[c.entity] = (count[c.entity] || 0) + 1; });
   b.p.calendars.forEach((c, i) => {
     const ent = el("input", { type: "text", value: c.entity, placeholder: "calendar.…", spellcheck: false }); ent.setAttribute("list", "dl-calendar");
     ent.setAttribute("aria-label", "Kalendář"); ent.setAttribute("aria-invalid", !known(c.entity));
@@ -539,17 +560,18 @@ function calRows(b) {
     const lab = el("input", { type: "text", value: c.label || "", placeholder: "—" }); lab.setAttribute("aria-label", "Štítek");
     lab.onchange = () => { c.label = lab.value.trim(); if (!c.label) delete c.label; commit(); };
     const ic = iconField("", c, "icon", "z HA", true);
-    const red = el("input", { type: "checkbox", checked: !!c.red, style: "width:18px;height:18px;margin-top:8px;accent-color:#db4437" });
-    red.setAttribute("aria-label", "Červeně (a upozornění v záhlaví)");
+    const red = el("input", { type: "checkbox", checked: !!c.red, style: "width:18px;height:18px;accent-color:#db4437" });
     red.onchange = () => { if (red.checked) c.red = true; else delete c.red; commit(); };
-    const wrap = el("input", { type: "checkbox", checked: !!c.wrap, style: "width:18px;height:18px;margin-top:8px;accent-color:var(--primary)",
-                               title: "Nezkracovat názvy událostí – zalomí se do více řádků (zabere víc místa)" });
-    wrap.setAttribute("aria-label", "Celý text (nezkracovat)");
+    const wrap = el("input", { type: "checkbox", checked: !!c.wrap, style: "width:18px;height:18px;accent-color:var(--primary)" });
     wrap.onchange = () => { if (wrap.checked) c.wrap = true; else delete c.wrap; commit(); };
     const del = el("button", { className: "icon-btn", title: "Odebrat kalendář", style: "width:32px;height:32px" }, icon("close"));
     del.onclick = () => { b.p.calendars.splice(i, 1); commit(); };
     const nm = el("div", { className: "ent" }); entInfo(nm, c.entity, "");
-    box.append(el("div", { className: "calrow" }, el("div", {}, ent, nm), lab, ic, red, wrap, del));
+    if (count[c.entity] > 1) { nm.className = "ent bad"; nm.replaceChildren(icon("alert"), " Kalendář je v seznamu víckrát – události se ukážou jen jednou, řádek navíc smaž"); }
+    // zaškrtávátka s viditelným popiskem (klik i na text), aby se nepletla
+    const cbx = (input, text, title) => el("label", { className: "cbx", title }, input, el("small", { textContent: text }));
+    box.append(el("div", { className: "calrow" }, el("div", {}, ent, nm), lab, ic,
+      cbx(red, "červeně", "Červeně (a upozornění v záhlaví)"), cbx(wrap, "celý text", "Nezkracovat názvy událostí – zalomí se do více řádků (zabere víc místa)"), del));
   });
   const add = el("button", { className: "txtbtn" }, icon("plus"), "Přidat kalendář");
   add.onclick = () => { b.p.calendars.push({ entity: "" }); commit(); requestAnimationFrame(() => [...document.querySelectorAll(`[data-id="${b.id}"] .calrow input[list]`)].pop()?.focus()); };
@@ -703,21 +725,24 @@ function lineSeg(b, key, label) {
   return el("div", { className: "f" }, el("span", { textContent: label }), seg);
 }
 function renderList() {
+  requestAnimationFrame(labelButtons);
   const ul = $("#blocks");
   ul.replaceChildren();
   const order = [...blocks].sort((a, b) => a.hidden - b.hidden || a.y - b.y || a.x - b.x);
   for (const b of order) {
     const t = TYPES[b.type], open = openId === b.id;
+    // Hodnota entity: hlavní název = popisek nebo název entity (dva bloky „Hodnota entity“ se nepletou)
+    const own = b.type === "value" && (b.p.label || (b.p.entity && entName(b.p.entity)));
     const tog = el("button", { className: "btoggle" },
-      el("b", {}, name(b.type), invalid(b) ? el("span", { className: "badge" }, "⚠ entita") : null,
+      el("b", {}, own || name(b.type), invalid(b) ? el("span", { className: "badge" }, "⚠ entita") : null,
         clashes(b).length ? el("span", { className: "badge" }, "překryv") : null,
         b.hidden ? el("span", { className: "badge muted", textContent: "skrytý" }) : null),
-      el("small", { textContent: summary(b) }));
+      el("small", { textContent: own ? `${name(b.type)} · ${summary1(b)}` : summary(b) }));
     tog.setAttribute("aria-expanded", open);
     tog.onclick = () => select(open ? null : b.id);
-    const hEl = el("span", { className: "bh", textContent: b.hidden ? "—" : `${b.w * D.col_w}×${b.h}` });
-    const eye = el("button", { className: "icon-btn", title: b.hidden ? "Zobrazit" : "Skrýt" }, icon(b.hidden ? "eye-off" : "eye"));
-    eye.setAttribute("aria-pressed", b.hidden);
+    const hEl = el("span", { className: "bh", textContent: open && !b.hidden ? `${b.w * D.col_w}×${b.h} px` : "" });
+    const eye = el("button", { className: "icon-btn", title: b.hidden ? "Zobrazit blok" : "Skrýt blok" }, icon(b.hidden ? "eye-off" : "eye"));
+    eye.setAttribute("aria-pressed", b.hidden); eye.setAttribute("aria-label", `${b.hidden ? "Zobrazit" : "Skrýt"} blok ${own || name(b.type)}`);
     eye.onclick = () => toggleHidden(b);
     const li = el("li", { className: "card blk" + (open ? " open" : "") + (b.hidden ? " hidden-blk" : "") },
       el("div", { className: "bhead" }, el("div", { className: "bicon" }, icon(t.icon)), tog, hEl, eye));
@@ -768,9 +793,11 @@ $("#stackBtn").onclick = () => {
   if (total > D.h && ag) { shrunk = Math.min(total - D.h, ag.h - minOf("agenda")[1]); ag.h -= shrunk; total -= shrunk; }
   if (total > D.h) { blocks = JSON.parse(before); toast(`Pod sebe se bloky nevejdou (${total} px z ${D.h}) – některé zmenši nebo skryj.`); return; }
   let y = 0;
+  const widened = vis.filter(b => b.w !== D.cols).map(b => name(b.type));
   for (const b of vis) { b.x = 0; b.w = D.cols; b.y = y; y += b.h; }
   commit();
-  toast("Bloky seřazeny pod sebe." + (shrunk ? ` Události zmenšeny o ${shrunk} px, aby se vše vešlo.` : "")
+  toast("Bloky seřazeny pod sebe." + (widened.length ? ` Na celou šířku roztaženo: ${widened.join(", ")}.` : "")
+        + (shrunk ? ` Události zmenšeny o ${shrunk} px, aby se vše vešlo.` : "")
         + (y < D.h ? ` Dole zbývá ${D.h - y} px.` : ""), () => travel(-1));
 };
 
@@ -801,9 +828,11 @@ function renderMenu() {
   const m = $("#addMenu"); m.replaceChildren();
   const once = new Set(blocks.filter(b => b.type === "agenda" || b.type === "header").map(b => b.type));
   for (const [k, t] of Object.entries(TYPES)) {
-    const dis = once.has(k);
+    const [mw, mh] = minOf(k), tight = addAt && (addAt.w < mw || addAt.h < mh);   // do vybraného místa se nevejde
+    const dis = once.has(k) || tight;
     const btn = el("button", { role: "menuitem", disabled: dis }, el("div", { className: "bicon" }, icon(t.icon)),
-      el("div", {}, el("b", { textContent: name(k) }), el("small", { textContent: dis ? "Může být jen jednou" : t.desc })));
+      el("div", {}, el("b", { textContent: name(k) }), el("small", { textContent: once.has(k) ? "Může být jen jednou"
+        : tight ? `Sem se nevejde (potřebuje aspoň ${mw * D.col_w}×${mh} px)` : t.desc })));
     btn.onclick = () => {
       closeMenu();
       const nb = newBlock(k);
@@ -1092,8 +1121,11 @@ function refresh(soft) {
   const n = blocks.filter(invalid).length;
   $("#dirtyText").textContent = "Neuložené změny" + (n ? ` · ${n} ${n > 1 ? "bloky" : "blok"} s neplatnou entitou` : "");
   $("#undo").disabled = hpos === 0; $("#redo").disabled = hpos === hist.length - 1;
+  labelButtons();
   scheduleRender();
 }
+// ikonová tlačítka: aria-label z title (čtečky, dotyk)
+const labelButtons = () => document.querySelectorAll("button[title]:not([aria-label])").forEach(b => b.setAttribute("aria-label", b.title));
 async function doSave(force) {
   $("#save").disabled = true;
   try {

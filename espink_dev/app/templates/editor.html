@@ -648,6 +648,7 @@ function params(b) {
     case "header": return [
       el("div", { className: "grid2" }, entityField("Kalendář jmenin", b, "nameday_calendar", "calendar"), entityField("Státní svátky", b, "holiday_calendar", "calendar")),
       chk("Upozornění z červených kalendářů (dnes/zítra)", b, "alert"),
+      entityField("Výstrahy ČHMÚ", b, "warnings", "binary_sensor", "…_vystrahy_chmu z integrace ČHMÚ Meteogram; platná výstraha má přednost před kalendáři"),
       chk("Aktuální počasí vpravo", b, "show_weather"),
       ...(b.p.show_weather ? weatherFields(b) : [])];
     case "weather_now": return weatherFields(b);
@@ -696,7 +697,7 @@ function summary(b) {
 function summary1(b) {
   const p = b.p;
   switch (b.type) {
-    case "header": return [p.alert && "upozornění", p.show_weather && "počasí"].filter(Boolean).join(" · ") || "datum";
+    case "header": return [p.alert && "upozornění", p.warnings && "výstrahy", p.show_weather && "počasí"].filter(Boolean).join(" · ") || "datum";
     case "weather_now": return entName(p.temperature || p.weather);
     case "departures": return entName(p.entity, / odjezdy$/i);
     case "agenda": return `${p.calendars.length} kalendářů · ${p.days} dní`;
@@ -709,7 +710,7 @@ function summary1(b) {
   }
   return "";
 }
-const ENT_KEYS = Object.freeze(["entity", "disruptions", "weather", "temperature", "humidity", "rain", "pressure", "indoor", "nameday_calendar", "holiday_calendar"]);
+const ENT_KEYS = Object.freeze(["entity", "disruptions", "weather", "temperature", "humidity", "rain", "pressure", "indoor", "nameday_calendar", "holiday_calendar", "warnings"]);
 const invalid = b => !!ENT && (ENT_KEYS.some(k => typeof b.p[k] === "string" && !known(b.p[k]))
                                || (b.p.calendars || []).some(c => !known(c.entity)));
 
@@ -831,6 +832,7 @@ function newBlock(type) {
   const hdr = blocks.find(b => b.type === "header");
   if (type === "weather_now" && hdr) for (const k of ["weather", "temperature", "humidity", "rain", "pressure", "indoor", "temp_decimals"]) p[k] = hdr.p[k] ?? p[k];
   if (type === "forecast" && hdr && hdr.p.weather) p.weather = hdr.p.weather;
+  if (type === "header") p.warnings = guess("binary_sensor", /_vystrahy_chmu$/);
   if (type === "departures") { p.entity = guess("sensor", /_odjezdy$/); p.disruptions = guess("sensor", /_vyluky$/); }
   const [w, h] = SCHEMA.types[type].size;
   return { id: Math.random().toString(16).slice(2, 10), type, hidden: false, x: 0, y: 0, w, h, line_top: "none", line_left: "none", p };
@@ -1409,7 +1411,7 @@ async function loadEntities() {
     if (!r.ok || !Array.isArray(list)) throw new Error(list.error || "HTTP " + r.status);
     ENT = Object.fromEntries(list.map(e => [e.id, e]));
     document.querySelectorAll("datalist").forEach(d => d.remove());
-    for (const d of ["sensor", "weather", "calendar", "all"]) {
+    for (const d of ["sensor", "binary_sensor", "weather", "calendar", "all"]) {
       const dl = el("datalist", { id: "dl-" + d });
       list.filter(e => d === "all" || e.id.startsWith(d + ".")).forEach(e => dl.append(el("option", { value: e.id, textContent: e.name })));
       document.body.append(dl);

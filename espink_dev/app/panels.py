@@ -43,6 +43,9 @@ def sanitize(raw: dict, layouts: dict) -> dict:
     lid = raw.get("layout")
     if not isinstance(lid, str) or lid not in layouts:
         lid = next(iter(layouts))
+    night = raw.get("night_layout")  # rozvržení pro poslední obraz před nocí; "" = beze změny
+    if not isinstance(night, str) or night not in layouts:
+        night = ""
     sensor = str(raw.get("battery_sensor") or "").strip()
     if sensor and not (ENTITY_RE.match(sensor) and sensor.startswith("sensor.")):
         raise ValueError(f"senzor baterie musí být entita sensor.…: {sensor}")
@@ -51,7 +54,7 @@ def sanitize(raw: dict, layouts: dict) -> dict:
         rotate = None
     elif rotate not in (90, 270, "90", "270"):  # rozvržení je na výšku, displej nativně na šířku
         raise ValueError(f"neplatné otočení: {rotate} (jen 90 nebo 270)")
-    return {"mac": mac, "name": name, "layout": lid, "schedule": check_rules(raw.get("schedule")),
+    return {"mac": mac, "name": name, "layout": lid, "night_layout": night, "schedule": check_rules(raw.get("schedule")),
             "battery_sensor": sensor, "rotate": None if rotate is None else int(rotate)}
 
 

@@ -39,6 +39,10 @@ kolik řádků se vejde). Náhled vykresluje server stejně jako pro desku.
   Patička (i s entitami), Hodnota entity (stav nebo atribut, ikona, červeně pod/nad
   mezí, desetinná místa), Text a Šablona (Jinja v sandboxu; `states()`,
   `state_attr()`, `is_state()`, `now`, filtr `|num(1)`).
+- V Záhlaví jde vybrat **Výstrahy ČHMÚ** (`binary_sensor.…_vystrahy_chmu` z integrace
+  ČHMÚ Meteogram). Platná výstraha, nebo výstraha začínající do 24 h, se ukáže červeně
+  s ikonou v řádku upozornění, např. „Silný vítr · Bouřky, do zítra 6:00“, a má
+  přednost před červenými kalendáři.
 - U kalendáře v Událostech jde zapnout **Celý text** – názvy se nezkracují, ale
   zalomí (nejvýš 8 řádků).
 - Rozvržení může být víc (nové prázdné nebo kopie, přejmenovat, smazat), dále export
@@ -49,7 +53,10 @@ kolik řádků se vejde). Náhled vykresluje server stejně jako pro desku.
 
 Každá deska (podle MAC) je panel s názvem, přiřazeným rozvržením, otočením
 (normálně / vzhůru nohama), senzorem baterie a vlastním **rozvrhem probouzení**.
-Víc panelů může sdílet jedno rozvržení. Na širší obrazovce jsou karty vedle sebe.
+Víc panelů může sdílet jedno rozvržení. Volba **Na noc** vybere rozvržení pro poslední
+obraz před dlouhým spánkem (aspoň 3 h podle rozvrhu). Ten se sestaví k času ranního
+probuzení, takže přes noc a ráno panel ukazuje datum, jmeniny, události a předpověď
+nového dne. Na širší obrazovce jsou karty vedle sebe.
 
 Rozvrh je pruh přes celý den po čtvrthodinách; barva udává interval (5–30 min,
 1× za hodinu v :00, nebo nebudit). Hranice úseků se posouvají tažením nebo šipkami

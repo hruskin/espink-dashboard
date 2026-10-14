@@ -76,6 +76,7 @@ class Target:
         self.served_ts = None     # Timestamp, který deska naposledy dostala (= má na displeji)
         self.error = ""
         self.shown: dict = {}     # zaokrouhlené hodnoty na displeji (hystereze, model.hnum)
+        self.night = False        # obsah je noční obraz (rozvržení Na noc, k času ranního probuzení)
         self.last_device_rebuild = 0.0
         self.last_publish = 0.0
         self.configure(cfg, default_schedule)
@@ -177,6 +178,17 @@ class Server:
     def layout_for(self, t: Target) -> dict:
         return self.layouts.get(t.cfg["layout"]) or next(iter(self.layouts.values()))
 
+    def night_at(self, t: Target, now: datetime) -> datetime | None:
+        """Poslední obraz před dlouhým spánkem (noc): čas ranního probuzení, pokud má panel
+        rozvržení Na noc. Obraz se pak sestaví k tomuto času – ráno ukáže nový den."""
+        if t.cfg.get("night_layout") not in self.layouts:
+            return None
+        sleep = t.schedule.sleep_seconds(now)
+        return now + timedelta(seconds=sleep) if sleep >= NIGHT_SLEEP else None
+
+    def uses_layout(self, t: Target, lid: str) -> bool:
+        return self.layout_for(t)["id"] == lid or t.cfg.get("night_layout") == lid
+
     def target(self, mac: str | None) -> Target:
         return self.targets.get(mac or "") or next(iter(self.targets.values()))
 
@@ -201,13 +213,15 @@ class Server:
             raws: dict[str, dict] = {}  # data z HA jednou pro každé rozvržení
             errors = []
             for t in list(self.targets.values()) if only is None else only:
-                lay = self.layout_for(t)
+                night = self.night_at(t, now)
+                lay = self.layouts[t.cfg["night_layout"]] if night else self.layout_for(t)
+                t.night = bool(night)
                 try:
                     if lay["id"] not in raws:
                         raws[lay["id"]] = await self.fetch_raw(lay, now)
                     device = t.device or await self.device_from_sensor(t.cfg["battery_sensor"])
                     # ve vlákně: šablona může běžet až 2 s a smyčka serveru (desky) musí odpovídat dál
-                    view = await asyncio.to_thread(model.build, raws[lay["id"]], lay, device, now, memory=t.shown)
+                    view = await asyncio.to_thread(model.build, raws[lay["id"]], lay, device, night or now, memory=t.shown)
                     digest = model.digest(view)
                     self.last_build = time.time()
                     if digest == t.view_hash and not force:
@@ -300,8 +314,9 @@ class Server:
             }
             # Změna baterie o celý krok (5 %) se má projevit hned v tomto probuzení
             # (nejvýš jednou za 30 s – jinak by šlo střídáním hodnot vynutit vykreslení při každém požadavku)
-            if not t.payload or (model._device(t.device)["battery"] != old_bucket
-                                 and time.time() - t.last_device_rebuild > 30):
+            # Na noc: poslední probuzení před dlouhým spánkem dostane noční obraz hned (ne až v dalším přepočtu)
+            if not t.payload or bool(self.night_at(t, now)) != t.night or (
+                    model._device(t.device)["battery"] != old_bucket and time.time() - t.last_device_rebuild > 30):
                 t.last_device_rebuild = time.time()
                 await self.rebuild(only=[t])
 
@@ -609,7 +624,7 @@ class Server:
             return web.json_response({"error": f"nelze uložit: {e}"}, status=500)
         self.layouts[new["id"]] = new
         self.layout_saved, self.layout_error = True, ""
-        await self.rebuild(force=True, only=[t for t in self.targets.values() if self.layout_for(t)["id"] == new["id"]])
+        await self.rebuild(force=True, only=[t for t in self.targets.values() if self.uses_layout(t, new["id"])])
         print(f"[layout] rozvržení {new['name']} uloženo")
         return web.json_response({"layout": new, "error": self.last_error or None})
 
@@ -649,7 +664,7 @@ class Server:
     async def handle_layout_delete(self, request: web.Request) -> web.Response:
         await self.read_json(request)  # jen kvůli kontrole Content-Type (CSRF)
         cur = self.layout_arg(request)
-        users = [p["name"] for p in self.panels if p["layout"] == cur["id"]]
+        users = [p["name"] for p in self.panels if cur["id"] in (p["layout"], p.get("night_layout"))]
         if users:
             raise bad_request(f"rozvržení používá panel {', '.join(users)} – nejdřív mu přiřaď jiné")
         if len(self.layouts) == 1:
@@ -854,6 +869,7 @@ class Installer:
 
 DEVICE_MAX_BODY = 16 * 1024
 LEARN_DAYS = 14                          # přechodné období učení klíčů dříve povolených desek
+NIGHT_SLEEP = 3 * 3600                   # spánek aspoň 3 h = noc: obraz z rozvržení Na noc
 FAIL_WINDOW, FAIL_MAX_MAC, FAIL_MAX_IP = 900, 5, 20   # chybné pokusy za 15 min → dočasné odmítání
 
 

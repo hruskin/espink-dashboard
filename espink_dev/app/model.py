@@ -475,6 +475,52 @@ def _alert(raw: dict, calendars: list, now: datetime, tz) -> str | None:
     return None
 
 
+SEVERITY_ORDER = {"Extreme": 0, "Severe": 1, "Moderate": 2, "Minor": 3}
+WARNING_AHEAD = timedelta(hours=24)   # výstrahy začínající později se ještě neukazují
+
+
+def _warning(raw: dict, entity: str, now: datetime, tz) -> dict | None:
+    """Výstraha ČHMÚ (integrace ČHMÚ Meteogram: atribut alerts) do řádku upozornění v záhlaví:
+    platí teď nebo začne do 24 h. Text jen z názvů a času – obsah se mění, jen když se změní výstraha."""
+    st = raw["states"].get(entity) if entity else None
+    if not st or st.get("state") != "on":
+        return None
+    a = st.get("attributes") or {}
+    items = []
+    for x in a.get("alerts") or []:
+        if not isinstance(x, dict) or not str(x.get("label") or "").strip():
+            continue
+        start, end = parse_dt(x.get("start"), tz), parse_dt(x.get("end"), tz)
+        if (end and end <= now) or (start and start > now + WARNING_AHEAD):
+            continue
+        items.append((SEVERITY_ORDER.get(x.get("severity"), 9), start or now, end, x))
+    if not items:
+        label = str(a.get("headline") or a.get("label") or "").strip()
+        return {"text": label[:120], "icon": "alert"} if label else None
+    items.sort(key=lambda i: (i[0], i[1]))
+    labels = list(dict.fromkeys(str(i[3]["label"]).strip() for i in items))
+    _, start, end, worst = items[0]
+    if start > now:
+        when = "od " + _when(start, now)
+    elif end:
+        when = "do " + _when(end, now)
+    else:
+        when = ""
+    icon = str(worst.get("icon") or "alert").removeprefix("mdi:")
+    return {"text": " · ".join(labels) + (f", {when}" if when else ""), "icon": icon}
+
+
+def _when(dt: datetime, now: datetime) -> str:
+    """Čas výstrahy krátce: 18:00 / zítra 6:00 / pá 16. 10. 6:00."""
+    days = (dt.date() - now.date()).days
+    hm = f"{dt.hour}:{dt.minute:02d}"
+    if days == 0:
+        return hm
+    if days == 1:
+        return "zítra " + hm
+    return f"{DAYS_SHORT[dt.weekday()].lower()} {dt.day}. {dt.month}. {hm}"
+
+
 def _device(device: dict) -> dict:
     volts = device.get("voltage")
     pct = battery_percent(volts)
@@ -740,9 +786,18 @@ def _header(raw: dict, b: dict, layout: dict, now: datetime, tz) -> dict:
         "month": MONTHS_GEN[now.month - 1],
         "nameday": _special_days(raw, b.get("nameday_calendar"), tz).get(today),
         "holiday": holiday,
-        "alert": _alert(raw, red_cals, now, tz),
+        "alert": None,
+        "alert_icon": None,
         "weather": _weather(raw, b, now, tz) if b["show_weather"] else None,
-    }
+    } | (_header_alert(raw, b, red_cals, now, tz))
+
+
+def _header_alert(raw: dict, b: dict, red_cals: list, now: datetime, tz) -> dict:
+    """Řádek upozornění: výstraha ČHMÚ má přednost před červenými kalendáři."""
+    w = _warning(raw, b.get("warnings"), now, tz)
+    if w:
+        return {"alert": w["text"], "alert_icon": w["icon"]}
+    return {"alert": _alert(raw, red_cals, now, tz), "alert_icon": None}
 
 
 def build(raw: dict, layout: dict, device: dict, now: datetime, worst: bool = False,

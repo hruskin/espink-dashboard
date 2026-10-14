@@ -138,8 +138,11 @@
   })
   let line-text = if has(b.alert) { b.alert } else { b.holiday }
   if has(line-text) {
+    let msg = ell(line-text, size: 19pt, weight: 800, fill: RED)
     place(bottom + left, dx: 16pt, dy: -3pt, box(width: pt(cw), height: 24pt,
-      ell(line-text, size: 19pt, weight: 800, fill: RED)))
+      if has(b.alert) and has(b.alert_icon) {
+        grid(columns: (auto, 1fr), column-gutter: 4pt, align: horizon, icon(b.alert_icon, size: 22pt, fill: RED), msg)
+      } else { msg }))
   }
 }
 

@@ -641,7 +641,7 @@ const weatherFields = b => [
   el("div", { className: "grid2" }, entityField("Venkovní teplota", b, "temperature", "sensor", "jinak z entity počasí"),
     entityField("Vlhkost", b, "humidity", "sensor", "jinak z entity počasí"),
     entityField("Srážky dnes", b, "rain", "sensor"), entityField("Tlak", b, "pressure", "sensor"), entityField("Teplota doma", b, "indoor", "sensor"),
-    numField("Desetinná místa teploty", b, "temp_decimals", "0 = celé stupně, méně překreslení"))];
+    numField("Desetinná místa teploty", b, "temp_decimals", "0 = celé stupně; změna se ukáže až od 0,5 °C"))];
 
 function params(b) {
   switch (b.type) {

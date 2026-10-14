@@ -9,3 +9,4 @@ dev-panels.json
 installer.json
 *.tmp
 security.json
+stats.json

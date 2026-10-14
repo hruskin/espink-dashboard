@@ -103,6 +103,7 @@ class Server:
         # bezpečnost: omezení rychlosti a odmítnutá zařízení (čekají na povolení v editoru)
         self.pending: dict[str, dict] = {}
         self.security = panels_mod.load_security()   # klíče desek (X-API-Key), jednorázové TOFU
+        self.stats = panels_mod.load_stats()         # probuzení a překreslení za den (Stav, senzory v HA)
         self.auth_lock = asyncio.Lock()
         if not self.security["tofu_done"] and (opts.get("allowed_devices") or self.panels):
             self.security["tofu_done"] = True        # instalace z doby před klíči: první deska už je
@@ -131,6 +132,30 @@ class Server:
         """Otočení obrazu panelu (jak je pověšený); bez vlastního to z konfigurace add-onu."""
         r = t.cfg.get("rotate")
         return self.opts["rotate"] if r is None else r
+
+    def count(self, mac: str, now: datetime, redraw: bool) -> None:
+        """Probuzení (dotaz na Timestamp) a překreslení (stažení obrázku) – počty za dnešek.
+        Deska, která obsah má, se jen zeptá a usne; stahuje, jen když se obsah změnil."""
+        s = self.stats.setdefault(mac, {"day": "", "wakes": 0, "redraws": 0, "last_redraw": None, "last_wake": 0.0})
+        day = now.date().isoformat()
+        if s["day"] != day:
+            s.update(day=day, wakes=0, redraws=0)
+        if not redraw or time.time() - s["last_wake"] > 120:   # stažení bez předchozího dotazu = i probuzení
+            s["wakes"] += 1
+            s["last_wake"] = time.time()
+        if redraw:
+            s["redraws"] += 1
+            s["last_redraw"] = now.isoformat(timespec="seconds")
+        try:
+            panels_mod.save_stats(self.stats)
+        except OSError as e:
+            print(f"[stats] nelze uložit: {e}")
+
+    def stats_for(self, mac: str) -> dict:
+        s = self.stats.get(mac) or {}
+        today = s.get("day") == now_local().date().isoformat()
+        return {"wakes_today": s.get("wakes", 0) if today else 0, "redraws_today": s.get("redraws", 0) if today else 0,
+                "last_redraw": s.get("last_redraw")}
 
     def save_security(self) -> None:
         try:
@@ -267,6 +292,7 @@ class Server:
                                  and time.time() - t.last_device_rebuild > 30):
                 t.last_device_rebuild = time.time()
                 await self.rebuild(only=[t])
+            self.count(mac, now, redraw=False)
             asyncio.create_task(self.publish_device(t, now, sleep))
             print(f"[device] {t.cfg['name']} {t.device['ip']} {t.device['voltage']} V,"
                   f" {t.device['rssi']} dBm, spánek {sleep} s")
@@ -275,6 +301,10 @@ class Server:
             await self.rebuild(force=True, only=[t])
         if check == "1":
             await self.stamp_next_wake(t, now, sleep)
+        else:   # stažení obrázku = deska se překreslí
+            self.count(mac, now, redraw=True)
+            if t.device:
+                asyncio.create_task(self.publish_device(t, now, sleep, force=True))
         headers = {
             "Timestamp": str(t.content_ts),
             "PreciseSleep": str(sleep),
@@ -395,10 +425,11 @@ class Server:
             with open(os.environ.get("OPTIONS_PATH", "options.json"), "w", encoding="utf-8") as f:
                 json.dump(new, f, ensure_ascii=False, indent=2)
 
-    async def publish_device(self, t: Target, now: datetime, sleep: int) -> None:
+    async def publish_device(self, t: Target, now: datetime, sleep: int, force: bool = False) -> None:
         if MOCK or not self.ha:
             return
-        if time.time() - t.last_publish < 60:  # nejvýš jeden zápis do HA za minutu
+        # nejvýš jeden zápis do HA za minutu; překreslení hned po dotazu smí (počty překreslení)
+        if time.time() - t.last_publish < (5 if force else 60):
             return
         t.last_publish = time.time()
         d = t.device
@@ -410,6 +441,7 @@ class Server:
             "next_wake": wake.isoformat(timespec="seconds"),
             # důvod posledního restartu desky („brownout“ = pokles napětí, např. při překreslení)
             "reset_reason": d.get("reset_reason"), "ip": d.get("ip"), "mac": d.get("mac"), "firmware": d.get("fw"),
+            **self.stats_for(t.cfg["mac"]),
         }
         if self.mqtt:
             await self.announce(t.cfg, d.get("fw"))
@@ -666,7 +698,7 @@ class Server:
             out.append({**p, "allowed": p["mac"] in allowed, "content_ts": t.content_ts if t else 0,
                         "error": t.error if t else "", "size": len(t.payload) if t else 0,
                         "interval_now": t.schedule.interval_at(now) if t else None, "next_wake": nxt,
-                        "rotate_used": self.rotate_for(t) if t else None,
+                        "rotate_used": self.rotate_for(t) if t else None, "stats": self.stats_for(p["mac"]),
                         "device": {**d, "battery": model.battery_percent(d.get("voltage"))} if d else {}})
         known = {p["mac"] for p in self.panels}
         # povolené MAC bez panelu (zapsané ručně v Konfiguraci add-onu) – panel vznikne, až se deska ozve

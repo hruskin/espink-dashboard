@@ -26,6 +26,10 @@ SENSORS = {
     "last_seen": ("Poslední kontakt", {"dev_cla": "timestamp", "ent_cat": "diagnostic"}),
     "next_wake": ("Další probuzení", {"dev_cla": "timestamp"}),
     "reset_reason": ("Důvod restartu", {"ent_cat": "diagnostic", "ic": "mdi:restart"}),
+    # deska se po probuzení jen zeptá; obrázek stahuje (a překresluje), jen když se obsah změnil
+    "last_redraw": ("Poslední překreslení", {"dev_cla": "timestamp"}),
+    "redraws_today": ("Překreslení dnes", {"stat_cla": "total_increasing", "ic": "mdi:monitor-shimmer"}),
+    "wakes_today": ("Probuzení dnes", {"stat_cla": "total_increasing", "ic": "mdi:alarm", "ent_cat": "diagnostic"}),
 }
 
 

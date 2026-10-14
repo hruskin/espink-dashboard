@@ -3,16 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,">
 <title>ESPink – panely</title>
 <link rel="stylesheet" href="static/mdi/css/materialdesignicons.min.css">
 <style>
   :root {
     --bg: #fafafa; --card: #fff; --ink: #212121; --muted: #727272; --line: #e0e0e0; --hover: rgba(0,0,0,.04);
-    --primary: #03a9f4; --on-primary: #fff; --err: #db4437; --warn: #ffa600; --ok: #43a047;
+    --primary: #0277bd; --on-primary: #fff; --err: #db4437; --warn: #ffa600; --ok: #43a047;
     --warn-bg: #fff4e0; --err-bg: #fdecea; --shadow: 0 2px 2px rgba(0,0,0,.14), 0 1px 5px rgba(0,0,0,.12);
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #111; --card: #1c1c1c; --ink: #e1e1e1; --muted: #9b9b9b; --line: #333; --hover: rgba(255,255,255,.05);
+    :root { --primary: #4fc3f7; --on-primary: #00111c; --bg: #111; --card: #1c1c1c; --ink: #e1e1e1; --muted: #9b9b9b; --line: #333; --hover: rgba(255,255,255,.05);
             --warn-bg: #3a2c10; --err-bg: #3b1714; --shadow: none; }
   }
   * { box-sizing: border-box; }
@@ -27,7 +28,10 @@
   .tabs a { display: flex; align-items: center; padding: 0 16px; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; font-weight: 500; }
   .tabs a[aria-current] { color: var(--primary); border-color: var(--primary); }
   @media (max-width: 600px) { .appbar h1 { display: none; } .tabs a { padding: 0 10px; } }
-  main { max-width: 900px; margin: 0 auto; padding: 16px 16px 48px; }
+  main { max-width: 1480px; margin: 0 auto; padding: 16px 16px 48px; }
+  #list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 12px; align-items: start; }
+  #list > .card { margin: 0; container-type: inline-size; }
+  #pendingBox, main > .help, main > h2 { max-width: 900px; }
   h2 { font-size: 16px; font-weight: 500; margin: 20px 4px 8px; color: var(--muted); }
   .card { background: var(--card); border-radius: 12px; box-shadow: var(--shadow); border: 1px solid var(--line); margin-bottom: 12px; }
   .phead { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
@@ -41,6 +45,7 @@
   .pbody { display: grid; grid-template-columns: 150px 1fr; gap: 16px; padding: 16px; }
   .thumb { width: 150px; border: 1px solid var(--line); background: #fff; image-rendering: pixelated; align-self: start; }
   @media (max-width: 560px) { .pbody { grid-template-columns: 1fr; } .thumb { width: 120px; } }
+  @container (max-width: 600px) { .pbody { grid-template-columns: 1fr; } .grid2 { grid-template-columns: 1fr; } }
   .f { display: block; margin-bottom: 12px; }
   .f > span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
   .f input, .f select, .f textarea { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font: inherit; }
@@ -52,13 +57,25 @@
   .withbtn > :first-child { flex: 1; min-width: 0; }
   .help { font-size: 12px; color: var(--muted); margin-top: 4px; }
   .help code { background: var(--hover); padding: 0 3px; border-radius: 3px; }
-  .foot { display: flex; gap: 8px; align-items: center; border-top: 1px dashed var(--line); padding-top: 10px; }
+  .foot { display: flex; gap: 8px; align-items: center; border-top: 1px dashed var(--line); padding: 10px 0 0; flex-wrap: wrap; }
+  /* rozepsaný panel: lišta s Uložit/Zahodit zůstane vidět dole u okna */
+  .card.dirty .foot { position: sticky; bottom: 0; z-index: 5; background: var(--card); padding-bottom: 10px; box-shadow: 0 -6px 8px -6px rgba(0,0,0,.15); }
+  .foot .unsaved { display: none; color: var(--muted); font-size: 13px; gap: 6px; align-items: center; }
+  .card.dirty .foot .unsaved { display: inline-flex; }
+  .foot .unsaved::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+  .chip.act { cursor: pointer; border: 0; font: inherit; font-size: 12px; }
+  .thumbbtn { border: 0; padding: 0; background: none; cursor: zoom-in; align-self: start; }
+  dialog { border: 0; border-radius: 12px; background: var(--card); color: var(--ink); padding: 20px; max-width: min(520px, calc(100vw - 32px)); box-shadow: 0 10px 40px rgba(0,0,0,.4); }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  .dlg-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  .zoom img { width: 480px; max-width: 100%; height: auto; display: block; border: 1px solid var(--line); background: #fff; image-rendering: pixelated; }
   .foot .sp { flex: 1; }
   .txtbtn { background: none; border: 0; color: var(--primary); font-weight: 500; padding: 8px 10px; border-radius: 4px; display: inline-flex; gap: 4px; align-items: center; text-decoration: none; }
   .txtbtn:hover { background: var(--hover); }
   .txtbtn.danger { color: var(--err); }
   .primary { background: var(--primary); color: var(--on-primary); border: 0; border-radius: 4px; padding: 9px 18px; font-weight: 500; }
   .primary:disabled { background: var(--line); color: var(--muted); cursor: default; }
+  .primary.danger { background: var(--err); }
   .pend { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 8px; align-items: end; padding: 12px 16px; border-bottom: 1px solid var(--line); }
   .pend:last-child { border-bottom: 0; }
   .pend .f { margin: 0; }
@@ -69,24 +86,44 @@
   .toast.show { display: block; }
   .banner { margin-bottom: 12px; padding: 10px 14px; border-radius: 8px; background: var(--err-bg); }
   :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  [hidden] { display: none !important; }  /* třídy s display (txtbtn…) jinak hidden přebijí */
   /* rozvrh probouzení: průběh dne + hodiny */
   .sched { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
   .sched-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
   .sched-head b { font-weight: 500; }
   .sched-head small { color: var(--muted); }
   .sched-bar { display: flex; height: 34px; border-radius: 6px; overflow: hidden; }
-  .sched-bar > div { color: #fff; font-size: 11px; font-weight: 500; display: flex; align-items: center; justify-content: center;
+  .sched-bar > button { color: #fff; font-size: 12px; overflow: hidden; white-space: nowrap; font-weight: 500; display: flex; align-items: center; justify-content: center; border: 0; padding: 0; cursor: pointer;
                      white-space: nowrap; overflow: hidden; border-right: 1px solid var(--card); min-width: 0; }
-  .sched-bar > div:last-child { border-right: 0; }
-  .sched-axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin: 2px 0 6px; font-variant-numeric: tabular-nums; }
+  .sched-bar > button:last-child { border-right: 0; }
+  .sched-bar > button:hover { filter: brightness(1.2); }
+  .sched-bar > button.on { box-shadow: inset 0 0 0 3px #fff, inset 0 0 0 5px #212121; font-weight: 700; }
+  .sched-track { position: relative; touch-action: pan-y; }
+  /* táhlo hranice: široká neviditelná plocha pro prst, uprostřed bílá čára s úchytem */
+  .sched-hd { position: absolute; top: -4px; bottom: -4px; width: 22px; margin-left: -11px; cursor: ew-resize; touch-action: none; z-index: 2; }
+  .sched-hd::before { content: ""; position: absolute; left: 10px; top: 0; bottom: 0; width: 2px; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.35); }
+  .sched-hd::after { content: ""; position: absolute; left: 5px; top: calc(50% - 8px); width: 12px; height: 16px; border-radius: 4px;
+                     background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.45); }
+  .sched-hd:hover::after, .sched-hd.drag::after, .sched-hd:focus-visible::after { background: var(--primary); }
+  .sched-tip { display: none; position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); background: #323232; color: #fff; font-size: 13px !important;
+               font-size: 11px; padding: 1px 6px; border-radius: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .sched-hd:hover .sched-tip, .sched-hd.drag .sched-tip, .sched-hd:focus .sched-tip { display: block; }
+  .sched-seg { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; margin: -4px 0 10px; padding: 8px 10px; border-radius: 8px; background: var(--hover); }
+  .sched-seg select { width: auto; padding: 6px 8px; }
+  .sched-seg .tm { display: inline-flex; align-items: center; gap: 2px; font-variant-numeric: tabular-nums; }
+  .sched-seg .tm button { width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-size: 16px; line-height: 1; }
+  .sched-seg .tm button:disabled { opacity: .35; cursor: default; }
+  .sched-seg .tm b { min-width: 44px; text-align: center; }
+  /* osa: popisky přesně nad hodinou (absolutně), s ryskami */
+  .sched-axis { position: relative; height: 18px; font-size: 10px; color: var(--muted); margin: 0 0 6px; font-variant-numeric: tabular-nums; }
+  .sched-axis span { position: absolute; top: 5px; transform: translateX(-50%); }
+  .sched-axis span::before { content: ""; position: absolute; left: 50%; top: -5px; width: 1px; height: 4px; background: var(--line); }
+  .sched-axis span:first-child { transform: none; } .sched-axis span:first-child::before { left: 0; }
+  .sched-axis span:last-child { transform: translateX(-100%); } .sched-axis span:last-child::before { left: auto; right: 0; }
   .sched-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: var(--muted); margin-bottom: 10px; }
   .sched-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
   .sched-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; }
   .sched-tools select { width: auto; padding: 6px 8px; }
-  .sched-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
-  @media (max-width: 560px) { .sched-grid { grid-template-columns: 1fr; } }
-  .sched-grid label { display: grid; grid-template-columns: 92px 1fr; align-items: center; font-size: 13px; font-variant-numeric: tabular-nums; }
-  .sched-grid select { padding: 6px 8px; border-left-width: 6px; }
   .sched-note { font-size: 12px; color: var(--muted); margin: 6px 0; }
   .sched-note.warn { color: var(--ink); background: var(--warn-bg); padding: 6px 8px; border-radius: 6px; }
 </style>
@@ -114,8 +151,30 @@ const el = (t, a = {}, ...k) => { const e = Object.assign(document.createElement
 const icon = n => el("i", { className: "mdi mdi-" + n });
 let DATA = null, dirty = new Set();
 
+// potvrzovací dialog místo confirm() (v panelu HA nativní okna působí cize)
+function ask(title, text, okLabel, danger) {
+  return new Promise(res => {
+    const ok = el("button", { className: danger ? "primary danger" : "primary", textContent: okLabel });
+    const no = el("button", { className: "txtbtn", textContent: "Zrušit" });
+    const d = el("dialog", {}, el("h3", { textContent: title, style: "margin:0 0 8px" }), el("p", { textContent: text, style: "margin:0" }),
+                 el("div", { className: "dlg-foot" }, no, ok));
+    const done = v => { d.close(); d.remove(); res(v); };
+    ok.onclick = () => done(true); no.onclick = () => done(false); d.oncancel = () => done(false);
+    document.body.append(d); d.showModal(); ok.focus();
+  });
+}
+
 let tt;
-function toast(text) { const t = $("#toast"); t.textContent = text; t.classList.add("show"); clearTimeout(tt); tt = setTimeout(() => t.classList.remove("show"), 5000); }
+function toast(text, action, label = "Vrátit") {
+  const t = $("#toast");
+  t.replaceChildren(el("span", { textContent: text }));
+  if (action) {
+    const b = el("button", { type: "button", textContent: label, style: "background:none;border:0;color:#4fc3f7;font-weight:600;margin-left:12px;cursor:pointer" });
+    b.onclick = () => { t.classList.remove("show"); action(); };
+    t.append(b);
+  }
+  t.classList.add("show"); clearTimeout(tt); tt = setTimeout(() => t.classList.remove("show"), action ? 8000 : 5000);
+}
 
 async function post(url, body) {
   const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -144,24 +203,27 @@ const field = (label, input, help) => el("label", { className: "f" }, el("span",
 // ───────── Rozvrh probouzení: 24 hodin, v každé interval (inspirace Živý obraz) ─────────
 // Server dál dostává pravidla „HH:MM-HH:MM=sekundy“ (spojené stejné sousední hodiny);
 // probuzení jsou zarovnaná na násobky intervalu (5 min = :00, :05, …; hodina = v :00).
-const SLOTS = [
-  { v: 300, label: "každých 5 min", short: "à 5 min", color: "#0288d1" },
-  { v: 600, label: "každých 10 min", short: "à 10 min", color: "#00838f" },
-  { v: 900, label: "každých 15 min", short: "à 15 min", color: "#6a4fc8" },
-  { v: 1200, label: "každých 20 min", short: "à 20 min", color: "#8e44ad" },
-  { v: 1800, label: "každých 30 min", short: "à 30 min", color: "#689f38" },
-  { v: 3600, label: "1× za hodinu (v :00)", short: "v :00", color: "#388e3c" },
-  { v: 0, label: "nebudit", short: "spí", color: "#8d8d8d" },
+const SLOTS = [   // sytější barva = budí častěji (víc baterie)
+  { v: 300, label: "každých 5 min", short: "5 min", color: "#0a1f5c", ink: "#fff" },
+  { v: 600, label: "každých 10 min", short: "10 min", color: "#1565c0", ink: "#fff" },
+  { v: 900, label: "každých 15 min", short: "15 min", color: "#42a5f5", ink: "#0b1e33" },
+  { v: 1200, label: "každých 20 min", short: "20 min", color: "#7cc0f5", ink: "#0b1e33" },
+  { v: 1800, label: "každých 30 min", short: "30 min", color: "#a8d5f8", ink: "#0b1e33" },
+  { v: 3600, label: "1× za hodinu (v :00)", short: "1×/h", color: "#d6ebfb", ink: "#0b1e33" },
+  { v: 0, label: "nebudí (spí)", short: "spí", color: "repeating-linear-gradient(45deg,#e0e0e0 0 4px,#f5f5f5 4px 8px)", ink: "#424242" },
 ];
 const slot = v => SLOTS.find(s => s.v === v) || SLOTS[SLOTS.length - 1];
 const RULE_RE = /^\s*(?:(\d)(?:-(\d))?\s+)?(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})\s*=\s*(\d+)\s*$/;
 const pad2 = n => String(n).padStart(2, "0");
 
-// pravidla -> 24 hodin; null = nejde zobrazit (dny v týdnu, minuty, jiný interval).
-// lossy: přibližně – za hodinu nejčastější interval, který v ní kdekoli platí (dny se ignorují),
-// takže převod nikdy nevytvoří hodinu „nebudit“ tam, kde se původně budilo
+// Rozvrh po čtvrthodinách: 96 úseků po 15 min (Q = index čtvrthodiny od půlnoci).
+// pravidla -> 96 čtvrthodin; null = nejde zobrazit (dny v týdnu, minuty mimo :00/:15/:30/:45, jiný interval).
+// lossy: přibližně – za čtvrthodinu nejčastější interval, který v ní kdekoli platí (dny se ignorují),
+// takže převod nikdy nevytvoří „nebudit“ tam, kde se původně budilo
+const QN = 96, QMIN = 15;
+const qt = q => `${Math.floor(q / 4) % 24 + (q === QN ? 24 : 0)}:${pad2(q % 4 * QMIN)}`;   // 96 -> „24:00“
 const toSlot = v => SLOTS.filter(s => s.v && s.v <= v).reduce((a, s) => Math.max(a, s.v), 0) || 300;
-function rulesToHours(rules, lossy) {
+function rulesToQ(rules, lossy) {
   const wins = [];
   for (const r of rules.filter(x => x.trim())) {
     const m = RULE_RE.exec(r);
@@ -169,99 +231,252 @@ function rulesToHours(rules, lossy) {
     const [, d1, d2, h1, m1, h2, m2, sec] = m;
     const allDays = !d1 || (d1 === "1" && d2 === "7");
     const v = Math.max(60, +sec);
-    if (!lossy && (!allDays || m1 !== "00" || m2 !== "00" || !SLOTS.some(s => s.v === v))) return null;
+    if (!lossy && (!allDays || +m1 % QMIN || +m2 % QMIN || !SLOTS.some(s => s.v === v))) return null;
     wins.push([+h1 * 60 + +m1, (+h2 % 24) * 60 + +m2, lossy ? toSlot(v) : v]);
   }
   const at = t => wins.find(([a, b]) => a < b ? t >= a && t < b : (t >= a || t < b));   // první vyhovující (jako server)
-  return Array.from({ length: 24 }, (_, h) => {
-    if (!lossy) { const w = at(h * 60); return w ? w[2] : 0; }
-    const vs = Array.from({ length: 60 }, (_, mi) => at(h * 60 + mi)).filter(Boolean).map(w => w[2]);
+  return Array.from({ length: QN }, (_, q) => {
+    if (!lossy) { const w = at(q * QMIN); return w ? w[2] : 0; }
+    const vs = Array.from({ length: QMIN }, (_, mi) => at(q * QMIN + mi)).filter(Boolean).map(w => w[2]);
     return vs.length ? Math.min(...vs) : 0;
   });
 }
-// 24 hodin -> pravidla; stejné sousední hodiny (i přes půlnoc) v jednom pravidle
-function hoursToRules(hours) {
-  if (hours.every(v => v === hours[0])) return hours[0] ? [`00:00-00:00=${hours[0]}`] : [];
-  const start = hours.findIndex((v, i) => v !== hours[(i + 23) % 24]);
+// 96 čtvrthodin -> pravidla; stejné sousední čtvrthodiny (i přes půlnoc) v jednom pravidle
+function qToRules(qs) {
+  const hm = q => `${pad2(Math.floor(q / 4) % 24)}:${pad2(q % 4 * QMIN)}`;
+  if (qs.every(v => v === qs[0])) return qs[0] ? [`00:00-00:00=${qs[0]}`] : [];
+  const start = qs.findIndex((v, i) => v !== qs[(i + QN - 1) % QN]);
   const out = [];
-  for (let k = 0; k < 24;) {
-    const a = (start + k) % 24, v = hours[a];
+  for (let k = 0; k < QN;) {
+    const a = (start + k) % QN, v = qs[a];
     let n = 1;
-    while (k + n < 24 && hours[(start + k + n) % 24] === v) n++;
-    if (v) out.push(`${pad2(a)}:00-${pad2((a + n) % 24)}:00=${v}`);
+    while (k + n < QN && qs[(start + k + n) % QN] === v) n++;
+    if (v) out.push(`${hm(a)}-${hm((a + n) % QN)}=${v}`);
     k += n;
   }
   return out.sort();
 }
-const wakesPerDay = hours => hours.reduce((s, v) => s + (v ? 3600 / v : 0), 0);
+const wakesPerDay = qs => qs.reduce((s, v) => s + (v ? QMIN * 60 / v : 0), 0);
 
 function scheduleEditor(p, onChange) {
   const inherited = !p.schedule.length;            // panel zatím jede podle výchozího rozvrhu add-onu
   let rules = inherited ? [...DATA.default_schedule] : [...p.schedule];
-  let custom = !inherited, advanced = rulesToHours(rules) === null;
+  let custom = !inherited, advanced = rulesToQ(rules) === null;
+  let seg = null, convert = false, focusQ = null;   // vybraný úsek [od, do], dotaz na převod, hranice k zaostření po překreslení
   const box = el("div", { className: "sched" });
   const changed = () => { custom = true; onChange(); draw(); };
+  const setRules = (r, keepSeg) => { rules = r; if (!keepSeg) seg = null; changed(); };
+  // smazání úseku půjde vrátit (jeden krok)
+  const undoable = (r, msg) => { const prev = rules; setRules(r); toast(msg, () => { rules = prev; changed(); }); };
+  const segsOf = qs => { const out = []; for (let q = 0; q < QN;) { let n = 1; while (q + n < QN && qs[q + n] === qs[q]) n++; out.push([q, q + n, qs[q]]); q += n; } return out; };
+  const fromSegs = segs => { const n = []; segs.forEach(([a, b, v]) => { for (let q = a; q < b; q++) n[q] = v; }); return qToRules(n); };
+  const slower = v => v === 0 ? 3600 : (SLOTS.filter(s => s.v > v && s.v).sort((a, b) => a.v - b.v)[0]?.v ?? 0);   // o stupeň úspornější
+  // interval pro druhou půlku rozděleného úseku: o stupeň úspornější, ale jiný než následující úsek
+  const splitVal = (v, next) => {
+    const i = SLOTS.findIndex(s => s.v === v);
+    for (const d of [1, 2, -1, -2, 3, -3]) { const s = SLOTS[i + d]; if (s && s.v !== next) return s.v; }
+    return slower(v);
+  };
+  const dur = n => n % 4 ? `${Math.floor(n / 4) ? Math.floor(n / 4) + " h " : ""}${n % 4 * 15} min` : `${n / 4} h`;
+  const head = el("small");
+  const setCount = () => {
+    const exact = rulesToQ(rules), qs = exact || rulesToQ(rules, true);
+    head.textContent = qs ? `· ${exact ? "" : "přibližně "}${Math.round(wakesPerDay(qs))} probuzení za den` : "· pravidla obsahují chybu";
+  };
+  // dvojklik do pruhu = nová hranice v místě kliknutí (po 15 min). Rozpoznává se ručně: první klik
+  // pruh překreslí, takže prohlížeč by dblclick na vyměněném prvku nevyvolal
+  let lastClick = { t: 0, x: -99 };
+  const splitAt = (bar, clientX) => {
+    const qs = rulesToQ(rules), r = bar.getBoundingClientRect(), q = Math.round((clientX - r.left) / r.width * QN);
+    const sg = qs && segsOf(qs).find(([a, b]) => q > a && q < b);
+    if (!sg) return false;
+    const [, to, v] = sg, n = [...qs], nv = splitVal(v, qs[to]);
+    for (let k = q; k < to; k++) n[k] = nv;
+    seg = [q, to]; setRules(qToRules(n), true);
+    requestAnimationFrame(() => box.querySelector(".sched-seg select")?.focus());
+    toast(`Přidána hranice v ${qt(q)}: úsek ${qt(q)}–${qt(to)} je teď ${slot(nv).label}.`);
+    return true;
+  };
+  let keyTimer = null;
   function draw() {
-    const exact = rulesToHours(rules);
-    const hours = exact || rulesToHours(rules, true);   // pokročilý rozvrh: pruh aspoň přibližně
+    clearTimeout(keyTimer);
+    const exact = rulesToQ(rules);
+    const qs = exact || rulesToQ(rules, true);       // pokročilý rozvrh: pruh aspoň přibližně
     box.replaceChildren();
-    const count = hours ? Math.round(wakesPerDay(hours)) : null;
+    setCount();
     const toggle = el("button", { className: "txtbtn", type: "button", style: "padding:2px 6px" },
-      icon(advanced ? "view-grid-outline" : "code-tags"), advanced ? "Hodiny" : "Pokročilé (pravidla)");
+      icon(advanced ? "chart-timeline" : "code-tags"), advanced ? "Časová osa" : "Pokročilé (pravidla)");
     toggle.onclick = () => {
-      if (advanced && !rulesToHours(rules)) {
-        const approx = rulesToHours(rules, true);
-        if (!approx) { toast("Nejdřív oprav pravidla – některý řádek nedává smysl."); return; }
-        if (!confirm("Rozvrh obsahuje dny v týdnu nebo minuty, hodinová mřížka je nezná. Převést na hodiny? " +
-                     "Každá hodina dostane nejčastější interval, který v ní platí (podle pruhu nahoře).")) return;
-        rules = hoursToRules(approx); custom = true; onChange();
+      if (advanced && !rulesToQ(rules)) {
+        if (!rulesToQ(rules, true)) { toast("Nejdřív oprav pravidla – některý řádek nedává smysl."); return; }
+        convert = true; draw(); return;          // zeptat se přímo v rozvrhu
       }
-      advanced = !advanced; draw();
+      advanced = !advanced; seg = null; draw();
     };
-    box.append(el("div", { className: "sched-head" },
-      el("div", {}, el("b", { textContent: "Průběh dne" }), " ",
-        el("small", { textContent: count === null ? "· pravidla obsahují chybu" : `· ${exact ? "" : "přibližně "}${count} probuzení za den` })), toggle));
+    box.append(el("div", { className: "sched-head" }, el("div", {}, el("b", { textContent: "Průběh dne" }), " ", head), toggle));
     if (inherited && !custom) box.append(el("div", { className: "sched-note", textContent: "Panel zatím používá výchozí rozvrh add-onu (Konfigurace add-onu v HA) – úpravou a uložením získá vlastní." }));
-    if (hours) {
-      const bar = el("div", { className: "sched-bar" });
-      for (let h = 0; h < 24;) {                     // úseky po stejném intervalu
-        let n = 1;
-        while (h + n < 24 && hours[h + n] === hours[h]) n++;
-        const s = slot(hours[h]);
-        bar.append(el("div", { style: `flex:${n};background:${s.color}`, title: `${h}:00–${h + n}:00 ${s.label}`, textContent: n >= 2 ? s.short : "" }));
-        h += n;
-      }
-      box.append(bar, el("div", { className: "sched-axis" }, ...[0, 3, 6, 9, 12, 15, 18, 21, 24].map(x => el("span", { textContent: x }))));
-      const used = [...new Set(hours)];
+    let segs = [];
+    if (qs) {
+      segs = segsOf(qs);
+      const track = el("div", { className: "sched-track" }), bar = el("div", { className: "sched-bar" });
+      const btns = segs.map(([from, to, v], i) => {
+        const s = slot(v), on = seg && seg[0] === from && seg[1] === to;
+        const b = el("button", { type: "button", className: on ? "on" : "", style: `flex:${to - from};background:${s.color};color:${s.ink}`,
+                                 title: `${qt(from)}–${qt(to)} · ${s.label}` });
+        b.dataset.short = s.short;
+        b.setAttribute("aria-label", `${qt(from)} až ${qt(to)}, ${s.label}`);
+        if (!advanced) b.setAttribute("aria-pressed", on);
+        b.onclick = e => {
+          if (advanced) return;
+          const now = Date.now(), dbl = now - lastClick.t < 400 && Math.abs(e.clientX - lastClick.x) < 8;
+          lastClick = dbl ? { t: 0, x: -99 } : { t: now, x: e.clientX };
+          if (dbl && splitAt(bar, e.clientX)) return;
+          seg = on ? null : [from, to]; draw();
+          requestAnimationFrame(() => (seg ? box.querySelector(".sched-seg select")
+            : [...box.querySelectorAll(".sched-bar > button")].find(x => x.title.startsWith(qt(from) + "–")))?.focus());
+        };
+        bar.append(b);
+        return b;
+      });
+      track.append(bar);
+      // popisky jen tam, kde se vejdou (podle skutečné šířky v px)
+      const fitLabels = () => btns.forEach(b => { b.textContent = b.offsetWidth >= b.dataset.short.length * 7 + 26 ? b.dataset.short : ""; });
+      requestAnimationFrame(fitLabels);
+      // hranice: táhnout myší/prstem (po 15 min), šipky ±15 min, PageUp/Down ±1 h, Home/End; úsek stažený na 0 zmizí
+      const commit = () => {
+        const prev = rules, gone = segs.some(([a, b]) => b <= a);
+        setRules(fromSegs(segs.filter(([a, b]) => b > a)));
+        if (gone) toast("Úsek zanikl – převzal ho soused.", () => { rules = prev; changed(); });
+      };
+      const apply = () => { focusQ = null; commit(); };
+      const relabel = i => { const [a, b] = segs[i]; btns[i].style.flex = b - a; btns[i].style.display = b > a ? "" : "none"; fitLabels(); };
+      if (!advanced) segs.slice(0, -1).forEach((_, i) => {
+        const hd = el("div", { className: "sched-hd", tabIndex: 0 });
+        hd.setAttribute("role", "slider");
+        hd.setAttribute("aria-label", `Hranice mezi ${slot(segs[i][2]).label} a ${slot(segs[i + 1][2]).label}`);
+        hd.setAttribute("aria-valuemin", segs[i][0]); hd.setAttribute("aria-valuemax", segs[i + 1][1]);
+        const tip = el("span", { className: "sched-tip" }); tip.setAttribute("aria-hidden", "true");
+        hd.append(tip);
+        const place = q => {
+          hd.style.left = (q / QN * 100) + "%"; hd.setAttribute("aria-valuenow", q); hd.setAttribute("aria-valuetext", qt(q));
+          tip.textContent = `${qt(q)} (před ${dur(segs[i][1] - segs[i][0])}, po ${dur(segs[i + 1][1] - segs[i + 1][0])})`;
+        };
+        const move = q => {
+          q = Math.max(segs[i][0], Math.min(segs[i + 1][1], q));
+          segs[i][1] = segs[i + 1][0] = q; relabel(i); relabel(i + 1); place(q);
+        };
+        place(segs[i][1]);
+        hd.onpointerdown = e => {
+          e.preventDefault(); hd.setPointerCapture(e.pointerId); hd.classList.add("drag");
+          const r = bar.getBoundingClientRect(), start = segs[i][1];
+          const off = e.clientX - (r.left + start / QN * r.width);   // uchopení mimo střed táhla neposkočí
+          hd.onpointermove = ev => move(Math.round((ev.clientX - off - r.left) / r.width * QN));
+          hd.onpointerup = () => { hd.onpointermove = hd.onpointerup = null; hd.classList.remove("drag"); if (segs[i][1] !== start) apply(); };
+        };
+        // odchod z úchytu před uplynutím pauzy = uložit hned
+        hd.onblur = () => { if (keyTimer) { clearTimeout(keyTimer); keyTimer = null; apply(); } };
+        hd.onkeydown = e => {
+          const d = { ArrowLeft: -1, ArrowRight: 1, PageDown: -4, PageUp: 4, Home: -QN, End: QN }[e.key];
+          if (!d) return;
+          e.preventDefault(); move(segs[i][1] + d);
+          // uložit až po krátké pauze: opakované stisky posouvají stejný úchyt bez překreslení
+          clearTimeout(keyTimer);
+          keyTimer = setTimeout(() => {
+            keyTimer = null;
+            const keep = segs[i][1];
+            commit();
+            requestAnimationFrame(() => {   // zaostřit hranici na stejném místě (i když úsek zanikl)
+              const hs = [...box.querySelectorAll(".sched-hd")];
+              (hs.find(h => +h.getAttribute("aria-valuenow") === keep) || hs[Math.min(i, hs.length - 1)])?.focus();
+            });
+          }, 500);
+        };
+        track.append(hd);
+      });
+      // šířka táhla nepřesáhne polovinu sousedních úseků (krátké úseky jdou vybrat)
+      requestAnimationFrame(() => {
+        const w = bar.offsetWidth / QN;
+        track.querySelectorAll(".sched-hd").forEach((hd, i) => {
+          const px = Math.max(10, Math.min(22, (segs[i][1] - segs[i][0]) * w, (segs[i + 1][1] - segs[i + 1][0]) * w));
+          hd.style.width = px + "px"; hd.style.marginLeft = -px / 2 + "px";
+        });
+      });
+      box.append(track, el("div", { className: "sched-axis" }, ...[0, 3, 6, 9, 12, 15, 18, 21, 24].map(x => el("span", { textContent: x, style: `left:${x / 24 * 100}%` }))));
+      const used = [...new Set(qs)];
       box.append(el("div", { className: "sched-legend" }, ...SLOTS.filter(s => used.includes(s.v)).map(s =>
         el("span", {}, el("i", { style: "background:" + s.color }), s.label))));
     }
+    if (convert) {
+      const approx = rulesToQ(rules, true), before = qs ? Math.round(wakesPerDay(qs)) : null;
+      const days = rules.some(r => { const m = RULE_RE.exec(r); return m && m[1] && !(m[1] === "1" && m[2] === "7"); });
+      const yes = el("button", { className: "primary", type: "button", textContent: "Převést na časovou osu" });
+      const no = el("button", { className: "txtbtn", type: "button", textContent: "Ponechat pravidla" });
+      yes.onclick = () => { convert = false; advanced = false; setRules(qToRules(approx)); };
+      no.onclick = () => { convert = false; draw(); };
+      box.append(el("div", { className: "sched-note warn" },
+        "Časová osa zná jen celé čtvrthodiny a stejný rozvrh pro všechny dny. Při převodu dostane každá čtvrthodina nejkratší interval, který v ní platí (budí se spíš častěji) – přesně jako pruh nahoře" +
+        (days ? "; omezení na dny v týdnu se zruší" : "") + `. Probuzení za den: ${before ?? "?"} → ${Math.round(wakesPerDay(approx))}.`,
+        el("div", { className: "dlg-foot", style: "margin-top:8px" }, no, yes)));
+    }
     if (advanced) {
       const ta = el("textarea", { value: rules.join("\n"), spellcheck: false, rows: Math.max(4, rules.length + 1) });
-      ta.oninput = () => { rules = ta.value.split("\n").map(x => x.trim()).filter(Boolean); custom = true; onChange(); };
-      ta.onblur = draw;
+      ta.oninput = () => { rules = ta.value.split("\n").map(x => x.trim()).filter(Boolean); custom = true; onChange(); setCount(); };
       ta.onchange = draw;
       box.append(el("label", { className: "f", style: "margin:0" }, ta), el("div", { className: "help", innerHTML:
         "Jedno pravidlo na řádek: <code>[dny ]HH:MM-HH:MM=sekundy</code>, dny 1=Po … 7=Ne, platí první vyhovující. Mimo pravidla deska spí." }));
       const bad = rules.filter(r => !RULE_RE.test(r));
       if (bad.length) box.append(el("div", { className: "sched-note warn", textContent: `Tenhle řádek nedává smysl: „${bad[0]}“ – formát je HH:MM-HH:MM=sekundy.` }));
-      else if (!exact && custom) box.append(el("div", { className: "sched-note", textContent: "Rozvrh obsahuje dny v týdnu, minuty nebo jiný interval – v mřížce po hodinách ho nejde přesně zobrazit, pruh je přibližný." }));
+      else if (!exact && custom) box.append(el("div", { className: "sched-note", textContent: "Rozvrh obsahuje dny v týdnu, minuty mimo čtvrthodiny nebo jiný interval – na časové ose ho nejde přesně zobrazit, pruh je přibližný." }));
       return;
     }
-    const all = el("select");
-    all.append(el("option", { value: "", textContent: "nastavit všechny hodiny…" }), ...SLOTS.map(s => el("option", { value: s.v, textContent: s.label })));
-    all.onchange = () => { if (all.value === "") return; rules = hoursToRules(Array(24).fill(+all.value)); changed(); };
+    const si = seg ? segs.findIndex(([a, b]) => a === seg[0] && b === seg[1]) : -1;
+    if (si >= 0) {   // úprava vybraného úseku: interval, Od/Do po 15 min, rozdělit, smazat
+      const [from, to, v] = segs[si], sel = el("select");
+      SLOTS.forEach(s => sel.append(el("option", { value: s.v, textContent: s.label, selected: s.v === v })));
+      sel.onchange = () => { const n = [...qs]; for (let q = from; q < to; q++) n[q] = +sel.value; setRules(qToRules(n), true); };
+      // posun začátku/konce úseku o 15 min (přesně i na telefonu)
+      const edge = (which, d) => {
+        const sg = segs.map(x => [...x]);
+        if (which === "from") { if (si === 0) return; sg[si - 1][1] = sg[si][0] = Math.max(sg[si - 1][0], Math.min(sg[si][1] - 1, from + d)); }
+        else { if (si === sg.length - 1) return; sg[si][1] = sg[si + 1][0] = Math.max(sg[si][0] + 1, Math.min(sg[si + 1][1], to + d)); }
+        seg = [sg[si][0], sg[si][1]];
+        setRules(fromSegs(sg.filter(([a, b]) => b > a)), true);
+      };
+      const tm = (label, which, val, canMinus, canPlus) => el("span", { className: "tm" }, label + " ",
+        el("button", { type: "button", textContent: "−", disabled: !canMinus, title: "o 15 min dřív", onclick: () => edge(which, -1) }), el("b", { textContent: qt(val) }),
+        el("button", { type: "button", textContent: "+", disabled: !canPlus, title: "o 15 min později", onclick: () => edge(which, 1) }));
+      const close = el("button", { className: "txtbtn", type: "button", title: "Zavřít" }, icon("close"));
+      close.onclick = () => { seg = null; draw(); };
+      // rozdělit = přidat úsek; druhá půlka dostane o stupeň úspornější interval
+      const split = el("button", { className: "txtbtn", type: "button", disabled: to - from < 2, title: "Rozdělit úsek na dva (přidat úsek)" },
+                       icon("table-split-cell"), "Rozdělit");
+      split.onclick = () => {
+        const len = to - from, mid = from + (len >= 8 ? Math.round(len / 8) * 4 : Math.floor(len / 2));   // dělit raději na celé hodiny
+        const n = [...qs], nv = splitVal(v, qs[to]); for (let q = mid; q < to; q++) n[q] = nv;
+        seg = [mid, to]; setRules(qToRules(n), true);
+        requestAnimationFrame(() => box.querySelector(".sched-seg select")?.focus());
+        toast(`Úsek rozdělen v ${qt(mid)}: ${qt(mid)}–${qt(to)} je teď ${slot(nv).label}.`);
+      };
+      const whole = from === 0 && to === QN;
+      const del = el("button", { className: "txtbtn danger", type: "button", disabled: whole, title: "Smazat úsek (převezme interval souseda)" },
+                     icon("delete-outline"), "Smazat");
+      del.onclick = () => {
+        const nv = from > 0 ? qs[from - 1] : qs[to];
+        const n = [...qs]; for (let q = from; q < to; q++) n[q] = nv;
+        undoable(qToRules(n), `Úsek ${qt(from)}–${qt(to)} odstraněn.`);
+      };
+      box.append(el("div", { className: "sched-seg" }, sel,
+        tm("Od", "from", from, si > 0 && from - 1 >= segs[si - 1][0], si > 0 && from + 1 < to),
+        tm("Do", "to", to, si < segs.length - 1 && to - 1 > from, si < segs.length - 1 && to + 1 <= segs[si + 1][1]),
+        split, del, close));
+    } else box.append(el("div", { className: "help", style: "margin:-4px 0 8px" },
+      "Bílé úchyty mezi úseky posouvej tažením (po 15 min). Klepnutím na úsek změníš interval a čas, rozdělíš ho nebo smažeš; dvojklikem do pruhu přidáš hranici."));
+    // rychlý začátek: celý den jedním intervalem, pak doladit tažením
+    const all = el("select", { title: "Nastavit celý den jedním intervalem" });
+    all.append(el("option", { value: "", textContent: "nastavit celý den…" }), ...SLOTS.map(s => el("option", { value: s.v, textContent: s.label })));
+    all.onchange = () => { if (all.value === "") return; undoable(qToRules(Array(QN).fill(+all.value)), `Celý den nastaven na „${slot(+all.value).label}“.`); };
     box.append(el("div", { className: "sched-tools" }, all));
-    const grid = el("div", { className: "sched-grid" });
-    const row = h => {
-      const sel = el("select", { style: "border-left-color:" + slot(hours[h]).color });
-      SLOTS.forEach(s => sel.append(el("option", { value: s.v, textContent: s.label, selected: s.v === hours[h] })));
-      sel.onchange = () => { const hs = [...hours]; hs[h] = +sel.value; rules = hoursToRules(hs); changed(); };
-      return el("label", {}, el("span", { textContent: `${h}:00–${h}:59` }), sel);
-    };
-    for (let i = 0; i < 12; i++) grid.append(row(i), row(i + 12));   // dva sloupce: dopoledne | odpoledne
-    box.append(grid);
-    if (!hours.some(Boolean)) box.append(el("div", { className: "sched-note warn", textContent: "Žádná hodina nebudí – panel by použil výchozí rozvrh add-onu." }));
+    if (!qs.some(Boolean)) box.append(el("div", { className: "sched-note warn", textContent: "Celý den nebudí – panel by použil výchozí rozvrh add-onu." }));
   }
   draw();
   return { el: box, rules: () => (custom ? rules : []) };
@@ -270,7 +485,7 @@ function scheduleEditor(p, onChange) {
 function panelCard(p) {
   const d = p.device || {};
   const chips = el("div", { className: "chips" },
-    p.allowed ? null : el("span", { className: "chip bad", title: "MAC není mezi povolenými zařízeními – deska nedostane obrázek" }, icon("lock-alert"), "nepovolená"),
+    p.allowed ? null : allowChip(p),
     el("span", { className: "chip" }, icon("clock-outline"), ago(d.last_seen)),
     d.battery != null ? el("span", { className: "chip" + (d.battery <= 15 ? " warn" : "") }, icon("battery"), `${d.battery} % · ${d.voltage} V`) : null,
     d.rssi != null ? el("span", { className: "chip" }, icon("wifi"), `${d.rssi} dBm`) : null,
@@ -285,19 +500,20 @@ function panelCard(p) {
   lay.onchange = () => { edit.href = "./?l=" + encodeURIComponent(lay.value); };
   const sensor = el("input", { type: "text", value: p.battery_sensor, placeholder: "prázdné = nezapisovat", spellcheck: false });
   sensor.setAttribute("list", "dl-sensor");
-  const sug = el("button", { className: "txtbtn", type: "button", title: "Navrhnout podle názvu panelu" }, icon("auto-fix"));
+  const sug = el("button", { className: "txtbtn", type: "button", title: "Navrhnout název senzoru podle názvu panelu" }, icon("auto-fix"), "Navrhnout");
   sug.onclick = () => { sensor.value = suggest(name.value.trim() || p.name); mark(); };
   const sched = scheduleEditor(p, () => mark());
-  // otočení obrazu podle toho, jak je panel pověšený (rozvržení je na výšku)
+  // otočení obrazu podle toho, jak je panel pověšený: obraz na výšku, 90° ↔ 270° = vzhůru nohama
+  const flip = DATA.default_rotate === 270 ? 90 : 270;
   const rot = el("select");
-  // obraz na výšku: 90° a 270° se liší právě otočením o 180° (vzhůru nohama)
-  const flip = DATA.default_rotate === 270 ? 90 : 270, normal = flip === 270 ? 90 : 270;
-  for (const [v, t] of [["", `normálně (výchozí, ${DATA.default_rotate}°)`], [String(flip), `otočeno o 180° (${flip}°)`],
-                        [String(normal), `normálně, pevně (${normal}°)`]])
-    rot.append(el("option", { value: v, textContent: t, selected: String(p.rotate ?? "") === v }));
+  rot.append(el("option", { value: "", textContent: "Normálně" }),
+             el("option", { value: String(flip), textContent: "Vzhůru nohama (otočeno o 180°)", selected: (p.rotate ?? DATA.default_rotate) === flip }));
   const save = el("button", { className: "primary", textContent: "Uložit", disabled: true });
+  const discard = el("button", { className: "txtbtn", textContent: "Zahodit", hidden: true });
   const del = el("button", { className: "txtbtn danger" }, icon("delete-outline"), "Odebrat");
-  const mark = () => { save.disabled = false; dirty.add(p.mac); };
+  let card = null;
+  const mark = () => { save.disabled = false; discard.hidden = false; dirty.add(p.mac); card?.classList.add("dirty"); };
+  discard.onclick = () => { dirty.delete(p.mac); render(); toast("Změny panelu zahozeny."); };
   [name, lay, sensor, rot].forEach(i => i.addEventListener("input", mark));
 
   save.onclick = async () => {
@@ -305,27 +521,47 @@ function panelCard(p) {
     try {
       DATA = await post("panels/save", { mac: p.mac, name: name.value, layout: lay.value, battery_sensor: sensor.value,
                                          schedule: sched.rules(), rotate: rot.value === "" ? null : +rot.value });
-      dirty.delete(p.mac); render(); toast(`Panel ${name.value.trim()} uložen. Změna se projeví při příštím probuzení desky.`);
+      dirty.delete(p.mac); render(); toast(`Panel „${name.value.trim()}“ uložen. Změna se projeví při příštím probuzení desky.`);
     } catch (e) { save.disabled = false; toast("Nelze uložit: " + e.message); }
   };
   del.onclick = async () => {
-    if (!confirm(`Odebrat panel ${p.name}? Jeho deska (${p.mac}) přestane dostávat obrázek, dokud ji znovu nepovolíš.`)) return;
-    try { DATA = await post("panels/delete", { mac: p.mac }); dirty.delete(p.mac); render(); toast(`Panel ${p.name} odebrán.`); }
+    if (!await ask(`Odebrat panel ${p.name}?`, `Deska ${p.mac} přestane dostávat obrázek. Až se znovu ozve, objeví se v Nových deskách a půjde znovu povolit.`, "Odebrat", true)) return;
+    try { DATA = await post("panels/delete", { mac: p.mac }); dirty.delete(p.mac); render(); toast(`Panel „${p.name}“ odebrán.`); }
     catch (e) { toast("Nelze odebrat: " + e.message); }
   };
-  const img = el("img", { className: "thumb", src: `preview.png?panel=${encodeURIComponent(p.mac)}&${p.content_ts}`, alt: "Náhled panelu " + p.name, loading: "lazy" });
-  return el("section", { className: "card" },
+  const src = `preview.png?panel=${encodeURIComponent(p.mac)}&${p.content_ts}`;
+  const img = el("img", { className: "thumb", src, alt: "Náhled panelu " + p.name, loading: "lazy" });
+  const zoom = el("button", { className: "thumbbtn", type: "button", title: "Zobrazit náhled ve skutečné velikosti" }, img);
+  zoom.onclick = () => {
+    const d = el("dialog", { className: "zoom" }, el("img", { src, alt: "Náhled panelu " + p.name }),
+      el("div", { className: "dlg-foot" }, el("a", { className: "txtbtn", href: "status", textContent: "Stav panelů" }),
+        el("button", { className: "primary", textContent: "Zavřít", onclick: () => { d.close(); d.remove(); } })));
+    d.onclick = e => { if (e.target === d) { d.close(); d.remove(); } };
+    document.body.append(d); d.showModal();
+  };
+  card = el("section", { className: "card" + (dirty.has(p.mac) ? " dirty" : "") },
     el("div", { className: "phead" }, icon("tablet"), el("div", {}, el("b", { textContent: p.name }), el("br"), el("small", { textContent: p.mac })), chips),
-    el("div", { className: "pbody" }, el("a", { href: "status", title: "Stav panelu" }, img), el("div", {},
+    el("div", { className: "pbody" }, zoom, el("div", {},
       el("div", { className: "grid2" }, field("Název", name), field("Rozvržení", el("div", { className: "withbtn" }, lay, edit))),
-      field("Otočení obrazu", rot, el("div", { className: "help", textContent: "Je-li obraz na panelu vzhůru nohama, zvol „otočeno o 180°“. Projeví se při příštím probuzení desky." })),
+      field("Otočení obrazu", rot, el("div", { className: "help", textContent: "Je-li obraz na panelu vzhůru nohama, zvol „Vzhůru nohama“. Projeví se při příštím probuzení desky." })),
       field("Senzor baterie v HA", el("div", { className: "withbtn" }, sensor, sug),
             el("div", { className: "help", textContent: DATA.mqtt
-        ? "Panel je v HA zařízení (MQTT) se senzory baterie, napětí, signálu, doby překreslení… Tohle je entity ID baterie – platí jen při prvním vytvoření, potom ho měň v HA."
-        : "Add-on ho vytvoří a plní přes REST API (napětí, signál, délka překreslení… v atributech)." })),
+        ? "Panel má v Home Assistantu vlastní zařízení se stavem baterie, signálu a překreslení. Tady je jen název (ID) senzoru baterie – použije se při prvním vytvoření, později ho přejmenuješ přímo v HA. Nech prázdné, pokud stav v HA nechceš."
+        : "Pod tímto názvem add-on zapisuje stav baterie do Home Assistantu. Nech prázdné, pokud ho nepotřebuješ." })),
       el("div", { className: "f" }, el("span", { textContent: "Rozvrh probouzení" }), sched.el,
         el("div", { className: "help", textContent: "Deska se jen zeptá na nový obsah; překresluje se, jen když se změnil. Méně probuzení = delší výdrž baterie." })),
-      el("div", { className: "foot" }, save, el("span", { className: "sp" }), del))));
+      el("div", { className: "foot" }, save, discard, el("span", { className: "unsaved", textContent: "Neuložené změny" }), el("span", { className: "sp" }), del))));
+  return card;
+}
+
+// nepovolená deska: povolit přímo z karty (klíč desky se vezme z jejího posledního pokusu o spojení)
+function allowChip(p) {
+  const b = el("button", { className: "chip bad act", type: "button", title: "Deska nedostává obrázek – povolit" }, icon("lock-alert"), "nepovolená · Povolit");
+  b.onclick = async () => {
+    try { DATA = await post("panels/approve", { mac: p.mac }); render(); toast(`Deska panelu „${p.name}“ povolena.`); }
+    catch (e) { toast("Nelze povolit: " + e.message); }
+  };
+  return b;
 }
 
 function pendingRow(p) {
@@ -344,7 +580,8 @@ function pendingRow(p) {
   const panel = DATA.panels.find(x => x.mac === p.mac);
   const info = p.allowed ? "povolená, zatím se neozvala"
     : [panel ? `panel ${panel.name}: deska se ozvala s jiným klíčem (přeinstalovaná?)` : "",
-       p.when && "ozvala se " + p.when, p.ip, p.fw && "FW " + p.fw, p.voltage && p.voltage + " V"].filter(Boolean).join(" · ");
+       p.when && "ozvala se " + p.when, p.ip && "IP " + p.ip, p.key_hint && "klíč končí …" + p.key_hint,
+       p.fw && "FW " + p.fw, p.voltage && p.voltage + " V"].filter(Boolean).join(" · ");
   return el("div", { className: "pend" },
     el("div", {}, el("b", { textContent: p.mac }), el("div", { className: "help", textContent: info })),
     ...(p.allowed ? [el("span"), el("span"), el("span")] : panel ? [el("span"), el("span"), ok] : [field("Název panelu", name), field("Rozvržení", lay), ok]));
@@ -366,11 +603,13 @@ function render() {
     el("p", { className: "help", textContent: "Desky, které se ozvaly, ale nejsou povolené. Povolením dostanou obrázek a vlastní panel." }));
 }
 
+let lastJson = "";
 async function load() {
   try {
-    const [d, ents] = await Promise.all([fetch("panels.json").then(r => r.json()),
+    const [txt, ents] = await Promise.all([fetch("panels.json").then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); }),
       fetch("entities.json").then(r => r.ok ? r.json() : []).catch(() => [])]);
-    DATA = d;
+    if (txt === lastJson) return;   // nic nového – nepřekreslovat (zavřelo by vybraný úsek)
+    lastJson = txt; DATA = JSON.parse(txt);
     const dl = $("#dl-sensor"); dl.replaceChildren();
     (Array.isArray(ents) ? ents : []).filter(e => e.id.startsWith("sensor.espink")).forEach(e => dl.append(el("option", { value: e.id, textContent: e.name })));
     render();
@@ -380,7 +619,10 @@ async function load() {
 }
 addEventListener("beforeunload", e => { if (dirty.size) e.preventDefault(); });
 // nové desky a stav se objeví bez obnovení stránky
-setInterval(() => { if (!document.hidden && !document.activeElement.matches("input,textarea,select")) load(); }, 30000);
+// nepřekreslovat, když uživatel zrovna pracuje: fokus v kartě, vybraný úsek, tažení, otevřený dialog
+const busy = () => document.activeElement?.matches("#list :is(input, textarea, select, .sched-hd), #pendingBox :is(input, select)")
+  || document.querySelector(".sched-seg, .sched-hd.drag, dialog[open]");
+setInterval(() => { if (!document.hidden && !busy()) load(); }, 30000);
 load();
 </script>
 </body>

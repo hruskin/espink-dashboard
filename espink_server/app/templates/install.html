@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,">
 <title>ESPink – instalace firmwaru</title>
 <link rel="stylesheet" href="static/mdi/css/materialdesignicons.min.css">
 <!-- ESP Web Tools přibalené v add-onu (static/esp-web-tools) – žádný cizí skript v originu HA -->
@@ -10,11 +11,11 @@
 <style>
   :root {
     --bg: #fafafa; --card: #fff; --ink: #212121; --muted: #727272; --line: #e0e0e0; --hover: rgba(0,0,0,.04);
-    --primary: #03a9f4; --on-primary: #fff; --err: #db4437; --warn: #ffa600; --ok: #43a047;
+    --primary: #0277bd; --on-primary: #fff; --err: #db4437; --warn: #ffa600; --ok: #43a047;
     --warn-bg: #fff4e0; --err-bg: #fdecea; --shadow: 0 2px 2px rgba(0,0,0,.14), 0 1px 5px rgba(0,0,0,.12);
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #111; --card: #1c1c1c; --ink: #e1e1e1; --muted: #9b9b9b; --line: #333; --hover: rgba(255,255,255,.05);
+    :root { --primary: #4fc3f7; --on-primary: #00111c; --bg: #111; --card: #1c1c1c; --ink: #e1e1e1; --muted: #9b9b9b; --line: #333; --hover: rgba(255,255,255,.05);
             --warn-bg: #3a2c10; --err-bg: #3b1714; --shadow: none; }
   }
   * { box-sizing: border-box; }
@@ -55,6 +56,10 @@
   .install { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 4px 0 16px; }
   .meta { font-size: 12px; color: var(--muted); }
   .saved { color: var(--ok); font-size: 13px; }
+  .saved.err { color: var(--err); }
+  .ferr { color: var(--err); font-size: 12px; min-height: 16px; margin-top: 2px; }
+  .f input[aria-invalid=true] { border-color: var(--err); }
+  .pendnote { font-size: 13px; color: var(--muted); }
   esp-web-install-button { --esp-tools-button-color: var(--primary); --esp-tools-button-text-color: #fff; }
 </style>
 </head>
@@ -72,14 +77,14 @@
   <section class="card">
     <h2><i class="mdi mdi-cog-outline"></i>Nastavení firmwaru</h2>
     <div class="grid">
-      <label class="f"><span>Adresa serveru (Home Assistant)</span><input type="text" id="host" spellcheck="false" autocomplete="off">
+      <label class="f"><span>Adresa serveru (Home Assistant)</span><input type="text" id="host" spellcheck="false" autocomplete="off" aria-describedby="hostHelp host-err">
         <div class="help" id="hostHelp"></div></label>
-      <label class="f"><span>Port</span><input type="number" id="port" min="1" max="65535"></label>
+      <label class="f"><span>Port</span><input type="number" id="port" min="1" max="65535" aria-describedby="port-err"></label>
     </div>
     <label class="f"><span>Heslo konfiguračního AP desky</span>
-      <div class="withbtn"><input type="text" id="ap" spellcheck="false" autocomplete="off" maxlength="63">
-        <button class="icon-btn" id="regen" title="Vygenerovat nové heslo" type="button"><i class="mdi mdi-dice-multiple-outline"></i></button></div>
-      <div class="help">Když se deska nepřipojí k Wi-Fi, spustí vlastní přístupový bod <code>INK_…</code> s tímto heslem (ukáže ho i na displeji).</div></label>
+      <div class="withbtn"><input type="text" id="ap" spellcheck="false" autocomplete="off" maxlength="63" aria-describedby="apHelp ap-err">
+        <button class="txtbtn" id="regen" title="Vygenerovat nové heslo" type="button"><i class="mdi mdi-dice-multiple-outline"></i>Nové heslo</button></div>
+      <div class="help" id="apHelp">Když se deska nepřipojí k Wi-Fi, spustí vlastní přístupový bod <code>INK_…</code> s tímto heslem (ukáže ho i na displeji).</div></label>
     <div class="withbtn" style="gap:12px"><button class="primary" id="save" disabled>Uložit</button><span id="saveMsg" class="saved"></span></div>
     <p class="help">Hodnoty se vloží do firmwaru při stažení – binárka v add-onu sama žádnou adresu ani heslo neobsahuje. Zadej raději IP adresu než <code>homeassistant.local</code> (mDNS po probuzení zdržuje).</p>
   </section>
@@ -100,6 +105,7 @@
         <span slot="not-allowed">Instalace vyžaduje HTTPS (otevři Home Assistant přes https://).</span>
       </esp-web-install-button>
       <span class="meta" id="build"></span>
+      <span class="pendnote" id="pendNote" hidden>Nejdřív ulož nastavení firmwaru nahoře.</span>
     </div>
     <p class="help">Kdyby se deska nechytila: podrž <b>BOOT</b>, stiskni <b>RESET</b>, pusť BOOT a zkus to znovu. Logy desky uvidíš v instalátoru přes <i>Logs &amp; Console</i>.</p>
   </section>
@@ -125,16 +131,44 @@ function show(d) {
   saved = d.settings;
   $("#host").value = saved.host; $("#port").value = saved.port; $("#ap").value = saved.ap_password;
   const det = saved.detected || {};
-  $("#hostHelp").textContent = det.host ? `Zjištěno ze Supervisoru: ${det.host}:${det.port}` : "Adresu HA se nepodařilo zjistit – zadej ji ručně.";
+  const hh = $("#hostHelp");
+  hh.textContent = det.host ? `Zjištěno ze Supervisoru: ${det.host}:${det.port} ` : "Adresu HA se nepodařilo zjistit – zadej ji ručně.";
+  if (det.host && (det.host !== saved.host || String(det.port) !== String(saved.port))) {
+    const use = Object.assign(document.createElement("button"), { type: "button", className: "txtbtn", textContent: "Použít", style: "padding:2px 6px" });
+    use.onclick = () => { $("#host").value = det.host; $("#port").value = det.port; syncState(); };
+    hh.append(use);
+  }
   const b = d.build || {};
-  $("#build").textContent = b.firmware ? `Živý obraz ${b.firmware} · ${(b.boards || ["ESPink v3.6"]).join(", ")} · ${(b.patches || []).length} patchů · sestaveno ${new Date(b.built).toLocaleDateString("cs-CZ")}` : "";
+  $("#build").textContent = b.firmware ? `Živý obraz ${b.firmware} · ${(b.boards || ["ESPink v3.6"]).join(", ")} · ${(b.patches || []).length} úprav pro ESPink Server · sestaveno ${new Date(b.built).toLocaleDateString("cs-CZ")}` : "";
   $("#noFw").hidden = d.available; $("#btn").hidden = !d.available;
-  $("#save").disabled = true;
+  syncState();
 }
-["#host", "#port", "#ap"].forEach(s => $(s).addEventListener("input", () => { $("#save").disabled = !dirty(); $("#saveMsg").textContent = ""; }));
+// kontrola polí přímo u nich (stejná pravidla jako server)
+function validate() {
+  const v = values(), errs = {
+    host: /^[A-Za-z0-9.:-]{1,63}$/.test(v.host) ? "" : "Zadej IP adresu nebo název bez mezer (max. 63 znaků).",
+    port: v.port >= 1 && v.port <= 65535 ? "" : "Port musí být 1–65535.",
+    ap: v.ap_password.length >= 8 && v.ap_password.length <= 63 && /^[\x20-\x7e]+$/.test(v.ap_password) ? "" : "Heslo musí mít 8–63 znaků bez diakritiky.",
+  };
+  for (const [k, msg] of Object.entries(errs)) {
+    const inp = $("#" + k); inp.setAttribute("aria-invalid", !!msg);
+    const lab = inp.closest("label");
+    let e = lab.querySelector(".ferr");
+    if (!e) { e = Object.assign(document.createElement("div"), { className: "ferr", id: k + "-err" }); lab.append(e); }
+    e.textContent = msg;
+  }
+  return !Object.values(errs).some(Boolean);
+}
+function syncState() {
+  const d = dirty(), ok = validate();
+  $("#save").disabled = !d || !ok;
+  $("#btn").style.pointerEvents = d ? "none" : ""; $("#btn").style.opacity = d ? ".5" : "";
+  $("#pendNote").hidden = !d;
+}
+["#host", "#port", "#ap"].forEach(s => $(s).addEventListener("input", () => { $("#saveMsg").textContent = ""; $("#saveMsg").className = "saved"; syncState(); }));
 $("#regen").onclick = () => {
   const abc = "abcdefghijkmnpqrstuvwxyz23456789", r = crypto.getRandomValues(new Uint32Array(12));
-  $("#ap").value = [...r].map(x => abc[x % abc.length]).join(""); $("#save").disabled = !dirty();
+  $("#ap").value = [...r].map(x => abc[x % abc.length]).join(""); syncState();
 };
 $("#save").onclick = async () => {
   $("#save").disabled = true;
@@ -143,10 +177,11 @@ $("#save").onclick = async () => {
     const res = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(res.error || "HTTP " + r.status);
     show(res); $("#saveMsg").textContent = "Uloženo – platí pro příští instalaci.";
-  } catch (e) { $("#save").disabled = false; $("#saveMsg").textContent = ""; alert("Nelze uložit: " + e.message); }
+  } catch (e) { syncState(); $("#saveMsg").className = "saved err"; $("#saveMsg").textContent = "Nelze uložit: " + e.message; }
 };
+addEventListener("beforeunload", e => { if (saved.host !== undefined && dirty()) e.preventDefault(); });
 // neuložené změny by instalace nepoužila
-$("#btn").addEventListener("click", e => { if (dirty()) { e.stopPropagation(); e.preventDefault(); alert("Nejdřív ulož nastavení firmwaru."); } }, true);
+$("#btn").addEventListener("click", e => { if (dirty()) { e.stopPropagation(); e.preventDefault(); } }, true);
 
 checkSerial();
 fetch("firmware/info.json").then(r => r.json()).then(show).catch(e => { $("#noFw").hidden = false; $("#noFw").lastElementChild.textContent = "Nelze načíst: " + e.message; });

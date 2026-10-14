@@ -106,9 +106,25 @@ _RULE = re.compile(r"^\s*(?:(\d)(?:-(\d))?\s+)?(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2
 MIN_SLEEP = 60
 
 
+def _rule_ok(rule: str) -> bool:
+    """Formát i rozsah: hodiny 0–24 (24:00 = půlnoc), minuty 0–59, dny 1–7, od ≤ do."""
+    m = _RULE.match(rule)
+    if not m:
+        return False
+    d1, d2, h1, m1, h2, m2, _ = m.groups()
+    if d1 and not (1 <= int(d1) <= int(d2 or d1) <= 7):
+        return False
+    for h, mi in ((h1, m1), (h2, m2)):
+        if not (0 <= int(h) <= 24 and 0 <= int(mi) <= 59) or (int(h) == 24 and int(mi)):
+            return False
+    return True
+
+
 def check_rules(rules) -> list[str]:
-    v = [str(r).strip() for r in rules or [] if str(r).strip()]
-    bad = [r for r in v if not _RULE.match(r)]
+    if not isinstance(rules, (list, tuple)):
+        raise ValueError("rozvrh musí být seznam pravidel")
+    v = [str(r).strip() for r in rules if str(r).strip()]
+    bad = [r for r in v if not _rule_ok(r)]
     if bad:
         raise ValueError(f"neplatné pravidlo rozvrhu: {bad[0]}")
     return v
@@ -151,7 +167,7 @@ class Schedule:
         windows = []
         for rule in rules:
             m = _RULE.match(rule)
-            if not m:
+            if not m or not _rule_ok(rule):   # i z Konfigurace add-onu (Supervisor kontroluje jen text)
                 print(f"[schedule] neplatné pravidlo ignorováno: {rule!r}")
                 continue
             d1, d2, h1, m1, h2, m2, sec = m.groups()
@@ -159,7 +175,7 @@ class Schedule:
                 days = set(range(int(d1), int(d2 or d1) + 1))
             else:
                 days = set(range(1, 8))
-            windows.append(Window(days, time(int(h1), int(m1)), time(int(h2) % 24, int(m2)), max(MIN_SLEEP, int(sec))))
+            windows.append(Window(days, time(int(h1) % 24, int(m1)), time(int(h2) % 24, int(m2)), max(MIN_SLEEP, int(sec))))
         return cls(windows)
 
     def sleep_seconds(self, now: datetime) -> int:
@@ -182,6 +198,10 @@ class Schedule:
         if nxt is None:
             return FALLBACK_SLEEP
         return int(max(MIN_SLEEP, (nxt - now).total_seconds()))
+
+    def interval_at(self, now: datetime) -> int | None:
+        """Interval okna, které platí teď (None = mimo okna, deska spí do dalšího)."""
+        return next((w.interval for w in self.windows if w.contains(now)), None)
 
     def next_start(self, now: datetime) -> datetime | None:
         best = None

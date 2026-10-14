@@ -11,16 +11,24 @@ ENV_FILE="$HERE/.env.dev"
 if [ ! -x "$VENV/bin/python" ]; then
   echo "Připravuji Python prostředí ($VENV)…"
   python3 -m venv "$VENV"
-  "$VENV/bin/pip" install -q aiohttp jinja2 pillow paho-mqtt
+  # připnuté verze (odpovídají tomu, s čím je vývoj ověřený)
+  "$VENV/bin/pip" install -q "aiohttp==3.14.4" "jinja2==3.1.6" "pillow==12.3.0" "paho-mqtt==2.1.0"
 fi
 
-# Typst stejné verze jako v add-onu (Alpine 3.21); statická binárka do .venv
+# Typst stejné verze jako v add-onu (Alpine 3.21); statická binárka do .venv, ověřená SHA-256
 TYPST_VERSION=0.12.0
+declare -A TYPST_SHA=(
+  [x86_64]=605130a770ebd59a4a579673079cb913a13e75985231657a71d6239a57539ec3
+  [aarch64]=e81ae98e6b12db5a36c2276e5a9890da48f7a339b92476dd22daf90de3699e11
+)
 if [ -z "${TYPST:-}" ]; then
   if [ ! -x "$VENV/bin/typst" ]; then
     echo "Stahuji Typst $TYPST_VERSION…"
-    curl -fsSL "https://github.com/typst/typst/releases/download/v$TYPST_VERSION/typst-$(uname -m)-unknown-linux-musl.tar.xz" \
-      | tar -xJ -C "$VENV/bin" --strip-components=1 "typst-$(uname -m)-unknown-linux-musl/typst"
+    arch="$(uname -m)"; tmp="$(mktemp)"
+    curl -fsSL -o "$tmp" "https://github.com/typst/typst/releases/download/v$TYPST_VERSION/typst-$arch-unknown-linux-musl.tar.xz"
+    echo "${TYPST_SHA[$arch]:-chybí}  $tmp" | sha256sum -c --quiet || { echo "Typst: nesouhlasí kontrolní součet" >&2; rm -f "$tmp"; exit 1; }
+    tar -xJf "$tmp" -C "$VENV/bin" --strip-components=1 "typst-$arch-unknown-linux-musl/typst"
+    rm -f "$tmp"
   fi
   export TYPST="$VENV/bin/typst"
 fi

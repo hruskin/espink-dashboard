@@ -3,18 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,">
 <title>ESPink – rozvržení</title>
 <link rel="stylesheet" href="static/mdi/css/materialdesignicons.min.css">
 <style>
   :root {
     --bg: #fafafa; --card: #fff; --ink: #212121; --muted: #727272; --line: #e0e0e0; --hover: rgba(0,0,0,.04);
-    --primary: #03a9f4; --on-primary: #fff; --err: #db4437; --warn: #ffa600; --ok: #43a047;
+    --primary: #0277bd; --on-primary: #fff; --err: #db4437; --warn: #ffa600; --ok: #43a047;
     --warn-bg: #fff4e0; --err-bg: #fdecea; --shadow: 0 2px 2px rgba(0,0,0,.14), 0 1px 5px rgba(0,0,0,.12);
     --seg-a: #90caf9; --seg-b: #b0bec5;
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg: #111; --card: #1c1c1c; --ink: #e1e1e1; --muted: #9b9b9b; --line: #333; --hover: rgba(255,255,255,.05);
-            --primary: #03a9f4; --warn-bg: #3a2c10; --err-bg: #3b1714; --shadow: none; --seg-a: #1e5f8f; --seg-b: #455a64; }
+            --primary: #4fc3f7; --on-primary: #00111c; --warn-bg: #3a2c10; --err-bg: #3b1714; --shadow: none; --seg-a: #1e5f8f; --seg-b: #455a64; }
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.4 Roboto, system-ui, sans-serif; }
@@ -37,11 +38,11 @@
 
   /* layout */
   .seg { display: none; }
-  main { display: grid; grid-template-columns: 420px 1fr; gap: 16px; padding: 16px; align-items: start; padding-bottom: 96px; }
+  main { display: grid; grid-template-columns: 420px 1fr; gap: 16px; padding: 16px; align-items: start; padding-bottom: 48px; }
   .card { background: var(--card); border-radius: 12px; box-shadow: var(--shadow); border: 1px solid var(--line); }
   @media (max-width: 999px) {
     main { grid-template-columns: minmax(0, 1fr); padding: 12px 12px 96px; }
-    .seg { display: flex; position: sticky; top: 56px; z-index: 15; background: var(--bg); padding: 8px 12px; gap: 0; }
+    .seg { display: flex; position: sticky; top: var(--hdr, 56px); z-index: 15; background: var(--bg); padding: 8px 12px; gap: 0; }
     .seg button { flex: 1; padding: 8px; border: 1px solid var(--primary); background: transparent; color: var(--primary); font-weight: 500; }
     .seg button:first-child { border-radius: 18px 0 0 18px; } .seg button:last-child { border-radius: 0 18px 18px 0; }
     .seg button[aria-pressed=true] { background: var(--primary); color: var(--on-primary); }
@@ -60,6 +61,10 @@
   .budget-msg { margin-top: 8px; font-size: 13px; display: flex; gap: 6px; align-items: flex-start; }
   .budget-msg.warn .mdi { color: var(--warn); } .budget-msg.err { color: var(--err); } .budget-msg.ok .mdi { color: var(--ok); }
   .budget-msg .mdi { font-size: 18px; }
+  .keys { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .keys summary { cursor: pointer; }
+  .keys ul { margin: 6px 0 0; padding-left: 18px; }
+  @media (pointer: coarse) { .keys { display: none; } }
 
   /* blocks */
   .blocks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -101,7 +106,8 @@
   .segbtn button[aria-pressed=true] { background: var(--primary); color: var(--on-primary); }
   .calrow { display: grid; grid-template-columns: 1fr 70px 48px auto auto 32px; gap: 6px; align-items: start; margin-bottom: 6px; }
   .calrow input { padding: 7px 8px !important; }
-  .bfoot { display: flex; gap: 4px; align-items: center; border-top: 1px dashed var(--line); padding-top: 10px; margin-top: 4px; }
+  .calrow .cbx { display: flex; flex-direction: column; align-items: center; gap: 1px; cursor: pointer; font-size: 11px; color: var(--muted); padding-top: 4px; white-space: nowrap; }
+  .bfoot { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; border-top: 1px dashed var(--line); padding-top: 10px; margin-top: 4px; }
   .bfoot .sp { flex: 1; }
   .txtbtn { background: none; border: 0; color: var(--primary); font-weight: 500; padding: 8px 10px; border-radius: 4px; display: inline-flex; gap: 4px; align-items: center; }
   .txtbtn:hover { background: var(--hover); }
@@ -137,14 +143,18 @@
   .screen.failed .perr { display: block; }
 
   /* save bar + toast */
-  .savebar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--card); border-top: 1px solid var(--line);
-             display: flex; align-items: center; gap: 8px; padding: 10px 16px; transform: translateY(100%); transition: transform .2s; }
-  .savebar.show { transform: none; }
-  .savebar .st { flex: 1; display: flex; gap: 6px; align-items: center; }
-  .savebar .st::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+  .savectl { margin-left: auto; display: flex; align-items: center; gap: 4px; white-space: nowrap; min-width: 0; }
+  .savectl > button { flex-shrink: 0; }
+  .appbar .tabs { flex-shrink: 0; }
+  .savectl .st { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 13px; color: var(--muted); margin-right: 4px; }
+  .savectl.show .st { color: var(--ink); font-weight: 500; }
+  .savectl.show .st::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); margin-right: 6px; vertical-align: 1px; }
+  .savectl .primary { padding: 7px 16px; }
+  .savectl.show .primary:not(:disabled) { box-shadow: 0 0 0 3px rgba(2,119,189,.25); }
+  [hidden] { display: none !important; }
   .primary { background: var(--primary); color: var(--on-primary); border: 0; border-radius: 4px; padding: 9px 18px; font-weight: 500; }
   .primary:disabled { background: var(--line); color: var(--muted); cursor: not-allowed; }
-  .toast { position: fixed; left: 50%; bottom: 76px; transform: translateX(-50%); background: #323232; color: #fff; padding: 12px 16px; border-radius: 6px;
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #323232; color: #fff; padding: 12px 16px; border-radius: 6px;
            display: none; gap: 16px; align-items: center; z-index: 40; max-width: calc(100vw - 32px); }
   .toast.show { display: flex; }
   .toast button { background: none; border: 0; color: #4fc3f7; font-weight: 600; }
@@ -158,7 +168,37 @@
   .screen.busy img { opacity: .6; }
   .tabs a.dot::after { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--primary); margin-left: 6px; }
   .seg button.dot::after { content: " •"; }
-  .appbar .actions { margin-left: auto; display: flex; gap: 2px; }
+  .appbar .actions { display: flex; gap: 2px; }
+  .appbar .tabs { min-width: 0; overflow-x: auto; }
+  #moreBtn { display: none; }
+  .actions .lbl { display: none; }
+  .dlgerr { color: var(--err); font-size: 13px; min-height: 18px; }
+  .primary.danger { background: var(--err); }
+  /* telefon: akce v hlavičce do menu ⋮, lišta Uložit a nástroje náhledu se zalomí */
+  /* užší okno (i HA s bočním panelem): akce do menu ⋮, ať se nepletou s Uložit */
+  @media (max-width: 860px) {
+    #moreBtn { display: grid; }
+    .appbar .actions { display: none; position: absolute; right: 8px; top: 52px; flex-direction: column; align-items: stretch;
+                       background: var(--card); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); padding: 4px 0; z-index: 25; }
+    .appbar .actions.open { display: flex; }
+    .appbar .actions .icon-btn { width: auto; height: 40px; border-radius: 0; display: flex; gap: 10px; padding: 0 16px; justify-content: flex-start; color: var(--ink); }
+    .actions .lbl { display: inline; }
+  }
+  /* úzké okno: uložení ve druhém řádku hlavičky – stav vlevo, tlačítka vpravo */
+  @media (max-width: 700px) {
+    #moreBtn { margin-left: auto; }
+    .appbar { gap: 2px; padding: 0 8px; flex-wrap: wrap; height: auto; }
+    .appbar .tabs { height: 56px; }
+    .savectl { order: 3; flex-basis: calc(100% + 16px); height: 44px; margin: 0 -8px; padding: 0 8px; border-top: 1px solid var(--line); }
+    .savectl .st { margin-right: auto; }
+    .savectl .primary { padding: 7px 14px; }
+  }
+  @media (max-width: 360px) { .tabs a { padding: 0 6px; } }
+  @media (max-width: 600px) {
+
+    .ptool { flex-wrap: wrap; row-gap: 4px; }
+    .ptool .st { flex-basis: 100%; }
+  }
   textarea.code { width: 100%; min-height: 120px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg);
                   color: var(--ink); font: 13px/1.45 ui-monospace, "JetBrains Mono", monospace; resize: vertical; }
   .f textarea:focus { outline: 2px solid var(--primary); border-color: transparent; }
@@ -238,10 +278,19 @@
 <header class="appbar">
   <h1>ESPink</h1>
   <nav class="tabs"><a href="./" aria-current="page" id="tabLayout">Rozvržení</a><a href="panels">Panely</a><a href="install">Instalace</a><a href="status">Stav</a></nav>
-  <div class="actions">
-    <button class="icon-btn" id="histBtn" title="Historie uložených verzí"><i class="mdi mdi-history"></i></button>
-    <button class="icon-btn" id="exportBtn" title="Exportovat rozvržení (JSON)"><i class="mdi mdi-download"></i></button>
-    <button class="icon-btn" id="importBtn" title="Importovat rozvržení ze souboru"><i class="mdi mdi-upload"></i></button>
+  <!-- uložení vždy na očích v horní liště (dřív lišta dole, která se přehlédla) -->
+  <div class="savectl" id="savebar" role="group" aria-label="Uložení rozvržení">
+    <span class="st" id="dirtyText" aria-live="polite">Uloženo</span>
+    <button class="icon-btn" id="undo" title="Zpět (Ctrl+Z)"><i class="mdi mdi-undo"></i></button>
+    <button class="icon-btn" id="redo" title="Znovu (Ctrl+Shift+Z)"><i class="mdi mdi-redo"></i></button>
+    <button class="txtbtn" id="discard" hidden>Zahodit</button>
+    <button class="primary" id="save" title="Uložit (Ctrl+S)">Uložit</button>
+  </div>
+  <button class="icon-btn" id="moreBtn" title="Další akce" aria-label="Další akce" aria-haspopup="menu" aria-expanded="false"><i class="mdi mdi-dots-vertical"></i></button>
+  <div class="actions" id="actions">
+    <button class="icon-btn" id="histBtn" title="Historie uložených verzí" aria-label="Historie uložených verzí"><i class="mdi mdi-history"></i><span class="lbl">Historie verzí</span></button>
+    <button class="icon-btn" id="exportBtn" title="Exportovat rozvržení (JSON)" aria-label="Exportovat rozvržení"><i class="mdi mdi-download"></i><span class="lbl">Exportovat</span></button>
+    <button class="icon-btn" id="importBtn" title="Importovat rozvržení ze souboru" aria-label="Importovat rozvržení"><i class="mdi mdi-upload"></i><span class="lbl">Importovat</span></button>
     <input type="file" id="importFile" accept=".json,application/json" hidden>
   </div>
 </header>
@@ -261,8 +310,15 @@
         <div class="help" id="lUsers"></div></div>
     </div>
     <div class="card budget">
-      <div class="budget-head"><span>Mřížka 12 sloupců po 40 px, krok 4 px</span><span id="cover"></span></div>
+      <div class="budget-head"><span>Displej 480 × 800</span><span id="cover"></span></div>
       <div class="budget-msg" id="budgetMsg" aria-live="polite"></div>
+      <details class="keys"><summary>Ovládání a klávesové zkratky</summary>
+        <ul>
+          <li>Tažení bloku přesouvá, úchyty na okrajích mění velikost (po 40 px do stran, po 4 px svisle); dvojklik na úchyt roztáhne blok k sousedovi.</li>
+          <li>Stejně široký blok přetažený na jiný je prohodí.</li>
+          <li>Šipky posouvají vybraný blok (Alt = po 40 px), Shift+šipky mění velikost, Ctrl+Shift+šipky levou/horní hranu.</li>
+          <li>Enter otevře nastavení, Esc zruší výběr, Delete odebere, Ctrl+Z / Ctrl+Shift+Z zpět / znovu.</li>
+        </ul></details>
       <div class="tools">
         <button class="txtbtn" id="stackBtn" title="Viditelné bloky srovná pod sebe na celou šířku (v pořadí shora)"><i class="mdi mdi-view-sequential-outline"></i>Seřadit pod sebe</button>
       </div>
@@ -299,13 +355,6 @@
   </section>
 </main>
 
-<div class="savebar" id="savebar" role="region" aria-label="Neuložené změny">
-  <span class="st" id="dirtyText">Neuložené změny</span>
-  <button class="icon-btn" id="undo" title="Zpět (Ctrl+Z)"><i class="mdi mdi-undo"></i></button>
-  <button class="icon-btn" id="redo" title="Znovu (Ctrl+Shift+Z)"><i class="mdi mdi-redo"></i></button>
-  <button class="txtbtn" id="discard">Zahodit</button>
-  <button class="primary" id="save">Uložit</button>
-</div>
 <div class="toast" id="toast" role="status"><span id="toastText"></span><button id="toastAct" hidden>Vrátit</button></div>
 <div class="sr" aria-live="polite" id="live"></div>
 <dialog id="conflict"><h3 style="margin-top:0">Rozvržení bylo mezitím uloženo jinde</h3>
@@ -315,9 +364,14 @@
   <input type="search" id="iconSearch" placeholder="Hledat anglicky: thermometer, bus, trash…" autocomplete="off">
   <div class="icons" id="iconGrid"></div>
   <div class="dlg-foot"><button class="txtbtn" id="iconNone">Bez vlastní ikony</button><button class="txtbtn" onclick="iconDlg.close()">Zavřít</button></div></dialog>
+<dialog id="renameDlg"><h3 style="margin:0 0 12px">Přejmenovat rozvržení</h3>
+  <label class="f"><span>Název</span><input type="text" id="renameName" maxlength="40"></label>
+  <div class="dlgerr" id="renameErr" role="alert"></div>
+  <div class="dlg-foot"><button class="txtbtn" onclick="renameDlg.close()">Zrušit</button><button class="primary" id="renameOk">Přejmenovat</button></div></dialog>
 <dialog id="newDlg"><h3 style="margin:0 0 12px">Nové rozvržení</h3>
   <label class="f"><span>Název</span><input type="text" id="newName" maxlength="40" placeholder="např. Kuchyň"></label>
   <label class="f"><span>Začít z</span><select id="newFrom"></select></label>
+  <div class="dlgerr" id="newErr" role="alert"></div>
   <div class="dlg-foot"><button class="txtbtn" onclick="newDlg.close()">Zrušit</button><button class="primary" id="newOk">Vytvořit</button></div></dialog>
 <dialog id="histDlg"><h3 style="margin:0">Uložené verze</h3>
   <ul class="hist" id="histList"></ul>
@@ -340,7 +394,7 @@ const TYPES = {
 const SIZES = { s: "Malá", m: "Střední", l: "Velká" };
 let SCHEMA = null, D = null;          // popis bloků a rozměry ze serveru
 let ENT = null;                       // id → {name, state, unit}; null = HA nedostupné
-let unsavedBanner = null, rev = 0, leaving = false;
+let unsavedBanner = null, rev = 0, leaving = false, typing = false;   // typing: rozepsané pole (zapíše se při change)
 let LID = new URLSearchParams(location.search).get("l") || "", LAYOUTS = [];
 const q = () => LID ? "?id=" + encodeURIComponent(LID) : "";
 let blocks = [], saved = "[]", hist = [], hpos = 0, openId = null;
@@ -415,15 +469,23 @@ function renderStatus() {            // vrací true, když návrh nejde uložit 
   const cut = vis.filter(b => b.type === "text" && textFit(b) < textLines(b));
   $("#cover").textContent = `pokryto ${Math.min(100, Math.round(used / area * 100))} %`;
   const msg = $("#budgetMsg");
-  let cls = "ok", txt = "Bloky tahej v náhledu, roztahuj za úchyty (dvojklik na úchyt = až k sousedovi). Stejně široké pásy se přetažením prohodí. Šipky posouvají (Alt po 40 px), Shift+šipky mění velikost, Esc zruší výběr, Delete odebere.";
+  let cls = "ok", txt = "Bloky přesouvej a zvětšuj tažením v náhledu.", action = null;
+  const top = vis.length ? Math.min(...vis.map(b => b.y)) : 0;
   if (bad.length) { cls = "err"; txt = `Bloky ${[...new Set(bad.map(b => name(b.type)))].join(", ")} se překrývají – posuň je, jinak nejde uložit.`; }
   else if (small.length) { cls = "warn"; txt = small.map(b => `${name(b.type)}: doporučeno aspoň ${minOf(b.type)[0]} sloupců × ${minOf(b.type)[1]} px`).join("; ") + " – jinak se obsah nemusí vejít."; }
   else if (cut.length) { cls = "warn"; txt = cut.map(b => `Text: vejde se ${textFit(b)} z ${textLines(b)} řádků`).join("; ") + " – zvětši blok nebo zmenši písmo."; }
-  else if (used < area) txt = "Volná místa jsou v náhledu šrafovaná. " + txt;
+  else if (!vis.length) { cls = "warn"; txt = blocks.length ? "Všechny bloky jsou skryté – zobraz je okem v seznamu, nebo přidej nový." : "Rozvržení je prázdné – přidej první blok tlačítkem Přidat blok."; }
+  else if (top > 0) {   // pás nahoře zůstal volný (např. po smazání bloku)
+    cls = "warn"; txt = `Nahoře je ${top} px volných.`;
+    action = el("button", { className: "txtbtn", type: "button", style: "padding:0 6px" }, icon("arrow-collapse-up"), "Posunout vše nahoru");
+    action.onclick = () => { shown().forEach(b => { b.y -= top; }); commit(); toast(`Bloky posunuty o ${top} px nahoru.`, () => travel(-1)); };
+  }
+  else if (used < area) txt = "Volná místa jsou šrafovaná – klikni do nich a přidej blok. " + txt;
+  $("#stackBtn").hidden = !vis.length;
   msg.className = "budget-msg " + cls;
-  msg.replaceChildren(icon(cls === "ok" ? "check-circle" : cls === "err" ? "alert-circle" : "alert"), el("span", { textContent: txt }));
-  $("#save").disabled = bad.length > 0;
-  $("#save").title = bad.length ? "Nelze uložit: bloky se překrývají" : "";
+  msg.replaceChildren(icon(cls === "ok" ? "check-circle" : cls === "err" ? "alert-circle" : "alert"), el("span", {}, txt, " ", action));
+  $("#save").disabled = bad.length > 0 || snap() === saved;   // bez změn není co ukládat
+  $("#save").title = bad.length ? "Nelze uložit: bloky se překrývají" : "Uložit (Ctrl+S)";
   return bad.length > 0;
 }
 
@@ -505,8 +567,9 @@ const chk = (label, b, key) => {
 function calRows(b) {
   const box = el("div", { className: "f" }, el("span", { textContent: "Kalendáře" }));
   box.append(el("div", { className: "calrow", style: "font-size:12px;color:var(--muted)" },
-    el("span", { textContent: "Entita" }), el("span", { textContent: "Štítek" }), el("span", { textContent: "Ikona" }), el("span", { textContent: "Červeně" }),
-    el("span", { textContent: "Celý text", title: "Nezkracovat názvy událostí – zalomí se do více řádků" }), el("span")));
+    el("span", { textContent: "Entita" }), el("span", { textContent: "Štítek" }), el("span", { textContent: "Ikona" }), el("span"), el("span"), el("span")));
+  const count = {};
+  b.p.calendars.forEach(c => { if (c.entity) count[c.entity] = (count[c.entity] || 0) + 1; });
   b.p.calendars.forEach((c, i) => {
     const ent = el("input", { type: "text", value: c.entity, placeholder: "calendar.…", spellcheck: false }); ent.setAttribute("list", "dl-calendar");
     ent.setAttribute("aria-label", "Kalendář"); ent.setAttribute("aria-invalid", !known(c.entity));
@@ -514,17 +577,18 @@ function calRows(b) {
     const lab = el("input", { type: "text", value: c.label || "", placeholder: "—" }); lab.setAttribute("aria-label", "Štítek");
     lab.onchange = () => { c.label = lab.value.trim(); if (!c.label) delete c.label; commit(); };
     const ic = iconField("", c, "icon", "z HA", true);
-    const red = el("input", { type: "checkbox", checked: !!c.red, style: "width:18px;height:18px;margin-top:8px;accent-color:#db4437" });
-    red.setAttribute("aria-label", "Červeně (a upozornění v záhlaví)");
+    const red = el("input", { type: "checkbox", checked: !!c.red, style: "width:18px;height:18px;accent-color:#db4437" });
     red.onchange = () => { if (red.checked) c.red = true; else delete c.red; commit(); };
-    const wrap = el("input", { type: "checkbox", checked: !!c.wrap, style: "width:18px;height:18px;margin-top:8px;accent-color:var(--primary)",
-                               title: "Nezkracovat názvy událostí – zalomí se do více řádků (zabere víc místa)" });
-    wrap.setAttribute("aria-label", "Celý text (nezkracovat)");
+    const wrap = el("input", { type: "checkbox", checked: !!c.wrap, style: "width:18px;height:18px;accent-color:var(--primary)" });
     wrap.onchange = () => { if (wrap.checked) c.wrap = true; else delete c.wrap; commit(); };
     const del = el("button", { className: "icon-btn", title: "Odebrat kalendář", style: "width:32px;height:32px" }, icon("close"));
     del.onclick = () => { b.p.calendars.splice(i, 1); commit(); };
     const nm = el("div", { className: "ent" }); entInfo(nm, c.entity, "");
-    box.append(el("div", { className: "calrow" }, el("div", {}, ent, nm), lab, ic, red, wrap, del));
+    if (count[c.entity] > 1) { nm.className = "ent bad"; nm.replaceChildren(icon("alert"), " Kalendář je v seznamu víckrát – události se ukážou jen jednou, řádek navíc smaž"); }
+    // zaškrtávátka s viditelným popiskem (klik i na text), aby se nepletla
+    const cbx = (input, text, title) => el("label", { className: "cbx", title }, input, el("small", { textContent: text }));
+    box.append(el("div", { className: "calrow" }, el("div", {}, ent, nm), lab, ic,
+      cbx(red, "červeně", "Červeně (a upozornění v záhlaví)"), cbx(wrap, "celý text", "Nezkracovat názvy událostí – zalomí se do více řádků (zabere víc místa)"), del));
   });
   const add = el("button", { className: "txtbtn" }, icon("plus"), "Přidat kalendář");
   add.onclick = () => { b.p.calendars.push({ entity: "" }); commit(); requestAnimationFrame(() => [...document.querySelectorAll(`[data-id="${b.id}"] .calrow input[list]`)].pop()?.focus()); };
@@ -678,21 +742,24 @@ function lineSeg(b, key, label) {
   return el("div", { className: "f" }, el("span", { textContent: label }), seg);
 }
 function renderList() {
+  requestAnimationFrame(labelButtons);
   const ul = $("#blocks");
   ul.replaceChildren();
   const order = [...blocks].sort((a, b) => a.hidden - b.hidden || a.y - b.y || a.x - b.x);
   for (const b of order) {
     const t = TYPES[b.type], open = openId === b.id;
+    // Hodnota entity: hlavní název = popisek nebo název entity (dva bloky „Hodnota entity“ se nepletou)
+    const own = b.type === "value" && (b.p.label || (b.p.entity && entName(b.p.entity)));
     const tog = el("button", { className: "btoggle" },
-      el("b", {}, name(b.type), invalid(b) ? el("span", { className: "badge" }, "⚠ entita") : null,
+      el("b", {}, own || name(b.type), invalid(b) ? el("span", { className: "badge" }, "⚠ entita") : null,
         clashes(b).length ? el("span", { className: "badge" }, "překryv") : null,
         b.hidden ? el("span", { className: "badge muted", textContent: "skrytý" }) : null),
-      el("small", { textContent: summary(b) }));
+      el("small", { textContent: own ? `${name(b.type)} · ${summary1(b)}` : summary(b) }));
     tog.setAttribute("aria-expanded", open);
     tog.onclick = () => select(open ? null : b.id);
-    const hEl = el("span", { className: "bh", textContent: b.hidden ? "—" : `${b.w * D.col_w}×${b.h}` });
-    const eye = el("button", { className: "icon-btn", title: b.hidden ? "Zobrazit" : "Skrýt" }, icon(b.hidden ? "eye-off" : "eye"));
-    eye.setAttribute("aria-pressed", b.hidden);
+    const hEl = el("span", { className: "bh", textContent: open && !b.hidden ? `${b.w * D.col_w}×${b.h} px` : "" });
+    const eye = el("button", { className: "icon-btn", title: b.hidden ? "Zobrazit blok" : "Skrýt blok" }, icon(b.hidden ? "eye-off" : "eye"));
+    eye.setAttribute("aria-pressed", b.hidden); eye.setAttribute("aria-label", `${b.hidden ? "Zobrazit" : "Skrýt"} blok ${own || name(b.type)}`);
     eye.onclick = () => toggleHidden(b);
     const li = el("li", { className: "card blk" + (open ? " open" : "") + (b.hidden ? " hidden-blk" : "") },
       el("div", { className: "bhead" }, el("div", { className: "bicon" }, icon(t.icon)), tog, hEl, eye));
@@ -743,9 +810,11 @@ $("#stackBtn").onclick = () => {
   if (total > D.h && ag) { shrunk = Math.min(total - D.h, ag.h - minOf("agenda")[1]); ag.h -= shrunk; total -= shrunk; }
   if (total > D.h) { blocks = JSON.parse(before); toast(`Pod sebe se bloky nevejdou (${total} px z ${D.h}) – některé zmenši nebo skryj.`); return; }
   let y = 0;
+  const widened = vis.filter(b => b.w !== D.cols).map(b => name(b.type));
   for (const b of vis) { b.x = 0; b.w = D.cols; b.y = y; y += b.h; }
   commit();
-  toast("Bloky seřazeny pod sebe." + (shrunk ? ` Události zmenšeny o ${shrunk} px, aby se vše vešlo.` : "")
+  toast("Bloky seřazeny pod sebe." + (widened.length ? ` Na celou šířku roztaženo: ${widened.join(", ")}.` : "")
+        + (shrunk ? ` Události zmenšeny o ${shrunk} px, aby se vše vešlo.` : "")
         + (y < D.h ? ` Dole zbývá ${D.h - y} px.` : ""), () => travel(-1));
 };
 
@@ -776,9 +845,11 @@ function renderMenu() {
   const m = $("#addMenu"); m.replaceChildren();
   const once = new Set(blocks.filter(b => b.type === "agenda" || b.type === "header").map(b => b.type));
   for (const [k, t] of Object.entries(TYPES)) {
-    const dis = once.has(k);
+    const [mw, mh] = minOf(k), tight = addAt && (addAt.w < mw || addAt.h < mh);   // do vybraného místa se nevejde
+    const dis = once.has(k) || tight;
     const btn = el("button", { role: "menuitem", disabled: dis }, el("div", { className: "bicon" }, icon(t.icon)),
-      el("div", {}, el("b", { textContent: name(k) }), el("small", { textContent: dis ? "Může být jen jednou" : t.desc })));
+      el("div", {}, el("b", { textContent: name(k) }), el("small", { textContent: once.has(k) ? "Může být jen jednou"
+        : tight ? `Sem se nevejde (potřebuje aspoň ${mw * D.col_w}×${mh} px)` : t.desc })));
     btn.onclick = () => {
       closeMenu();
       const nb = newBlock(k);
@@ -801,13 +872,25 @@ function renderMenu() {
       }
       addAt = null; blocks.push(nb); openId = nb.id; commit();
       if (shrink) toast(msg, shrink, "Zmenšit Události"); else toast(msg, undo ? () => travel(-1) : null);
-      requestAnimationFrame(() => document.querySelector(`li[data-id="${nb.id}"] .bbody input`)?.focus());
+      requestAnimationFrame(() => document.querySelector(`li[data-id="${nb.id}"] .bbody > :not(.pos):not(.lines2) :is(input, select, textarea)`)?.focus());
     };
     m.append(btn);
   }
 }
 const closeMenu = () => { $("#addMenu").hidden = true; $("#addBtn").setAttribute("aria-expanded", false); };
-$("#addBtn").onclick = e => { addAt = null; e.stopPropagation(); const m = $("#addMenu"); renderMenu(); m.hidden = !m.hidden; $("#addBtn").setAttribute("aria-expanded", !m.hidden); };
+const menuItems = () => [...$("#addMenu").querySelectorAll("button:not(:disabled)")];
+$("#addBtn").onclick = e => {
+  addAt = null; e.stopPropagation(); const m = $("#addMenu"); renderMenu(); m.hidden = !m.hidden;
+  $("#addBtn").setAttribute("aria-expanded", !m.hidden);
+  if (!m.hidden) requestAnimationFrame(() => menuItems()[0]?.focus());
+};
+// klávesnice v nabídce: šipky, Home/End, Esc zavře a vrátí fokus na tlačítko
+$("#addMenu").addEventListener("keydown", e => {
+  const items = menuItems(), i = items.indexOf(document.activeElement);
+  const to = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: items.length - 1 }[e.key];
+  if (to !== undefined) { e.preventDefault(); items[(to + items.length) % items.length]?.focus(); }
+  else if (e.key === "Escape" || e.key === "Tab") { closeMenu(); addAt = null; if (e.key === "Escape") { e.preventDefault(); $("#addBtn").focus(); } }
+});
 document.addEventListener("click", e => { if (!e.target.closest(".add") && !e.target.closest(".free")) { closeMenu(); addAt = null; } });
 
 // ───────── Náhled: server vykreslí neuložený návrh stejně jako pro desku ─────────
@@ -881,7 +964,10 @@ function select(id, { pane = false, focus = false } = {}) {
   if (id) document.querySelector(`li[data-id="${id}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   if (focus && id) document.querySelector(`.gbox[data-id="${id}"]`)?.focus({ preventScroll: true });
 }
-function openBlock(id) { select(id, { pane: true }); }
+function openBlock(id) {   // otevřít nastavení a zaostřit první parametr bloku (ne polohu)
+  select(id, { pane: true });
+  requestAnimationFrame(() => document.querySelector(`li[data-id="${id}"] .bbody > :not(.pos):not(.lines2) :is(input, select, textarea)`)?.focus());
+}
 
 // Kompaktní lišta pod náhledem (telefon): poloha vybraného bloku bez přepnutí na seznam
 function updateSelbar() {
@@ -987,6 +1073,8 @@ function startDrag(e, b, d, mode) {
   d.onpointerup = () => {
     d.onpointermove = d.onpointerup = null; coords.hidden = true;
     document.body.classList.remove("dragging"); hole.remove(); land.remove(); minb.remove();
+    // klik/tažení myší: fokus na blok (po překreslení), ať hned fungují šipky, Enter a Delete
+    requestAnimationFrame(() => document.querySelector(`.gbox[data-id="${b.id}"]`)?.focus({ preventScroll: true }));
     if (!moved) {
       // dvojklik na úchyt: roztáhnout k nejbližšímu bloku (nebo okraji) v tom směru
       const now = Date.now(), dbl = mode !== "move" && lastHandle.id === b.id && lastHandle.mode === mode && now - lastHandle.t < 450;
@@ -1025,8 +1113,12 @@ function shake(b) {
 // Klávesnice: šipky posun (Alt = po 40 px), Shift+šipky pravá/dolní hrana, Ctrl+Shift+šipky levá/horní hrana,
 // Enter nastavení, Esc zrušit výběr, Delete odebrat
 function keyMove(e, b) {
-  if (e.key === "Escape") { select(null); return; }
-  if (e.key === "Delete") { e.preventDefault(); remove(b.id); return; }
+  if (e.key === "Escape") { select(null); requestAnimationFrame(() => document.querySelector(`.gbox[data-id="${b.id}"]`)?.focus({ preventScroll: true })); return; }
+  if (e.key === "Delete") {
+    e.preventDefault(); remove(b.id);
+    requestAnimationFrame(() => document.querySelector(".gbox")?.focus({ preventScroll: true }));   // fokus na další blok
+    return;
+  }
   if (e.key === "Enter") { openBlock(b.id); return; }
   const k = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
   if (!k) return;
@@ -1053,6 +1145,8 @@ function fit() {
 document.querySelectorAll("[data-z]").forEach(b => b.onclick = () => {
   zoom = b.dataset.z; document.querySelectorAll("[data-z]").forEach(x => x.setAttribute("aria-pressed", x === b)); fit(); });
 addEventListener("resize", fit);
+const hdr = () => document.documentElement.style.setProperty("--hdr", $(".appbar").offsetHeight + "px");
+addEventListener("resize", hdr); hdr();
 $("#refresh").onclick = () => scheduleRender(true);
 $("#perr").onclick = () => scheduleRender(true);
 
@@ -1063,12 +1157,18 @@ function refresh(soft) {
   drawBoxes(); updateSelbar();
   const dirty = snap() !== saved;
   $("#savebar").classList.toggle("show", dirty);
+  $("#discard").hidden = !dirty;
   $("#tabLayout").classList.toggle("dot", dirty);
   const n = blocks.filter(invalid).length;
-  $("#dirtyText").textContent = "Neuložené změny" + (n ? ` · ${n} ${n > 1 ? "bloky" : "blok"} s neplatnou entitou` : "");
+  $("#dirtyText").textContent = dirty ? "Neuloženo" + (n ? ` · ${n} ${n > 1 ? "bloky" : "blok"} s neplatnou entitou` : "") : "Uloženo";
+  $("#dirtyText").title = $("#dirtyText").textContent;
+  if (!dirty) typing = false;
   $("#undo").disabled = hpos === 0; $("#redo").disabled = hpos === hist.length - 1;
+  labelButtons();
   scheduleRender();
 }
+// ikonová tlačítka: aria-label z title (čtečky, dotyk)
+const labelButtons = () => document.querySelectorAll("button[title]:not([aria-label])").forEach(b => b.setAttribute("aria-label", b.title));
 async function doSave(force) {
   $("#save").disabled = true;
   try {
@@ -1167,11 +1267,25 @@ $("#gridBtn").onclick = () => {
   const on = !document.body.classList.contains("grid-on");
   document.body.classList.toggle("grid-on", on); $("#gridBtn").setAttribute("aria-pressed", on);
 };
-$("#discard").onclick = () => {
-  if (hpos > 3 && !confirm("Zahodit všechny neuložené změny?")) return;
+$("#discard").onclick = async () => {
+  if (hpos > 3 && !await ask("Zahodit změny?", "Všechny neuložené změny v tomto rozvržení se ztratí.", "Zahodit", true)) return;
   blocks = JSON.parse(saved); hist = [saved]; hpos = 0; openId = null; refresh(); toast("Změny zahozeny.");
 };
 $("#undo").onclick = () => travel(-1); $("#redo").onclick = () => travel(1);
+document.addEventListener("keydown", e => {   // Ctrl+S = uložit
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+    e.preventDefault();
+    const a = document.activeElement;
+    let back = null;
+    if (a?.matches("input, textarea, select")) {   // blur → change → commit; po překreslení vrátit fokus na stejné pole
+      const li = a.closest("li[data-id]"), i = li ? [...li.querySelectorAll("input, textarea, select")].indexOf(a) : -1;
+      a.blur();
+      back = () => (li && document.querySelector(`li[data-id="${li.dataset.id}"]`)?.querySelectorAll("input, textarea, select")[i] || a).focus({ preventScroll: true });
+      back();
+    }
+    if (!$("#save").disabled) doSave(false).then(() => back?.());
+  }
+});
 document.addEventListener("keydown", e => {
   if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z" || e.target.matches("input,textarea")) return;
   e.preventDefault(); travel(e.shiftKey ? 1 : -1);
@@ -1182,7 +1296,15 @@ document.addEventListener("keydown", e => {
       || document.querySelector("dialog[open]")) return;
   e.preventDefault(); remove(openId);
 });
-addEventListener("beforeunload", e => { if (!leaving && snap() !== saved) e.preventDefault(); });
+$("#editCol").addEventListener("input", e => {
+  if (!e.target.matches("input:not([type=checkbox]):not([type=radio]), textarea")) return;
+  typing = true; $("#savebar").classList.add("show"); $("#discard").hidden = false;
+  $("#dirtyText").textContent = "Neuloženo"; $("#save").disabled = false;
+});
+$("#editCol").addEventListener("change", () => { typing = false; });
+// pole opuštěno beze změny (vráceno na původní hodnotu) – stav zase podle skutečnosti
+$("#editCol").addEventListener("focusout", () => { if (typing) { typing = false; refresh(true); } });
+addEventListener("beforeunload", e => { if (!leaving && (typing || snap() !== saved)) e.preventDefault(); });
 
 // ───────── Více rozvržení (každý panel zobrazuje jedno z nich) ─────────
 const current = () => LAYOUTS.find(l => l.id === LID) || { name: "", panels: [] };
@@ -1195,9 +1317,23 @@ function renderLayouts() {
   $("#lDelete").title = c.panels.length ? "Rozvržení používá panel – nejdřív mu v Panelech přiřaď jiné" : LAYOUTS.length < 2 ? "Poslední rozvržení nejde smazat" : "Smazat rozvržení";
   document.title = `ESPink – ${c.name}`;
 }
-function go(id) {                       // přepnout rozvržení = načíst editor znovu
-  if (snap() !== saved && !confirm("Neuložené změny v tomto rozvržení se ztratí. Pokračovat?")) { renderLayouts(); return false; }
+async function go(id) {                 // přepnout rozvržení = načíst editor znovu
+  if (snap() !== saved && !await ask("Přepnout rozvržení?", "Neuložené změny v tomto rozvržení se ztratí.", "Přepnout bez uložení", true)) {
+    renderLayouts(); return false;
+  }
   leaving = true; location.search = "?l=" + encodeURIComponent(id); return true;
+}
+// potvrzovací dialog místo confirm() (v panelu HA nativní okna působí cize)
+function ask(title, text, okLabel, danger) {
+  return new Promise(res => {
+    const ok = el("button", { className: "primary" + (danger ? " danger" : ""), textContent: okLabel });
+    const no = el("button", { className: "txtbtn", textContent: "Zrušit" });
+    const d = el("dialog", {}, el("h3", { textContent: title, style: "margin:0 0 8px" }), el("p", { textContent: text, style: "margin:0" }),
+                 el("div", { className: "dlg-foot" }, no, ok));
+    const done = v => { d.close(); d.remove(); res(v); };
+    ok.onclick = () => done(true); no.onclick = () => done(false); d.oncancel = () => done(false);
+    document.body.append(d); d.showModal(); ok.focus();
+  });
 }
 async function post(url, body) {
   const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
@@ -1206,30 +1342,42 @@ async function post(url, body) {
   return res;
 }
 $("#layoutSel").onchange = e => go(e.target.value);
+$("#moreBtn").onclick = e => {
+  e.stopPropagation(); const open = $("#actions").classList.toggle("open"); $("#moreBtn").setAttribute("aria-expanded", open);
+};
+$("#actions").addEventListener("click", () => { $("#actions").classList.remove("open"); $("#moreBtn").setAttribute("aria-expanded", false); });
+document.addEventListener("click", e => { if (!e.target.closest("#actions, #moreBtn")) { $("#actions").classList.remove("open"); $("#moreBtn").setAttribute("aria-expanded", false); } });
 $("#lNew").onclick = () => {
   const f = $("#newFrom"); f.replaceChildren(el("option", { value: "", textContent: "Prázdné rozvržení" }));
   for (const l of LAYOUTS) f.append(el("option", { value: l.id, textContent: "Kopie: " + l.name + (l.id === LID && snap() !== saved ? " (uložená verze)" : ""), selected: l.id === LID }));
-  $("#newName").value = ""; $("#newDlg").showModal(); $("#newName").focus();
+  $("#newName").value = ""; $("#newErr").textContent = ""; $("#newDlg").showModal(); $("#newName").focus();
 };
 $("#newName").onkeydown = e => { if (e.key === "Enter") $("#newOk").click(); };
 $("#newOk").onclick = async () => {
   const name = $("#newName").value.trim();
-  if (!name) { $("#newName").focus(); toast("Zadej název rozvržení."); return; }
+  if (!name) { $("#newName").focus(); $("#newErr").textContent = "Zadej název rozvržení."; return; }
   try {
     const res = await post("layouts/create", { name, copy: $("#newFrom").value });
     LAYOUTS = res.layouts; $("#newDlg").close();
-    if (!go(res.layout.id)) toast(`Rozvržení ${name} vytvořeno – najdeš ho v nabídce.`);
-  } catch (e) { toast("Nelze vytvořit: " + e.message); }
+    if (!await go(res.layout.id)) toast(`Rozvržení ${name} vytvořeno – najdeš ho v nabídce.`);
+  } catch (e) { $("#newErr").textContent = "Nelze vytvořit: " + e.message; $("#newName").focus(); }
 };
-$("#lRename").onclick = async () => {
-  const name = prompt("Nový název rozvržení:", current().name);
-  if (name === null || name.trim() === current().name) return;
-  if (!name.trim()) { toast("Název rozvržení nesmí být prázdný."); return; }
-  try { LAYOUTS = (await post("layouts/rename" + q(), { name })).layouts; renderLayouts(); toast("Přejmenováno."); }
-  catch (e) { toast("Nelze přejmenovat: " + e.message); }
+$("#lRename").onclick = () => {
+  $("#renameName").value = current().name; $("#renameErr").textContent = "";
+  $("#renameDlg").showModal(); $("#renameName").select();
+};
+$("#renameName").onkeydown = e => { if (e.key === "Enter") $("#renameOk").click(); };
+$("#renameOk").onclick = async () => {
+  const name = $("#renameName").value.trim();
+  if (name === current().name) { $("#renameDlg").close(); return; }
+  if (!name) { $("#renameErr").textContent = "Název nesmí být prázdný."; $("#renameName").focus(); return; }
+  try {
+    LAYOUTS = (await post("layouts/rename" + q(), { name })).layouts;
+    $("#renameDlg").close(); renderLayouts(); toast(`Přejmenováno na ${name}.`);
+  } catch (e) { $("#renameErr").textContent = e.message; $("#renameName").focus(); }
 };
 $("#lDelete").onclick = async () => {
-  if (!confirm(`Smazat rozvržení ${current().name}? Nejde to vrátit.`)) return;
+  if (!await ask(`Smazat rozvržení ${current().name}?`, "Smazání nejde vrátit (export JSON si můžeš udělat předem).", "Smazat", true)) return;
   try { const res = await post("layouts/delete" + q()); leaving = true; location.search = "?l=" + encodeURIComponent(res.layouts[0].id); }
   catch (e) { toast("Nelze smazat: " + e.message); }
 };

@@ -5,11 +5,12 @@ proto přesně odpovídá tomu, zda se obrázek změnil (=> hlavička Timestamp)
 """
 import functools
 import hashlib
+import math
 import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from jinja2.sandbox import SandboxedEnvironment
+from jinja2.sandbox import SandboxedEnvironment, SecurityError
 from markupsafe import Markup
 from PIL import ImageFont
 
@@ -101,10 +102,12 @@ def hnum(key: str, value, decimals: int = 1) -> str | None:
 
 
 def fnum(value) -> float | None:
+    """Číslo, nebo None – i pro NaN/inf (jinak by rozbily JSON pro UI a HA)."""
     try:
-        return float(value)
-    except (TypeError, ValueError):
+        v = float(value)
+    except (TypeError, ValueError, OverflowError):
         return None
+    return v if math.isfinite(v) else None
 
 
 def parse_dt(value: str, tz) -> datetime | None:
@@ -597,7 +600,60 @@ def _text(b: dict) -> dict:
 
 # Šablona běží v sandboxu Jinja: žádný přístup k Pythonu ani souborům; výstup je HTML
 # (vykresluje se v Chromiu s CSP bez skriptů a sítě), hodnoty entit se escapují.
-_tpl_env = SandboxedEnvironment(autoescape=True)
+TPL_MAX_LEN = 10000   # nejdelší řetězec/seznam, který šablona smí vyrobit
+TPL_MAX_RANGE = 1000  # nejdelší range()
+
+
+class _LimitedSandbox(SandboxedEnvironment):
+    """Sandbox šablony bez obřích výsledků (běží při každém vykreslení, i po restartu):
+    'a' * 10**9, 9 ** 999999, 'x'.ljust(10**8), zdvojování přes + a ~ ani obří range."""
+    intercepted_binops = frozenset({"*", "**", "+", "~"})
+
+    def call_binop(self, context, operator, left, right):
+        if operator == "**" and isinstance(right, (int, float)) and abs(right) > 64:
+            raise SecurityError("příliš velká mocnina")
+        if operator == "*":
+            seq, n = (left, right) if isinstance(left, (str, list, tuple)) else (right, left)
+            if isinstance(seq, (str, list, tuple)) and isinstance(n, int) and n * len(seq) > TPL_MAX_LEN:
+                raise SecurityError("příliš dlouhý výsledek")
+        out = super().call_binop(context, operator, left, right)
+        if isinstance(out, (str, list, tuple)) and len(out) > TPL_MAX_LEN:
+            raise SecurityError("příliš dlouhý výsledek")
+        return out
+
+    def call(self, __context, __obj, *args, **kwargs):  # noqa: N807 – podpis z Jinja
+        # metody řetězců (ljust, center, zfill, format…) s obří šířkou nebo délkou
+        if any(isinstance(a, int) and not isinstance(a, bool) and abs(a) > TPL_MAX_LEN for a in (*args, *kwargs.values())):
+            raise SecurityError("příliš velký argument")
+        out = super().call(__context, __obj, *args, **kwargs)
+        if isinstance(out, (str, list, tuple)) and len(out) > TPL_MAX_LEN:
+            raise SecurityError("příliš dlouhý výsledek")
+        return out
+
+
+def _safe_range(*args):
+    r = range(*args)
+    if len(r) > TPL_MAX_RANGE:
+        raise SecurityError(f"range delší než {TPL_MAX_RANGE}")
+    return r
+
+
+def _limited_filter(fn):
+    """Filtr s kontrolou velikosti výsledku a číselných argumentů (center, format, indent…)."""
+    def wrapper(*args, **kwargs):
+        if any(isinstance(a, int) and not isinstance(a, bool) and abs(a) > TPL_MAX_LEN for a in (*args[1:], *kwargs.values())):
+            raise SecurityError("příliš velký argument")
+        out = fn(*args, **kwargs)
+        if isinstance(out, str) and len(out) > TPL_MAX_LEN:
+            raise SecurityError("příliš dlouhý výsledek")
+        return out
+    return wrapper
+
+
+_tpl_env = _LimitedSandbox(autoescape=True)
+_tpl_env.globals["range"] = _safe_range
+for _f in ("center", "format", "indent", "wordwrap", "truncate", "join", "replace"):
+    _tpl_env.filters[_f] = _limited_filter(_tpl_env.filters[_f])
 _tpl_env.filters["num"] = lambda v, decimals=1: num(v, decimals) or "—"  # „11,6“ jako zbytek displeje
 
 
@@ -612,12 +668,57 @@ def _template(raw: dict, b: dict, now: datetime) -> dict:
 
     if not b["code"].strip():
         return {"html": "", "error": "Prázdná šablona"}
+
+    def render() -> dict:
+        try:
+            html = _tpl_env.from_string(b["code"]).render(
+                states=state, state_attr=attr, is_state=lambda e, v: state(e) == v, now=now)
+            return {"html": html[:8000], "error": None}
+        except Exception as e:  # noqa: BLE001 – chyba šablony nesmí shodit dashboard
+            return {"html": "", "error": f"Chyba šablony: {type(e).__name__}: {e}"[:200]}
+
+    out = _isolated(render)
+    return {"html": Markup(out["html"]), "error": out["error"]}
+
+
+TPL_TIMEOUT, TPL_MEMORY = 2.0, 256 * 1024 * 1024
+
+
+def _isolated(fn) -> dict:
+    """Šablona běží v odděleném procesu s časovým a paměťovým limitem: sandbox Jinja
+    nezachytí vše (např. zdvojování textu přes ~ v cyklu) a smyčka serveru musí běžet dál."""
+    import multiprocessing as mp
     try:
-        html = _tpl_env.from_string(b["code"]).render(
-            states=state, state_attr=attr, is_state=lambda e, v: state(e) == v, now=now)
-        return {"html": Markup(html[:8000]), "error": None}
-    except Exception as e:  # noqa: BLE001 – chyba šablony nesmí shodit dashboard
-        return {"html": "", "error": f"Chyba šablony: {type(e).__name__}: {e}"[:200]}
+        ctx = mp.get_context("fork")
+    except ValueError:      # bez fork (jiný systém) – aspoň sandbox
+        return fn()
+    recv, send = ctx.Pipe(duplex=False)
+
+    def child():
+        try:
+            import resource
+            resource.setrlimit(resource.RLIMIT_AS, (TPL_MEMORY, TPL_MEMORY))
+        except (ImportError, ValueError, OSError):
+            pass
+        try:
+            send.send(fn())
+        except MemoryError:
+            send.send({"html": "", "error": "Chyba šablony: příliš velký výsledek"})
+
+    proc = ctx.Process(target=child, daemon=True)
+    proc.start()
+    send.close()
+    try:
+        if recv.poll(TPL_TIMEOUT):
+            return recv.recv()
+        return {"html": "", "error": f"Chyba šablony: běží déle než {TPL_TIMEOUT:.0f} s"}
+    except EOFError:        # proces spadl (paměť)
+        return {"html": "", "error": "Chyba šablony: příliš náročná (paměť)"}
+    finally:
+        recv.close()
+        if proc.is_alive():
+            proc.kill()
+        proc.join(1)
 
 
 def _header(raw: dict, b: dict, layout: dict, now: datetime, tz) -> dict:
@@ -695,4 +796,4 @@ def _build(raw: dict, layout: dict, device: dict, now: datetime, worst: bool = F
 
 
 def digest(view: dict) -> str:
-    return hashlib.sha1(json.dumps(view, sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()
+    return hashlib.sha1(json.dumps(view, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8", "surrogatepass")).hexdigest()

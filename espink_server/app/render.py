@@ -92,7 +92,7 @@ def typst_png(source: str) -> Image.Image:
     with tempfile.TemporaryDirectory(prefix="espink-typst-") as root:  # prázdný kořen: šablona nemá co číst
         out = subprocess.run([typst_binary(), "compile", "--root", root, "--font-path", str(TYPST_FONTS),
                               "--ignore-system-fonts", "--format", "png", "--ppi", "72", "-", "-"],
-                             input=source.encode(), capture_output=True, timeout=60, check=False, cwd=root)
+                             input=source.encode("utf-8", "replace"), capture_output=True, timeout=60, check=False, cwd=root)
     if out.returncode or not out.stdout:
         raise RuntimeError(f"Typst: {out.stderr.decode(errors='replace')[-600:]}")
     img = Image.open(io.BytesIO(out.stdout)).convert("RGB")

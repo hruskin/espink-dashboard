@@ -11,7 +11,7 @@ import html
 import json
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import aiohttp
@@ -106,7 +106,15 @@ class Server:
         self.auth_lock = asyncio.Lock()
         if not self.security["tofu_done"] and (opts.get("allowed_devices") or self.panels):
             self.security["tofu_done"] = True        # instalace z doby před klíči: první deska už je
+            # desky povolené před verzí s klíči se klíč naučí při prvním spojení – jen 14 dní
+            self.security["learn_until"] = time.time() + LEARN_DAYS * 86400
             self.save_security()
+        elif "learn_until" not in self.security:
+            # aktualizace z verze bez okna pro učení: desky bez klíče ho mají 14 dní na naučení;
+            # nová instalace okno nepotřebuje (desky dostanou klíč při povolení)
+            self.security["learn_until"] = time.time() + LEARN_DAYS * 86400 if self.security["tofu_done"] else 0
+            self.save_security()
+        self.failures: dict[str, list[float]] = {}   # MAC/IP -> časy chybných pokusů (omezení hádání klíče)
 
     # ── panely ───────────────────────────────────────────────────────────
     def sync_targets(self) -> None:
@@ -162,7 +170,8 @@ class Server:
                     if lay["id"] not in raws:
                         raws[lay["id"]] = await self.fetch_raw(lay, now)
                     device = t.device or await self.device_from_sensor(t.cfg["battery_sensor"])
-                    view = model.build(raws[lay["id"]], lay, device, now, memory=t.shown)
+                    # ve vlákně: šablona může běžet až 2 s a smyčka serveru (desky) musí odpovídat dál
+                    view = await asyncio.to_thread(model.build, raws[lay["id"]], lay, device, now, memory=t.shown)
                     digest = model.digest(view)
                     self.last_build = time.time()
                     if digest == t.view_hash and not force:
@@ -210,8 +219,11 @@ class Server:
     async def handle_device(self, request: web.Request) -> web.Response:
         if (request.content_length or 0) > DEVICE_MAX_BODY:  # deska posílá ~1 kB JSON
             return web.Response(status=413)
+        raw = await request.content.read(DEVICE_MAX_BODY + 1)   # i při přenosu po částech (bez Content-Length)
+        if len(raw) > DEVICE_MAX_BODY:
+            return web.Response(status=413)
         try:
-            body = json.loads(await request.read() or b"{}") if request.can_read_body else {}
+            body = json.loads(raw or b"{}")
         except (ValueError, RecursionError):  # nevalidní JSON, UTF-8, zanoření – bez tracebacku v logu
             body = {}
         if not isinstance(body, dict):
@@ -242,8 +254,8 @@ class Server:
                 "fw": short_text(body.get("fwVersion")),
                 # deska posílá délku překreslení jen po probuzení, které následuje po překreslení –
                 # jinak ponechat poslední známou hodnotu (≈20 000 ms = vypršel limit ovladače panelu)
-                "refresh_ms": display.get("lastRefreshDuration") or prev.get("refresh_ms"),
-                "download_ms": network.get("lastDownloadDuration") or prev.get("download_ms"),
+                "refresh_ms": ms(display.get("lastRefreshDuration")) or prev.get("refresh_ms"),
+                "download_ms": ms(network.get("lastDownloadDuration")) or prev.get("download_ms"),
                 "cpu_temp": model.fnum(system.get("cpuTemp")),
                 "reset_reason": short_text(system.get("resetReason")),
                 "last_seen": now.isoformat(timespec="seconds"),
@@ -286,22 +298,52 @@ class Server:
                         print(f"[render] patička: {e}")
         t.served_ts = t.content_ts
 
+    def blocked(self, *who: str) -> bool:
+        """Příliš mnoho chybných pokusů z MAC nebo IP (hádání klíče) → na čas odmítat bez dalšího."""
+        now = time.time()
+        for w in who:
+            if w and len([t for t in self.failures.get(w, []) if now - t < FAIL_WINDOW]) >= (FAIL_MAX_MAC if ":" in w and len(w) == 17 else FAIL_MAX_IP):
+                return True
+        return False
+
+    def fail(self, *who: str) -> None:
+        now = time.time()
+        for w in who:
+            if w:
+                self.failures[w] = [t for t in self.failures.get(w, []) if now - t < FAIL_WINDOW] + [now]
+        if len(self.failures) > 500:   # paměť: zapomenout nejstarší
+            for k in sorted(self.failures, key=lambda k: self.failures[k][-1])[:250]:
+                del self.failures[k]
+
     async def device_allowed(self, mac: str | None, ip: str | None, body: dict, api_key: str) -> bool:
         """Jen zařízení ze seznamu allowed_devices se známým klíčem (X-API-Key). Úplně první
         deska se smí zapsat sama (trust on first use) – jen jednou za život instalace.
-        Ostatní (i deska se změněným klíčem, např. po smazání flash) čekají na povolení."""
+        Ostatní (i deska se změněným klíčem, např. po smazání flash) čekají na povolení.
+        Chybné pokusy se počítají – po několika se MAC/IP na čas odmítá (hádání klíče)."""
         allowed = self.opts.get("allowed_devices") or []
         keys = self.security["keys"]
+        # pořadí: blokace IP (hádání z jedné adresy) → správný klíč povolené desky → blokace MAC.
+        # Správný klíč projde i při blokaci MAC – jinak by šlo povolenou desku z jiné IP odříznout.
+        if self.blocked(ip):
+            return False
+        if mac and mac in allowed and api_key and keys.get(mac) == api_key:
+            return True
+        if self.blocked(mac):
+            self.fail(ip)   # další pokusy na zablokovanou MAC se počítají IP (jinak by hádání pokračovalo)
+            return False
         if mac and mac in allowed:
             known = keys.get(mac)
             if known and known == api_key:
                 return True
-            if not known and api_key:  # deska povolená před verzí s klíči – zapamatovat si ho
+            # deska povolená před verzí s klíči: klíč se naučí při prvním spojení, ale jen v přechodném
+            # období po aktualizaci (jinak by si ho mohl „zabrat“ kdokoli, kdo zná MAC)
+            if not known and api_key and time.time() < self.security.get("learn_until", 0):
                 keys[mac] = api_key
                 self.save_security()
                 print(f"[security] zapamatován klíč desky {mac}")
                 return True
             reason = "key"
+            self.fail(mac, ip)
         elif mac and not allowed and not self.panels and not self.security["tofu_done"] and api_key:
             try:
                 await self.allow(mac, api_key)
@@ -312,15 +354,24 @@ class Server:
                 return False
         else:
             reason = "new"
+            self.fail(ip)
         key = mac or "(bez MAC)"
         seen = self.pending.get(key)
         if not seen or time.time() - seen["t"] > 600:
             print(f"[security] odmítnuto zařízení {key} z {ip}" + (" – nesouhlasí klíč" if reason == "key" else ""))
+        # klíč čekající desky nepřepisuje požadavek z jiné IP (podvržená „přeinstalovaná“ deska)
+        keep = seen and seen.get("key") and seen.get("ip") != ip and time.time() - seen["t"] < 3600
         system = body.get("system") if isinstance(body.get("system"), dict) else {}
-        self.pending[key] = {"mac": key, "ip": ip, "t": time.time(), "when": now_local().strftime("%d. %m. %H:%M:%S"),
-                             "fw": short_text(body.get("fwVersion")), "voltage": model.fnum(system.get("vccVoltage")),
-                             "reason": reason, "key": api_key or (seen or {}).get("key", "")}
-        if len(self.pending) > 10:  # nejvýš 10 posledních
+        entry = {"mac": key, "ip": seen["ip"] if keep else ip, "t": time.time(), "when": now_local().strftime("%d. %m. %H:%M:%S"),
+                 "fw": short_text(body.get("fwVersion")), "voltage": model.fnum(system.get("vccVoltage")),
+                 "reason": reason, "key": seen["key"] if keep else (api_key or (seen or {}).get("key", ""))}
+        entry["key_hint"] = entry["key"][-3:] if entry["key"] else ""
+        self.pending[key] = entry
+        # nejvýš 3 záznamy z jedné IP a 10 celkem – náhodné MAC nevytlačí skutečnou novou desku
+        from_ip = sorted((k for k, p in self.pending.items() if p["ip"] == ip), key=lambda k: self.pending[k]["t"])
+        for k in from_ip[:-3]:
+            del self.pending[k]
+        if len(self.pending) > 10:
             del self.pending[min(self.pending, key=lambda k: self.pending[k]["t"])]
         return False
 
@@ -335,6 +386,7 @@ class Server:
         self.security["tofu_done"] = True
         self.save_security()
         self.pending.pop(mac, None)
+        self.failures.pop(mac, None)
 
     async def persist_options(self, new: dict) -> None:
         if self.ha and self.ha.base.startswith("http://supervisor"):
@@ -423,58 +475,7 @@ class Server:
         return await handler(request)
 
     async def handle_index(self, request: web.Request) -> web.Response:
-        now = now_local()
-        cards = []
-        for t in self.targets.values():
-            d = t.device
-            rows = "".join(
-                f"<tr><th>{html.escape(k)}</th><td>{html.escape(str(v))}</td></tr>"
-                for k, v in [
-                    ("MAC", t.cfg["mac"] or "–"),
-                    ("Rozvržení", self.layout_for(t)["name"]),
-                    ("Poslední kontakt", d.get("last_seen", "zatím nikdy")),
-                    ("Baterie", f"{d.get('voltage')} V ({model.battery_percent(d.get('voltage'))} %)" if d.get("voltage") else "–"),
-                    ("WiFi", f"{d.get('rssi')} dBm" if d.get("rssi") is not None else "–"),
-                    ("Další probuzení za", f"{d.get('sleep')} s" if d.get("sleep") else "–"),
-                    ("Obnovení displeje", f"{d.get('refresh_ms')} ms" if d.get("refresh_ms") else "–"),
-                    ("Poslední restart", d.get("reset_reason") or "–"),
-                    ("Teplota procesoru", f"{d.get('cpu_temp'):.0f} °C" if d.get("cpu_temp") is not None else "–"),
-                    ("Firmware", d.get("fw") or "–"),
-                    ("Obsah změněn", datetime.fromtimestamp(t.content_ts).strftime("%H:%M:%S") if t.content_ts else "–"),
-                    ("Velikost dat", f"{len(t.payload)} B ({self.opts['image_format']})"),
-                    ("Režim teď", f"probouzení po {t.schedule.sleep_seconds(now)} s"
-                                  + ("" if t.cfg["schedule"] else " (výchozí rozvrh)")),
-                    ("Otočení", f"{self.rotate_for(t)}°" + ("" if t.cfg.get("rotate") is not None else " (výchozí)")),
-                    ("Zápis do HA", (f"MQTT ({mqtt_mod.node(t.cfg['mac'])})" if self.mqtt and t.cfg["mac"]
-                                     else t.cfg["battery_sensor"] or "–")),
-                    ("Chyba", t.error or "žádná"),
-                ])
-            q = f"panel={t.cfg['mac']}&" if t.cfg["mac"] else ""
-            cards.append(f"""<section><h2>{html.escape(t.cfg['name'])}</h2><div class="wrap">
-<img src="preview.png?{q}{t.content_ts}" alt="Náhled displeje {html.escape(t.cfg['name'])}"><table>{rows}</table></div></section>""")
-        pending = ", ".join(f"{p['mac']} z {p['ip']} ({p['when']})" for p in self.pending.values())
-        page = f"""<!doctype html><html lang="cs"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>ESPink</title>
-<style>
- body{{font-family:system-ui,sans-serif;margin:16px;background:#f4f4f4;color:#111}}
- .wrap{{display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start}} h2{{font-weight:500;margin:24px 0 8px}}
- img{{width:360px;max-width:100%;border:1px solid #999;background:#fff;image-rendering:pixelated}}
- table{{border-collapse:collapse;background:#fff}} th,td{{text-align:left;padding:6px 10px;border-bottom:1px solid #ddd}}
- th{{font-weight:600;color:#444}} button{{margin-top:12px;padding:8px 14px;font-size:15px}}
- @media (prefers-color-scheme:dark){{body{{background:#111;color:#eee}} table{{background:#1c1c1c}} th{{color:#bbb}} th,td{{border-color:#333}}}}
-</style></head><body>
-<p><a href="./"><b>Editor rozvržení</b></a> · <a href="panels"><b>Panely</b></a> · <a href="install"><b>Instalace</b></a> · <a href="view.json">Model zobrazení (JSON)</a></p>
-<p>Povolená zařízení: {html.escape(", ".join(self.opts.get("allowed_devices") or []) or "zatím žádné (první se zapíše samo)")}<br>
-Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
-<button onclick="fetch('refresh',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:'{{}}'}}).then(()=>location.reload())">Překreslit hned</button>
-{"".join(cards)}
-<script>
- // obnovit náhledy jen při změně obsahu
- let ts="{self.ts_key()}";
- setInterval(async()=>{{try{{const r=await fetch("ts");const t=await r.text();
-   if(t!==ts){{location.reload()}}}}catch(e){{}}}},{1000 if DEV else 30000});
-</script></body></html>"""
-        return web.Response(text=page, content_type="text/html")
+        return web.FileResponse(render.APP_DIR / "templates" / "status.html", headers={"Cache-Control": "no-store"})
 
     def ts_key(self) -> str:
         return ",".join(str(t.content_ts) for t in self.targets.values())
@@ -627,7 +628,7 @@ Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
             try:
                 raw = await self.fetch_raw(draft, now)
                 device = t.device or await self.device_from_sensor(t.cfg["battery_sensor"])
-                view = model.build(raw, draft, device, now, worst=request.query.get("worst") == "1")
+                view = await asyncio.to_thread(model.build, raw, draft, device, now, worst=request.query.get("worst") == "1")
                 png, _ = await render.render(view, f"{now.day}. {now.month}. {now:%H:%M}",
                                              self.opts["rotate"], "png", after(now, t.schedule.sleep_seconds(now)))
             except Exception as e:  # noqa: BLE001
@@ -658,8 +659,14 @@ Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
         for p in self.panels:
             t = self.targets.get(p["mac"])
             d = t.device if t else {}
+            now = now_local()
+            nxt = None
+            if d.get("last_seen") and d.get("sleep"):
+                nxt = (datetime.fromisoformat(d["last_seen"]) + timedelta(seconds=d["sleep"])).isoformat(timespec="seconds")
             out.append({**p, "allowed": p["mac"] in allowed, "content_ts": t.content_ts if t else 0,
-                        "error": t.error if t else "",
+                        "error": t.error if t else "", "size": len(t.payload) if t else 0,
+                        "interval_now": t.schedule.interval_at(now) if t else None, "next_wake": nxt,
+                        "rotate_used": self.rotate_for(t) if t else None,
                         "device": {**d, "battery": model.battery_percent(d.get("voltage"))} if d else {}})
         known = {p["mac"] for p in self.panels}
         # povolené MAC bez panelu (zapsané ručně v Konfiguraci add-onu) – panel vznikne, až se deska ozve
@@ -669,7 +676,8 @@ Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
                 if p["mac"] not in known or p.get("reason") == "key"]
         return {"panels": out, "pending": pend + waiting,
                 "layouts": self.layout_list(), "default_schedule": self.opts["schedule"], "mqtt": bool(self.mqtt),
-                "default_rotate": self.opts["rotate"]}
+                "default_rotate": self.opts["rotate"], "image_format": self.opts["image_format"],
+                "allowed_devices": sorted(allowed), "content_ts": self.ts_key()}
 
     async def handle_panels(self, request: web.Request) -> web.Response:
         return web.json_response(self.panels_json(), headers={"Cache-Control": "no-store"})
@@ -681,9 +689,9 @@ Odmítnuto (čeká na povolení v Panelech): {html.escape(pending or "nic")}</p>
             raise bad_request("panel neexistuje")
         try:
             cfg = panels_mod.sanitize(data, self.layouts)
-        except ValueError as e:
+        except (ValueError, TypeError) as e:
             raise bad_request(str(e))
-        if data.get("layout") not in self.layouts:
+        if not isinstance(data.get("layout"), str) or data["layout"] not in self.layouts:
             raise bad_request("rozvržení neexistuje")
         if any(p["name"] == cfg["name"] and p["mac"] != mac for p in self.panels):
             raise bad_request(f"panel {cfg['name']} už existuje")
@@ -802,6 +810,14 @@ class Installer:
 
 
 DEVICE_MAX_BODY = 16 * 1024
+LEARN_DAYS = 14                          # přechodné období učení klíčů dříve povolených desek
+FAIL_WINDOW, FAIL_MAX_MAC, FAIL_MAX_IP = 900, 5, 20   # chybné pokusy za 15 min → dočasné odmítání
+
+
+def ms(value) -> int | None:
+    """Doba v ms od desky (překreslení, stažení): číslo v rozumném rozsahu, jinak nic."""
+    v = model.fnum(value)
+    return int(v) if v is not None and 0 < v <= 600_000 else None
 
 
 def short_text(value, limit: int = 40) -> str | None:

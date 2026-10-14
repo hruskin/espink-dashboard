@@ -178,13 +178,14 @@ class Schedule:
             windows.append(Window(days, time(int(h1) % 24, int(m1)), time(int(h2) % 24, int(m2)), max(MIN_SLEEP, int(sec))))
         return cls(windows)
 
-    def sleep_seconds(self, now: datetime) -> int:
+    def sleep_seconds(self, now: datetime, _depth: int = 0) -> int:
         """Kolik sekund má zařízení spát, aby se probudilo podle rozvrhu."""
         if not self.windows:
             return FALLBACK_SLEEP
         for w in self.windows:
             if w.contains(now):
-                until_end = (w.end_at(now) - now).total_seconds()
+                end = w.end_at(now)
+                until_end = (end - now).total_seconds()
                 # Zarovnat na násobky intervalu od půlnoci (5 min = :00, :05, …; hodina = v :00),
                 # aby se časy probuzení během dne neposouvaly. Probudí-li se deska o pár
                 # sekund dřív, nejbližší hranice se přeskočí (méně než MIN_SLEEP).
@@ -192,12 +193,21 @@ class Schedule:
                 wait = w.interval - into_day % w.interval
                 if wait < MIN_SLEEP:
                     wait += w.interval
-                # Probudit se nejpozději na konci okna, aby platil další režim
-                return int(round(max(MIN_SLEEP, min(wait, until_end if until_end > 0 else wait))))
+                # Probudit se nejpozději na konci okna, aby platil další režim. Je-li konec blíž
+                # než MIN_SLEEP (deska vstala těsně před změnou), rovnou naplánovat podle dalšího
+                # režimu – jinak by se probudila ještě jednou za minutu jen kvůli hranici.
+                if 0 < until_end < wait:
+                    if until_end < MIN_SLEEP and _depth < 3:
+                        return int(round(until_end)) + self.sleep_seconds(end, _depth + 1)
+                    wait = until_end
+                return int(round(max(MIN_SLEEP, wait)))
         nxt = self.next_start(now)
         if nxt is None:
             return FALLBACK_SLEEP
-        return int(max(MIN_SLEEP, (nxt - now).total_seconds()))
+        gap = (nxt - now).total_seconds()
+        if gap < MIN_SLEEP and _depth < 3:
+            return int(round(gap)) + self.sleep_seconds(nxt, _depth + 1)
+        return int(max(MIN_SLEEP, gap))
 
     def interval_at(self, now: datetime) -> int | None:
         """Interval okna, které platí teď (None = mimo okna, deska spí do dalšího)."""

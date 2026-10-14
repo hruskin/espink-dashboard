@@ -136,13 +136,11 @@ class Server:
     def count(self, mac: str, now: datetime, redraw: bool) -> None:
         """Probuzení (dotaz na Timestamp) a překreslení (stažení obrázku) – počty za dnešek.
         Deska, která obsah má, se jen zeptá a usne; stahuje, jen když se obsah změnil."""
-        s = self.stats.setdefault(mac, {"day": "", "wakes": 0, "redraws": 0, "last_redraw": None, "last_wake": 0.0})
+        s = self.stats.setdefault(mac, {"day": "", "wakes": 0, "redraws": 0, "last_redraw": None})
         day = now.date().isoformat()
         if s["day"] != day:
             s.update(day=day, wakes=0, redraws=0)
-        if not redraw or time.time() - s["last_wake"] > 120:   # stažení bez předchozího dotazu = i probuzení
-            s["wakes"] += 1
-            s["last_wake"] = time.time()
+        s["wakes"] += 1
         if redraw:
             s["redraws"] += 1
             s["last_redraw"] = now.isoformat(timespec="seconds")
@@ -292,19 +290,18 @@ class Server:
                                  and time.time() - t.last_device_rebuild > 30):
                 t.last_device_rebuild = time.time()
                 await self.rebuild(only=[t])
-            self.count(mac, now, redraw=False)
-            asyncio.create_task(self.publish_device(t, now, sleep))
-            print(f"[device] {t.cfg['name']} {t.device['ip']} {t.device['voltage']} V,"
-                  f" {t.device['rssi']} dBm, spánek {sleep} s")
 
         if not t.payload:
             await self.rebuild(force=True, only=[t])
         if check == "1":
+            # Deska překresluje, když dostane jiný Timestamp, než má – obrázek si přečte rovnou
+            # z této odpovědi (druhý požadavek s timestampCheck=0 posílá jen stránkovaný režim)
+            redraw = t.content_ts != t.served_ts
+            self.count(mac, now, redraw)
             await self.stamp_next_wake(t, now, sleep)
-        else:   # stažení obrázku = deska se překreslí
-            self.count(mac, now, redraw=True)
-            if t.device:
-                asyncio.create_task(self.publish_device(t, now, sleep, force=True))
+            asyncio.create_task(self.publish_device(t, now, sleep))
+            print(f"[device] {t.cfg['name']} {t.device['ip']} {t.device['voltage']} V,"
+                  f" {t.device['rssi']} dBm, spánek {sleep} s{', překreslí' if redraw else ''}")
         headers = {
             "Timestamp": str(t.content_ts),
             "PreciseSleep": str(sleep),
@@ -425,11 +422,11 @@ class Server:
             with open(os.environ.get("OPTIONS_PATH", "options.json"), "w", encoding="utf-8") as f:
                 json.dump(new, f, ensure_ascii=False, indent=2)
 
-    async def publish_device(self, t: Target, now: datetime, sleep: int, force: bool = False) -> None:
+    async def publish_device(self, t: Target, now: datetime, sleep: int) -> None:
         if MOCK or not self.ha:
             return
-        # nejvýš jeden zápis do HA za minutu; překreslení hned po dotazu smí (počty překreslení)
-        if time.time() - t.last_publish < (5 if force else 60):
+        # nejvýš jeden zápis do HA za minutu
+        if time.time() - t.last_publish < 60:
             return
         t.last_publish = time.time()
         d = t.device

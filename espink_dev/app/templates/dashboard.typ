@@ -53,6 +53,22 @@
   t(if lo == 0 { "…" } else { cl.slice(0, lo).join().trim() + "…" })
 })
 
+// text zalomený nejvýš do výšky h; co se nevejde, nahradí výpustka na posledním řádku
+#let ell-lines(s, h, ..st) = layout(size => {
+  let s = txt(s)
+  let t(x) = text(..st, x)
+  let fits(x) = measure(block(width: size.width, t(x))).height <= h + 0.5pt
+  if fits(s) { return t(s) }
+  let cl = s.clusters()
+  let lo = 0
+  let hi = cl.len()
+  while lo < hi {
+    let mid = calc.quo(lo + hi + 1, 2)
+    if fits(cl.slice(0, mid).join() + "…") { lo = mid } else { hi = mid - 1 }
+  }
+  t(if lo == 0 { "…" } else { cl.slice(0, lo).join().trim() + "…" })
+})
+
 // řádek pevné výšky s obsahem svisle uprostřed (CSS line-height / flex align-items: center)
 #let line(h, body, x: left) = box(width: 100%, height: pt(h), clip: true, align(x + horizon, body))
 // prvky vedle sebe bez zalomení, svisle na střed (CSS display: flex; align-items: center)
@@ -192,13 +208,21 @@
             cells.push(box(height: 29pt, align(center + horizon, move(dx: -2pt, icon(e.icon, size: 23pt, fill: fill)))))
           }
           cols.push(1fr)
-          cells.push(at-base(ell(e.summary, font: COND, size: pt(ss), weight: if e.red or e.at("allday", default: false) { 700 } else { 500 }, fill: fill)))
+          let sw = if e.red or e.at("allday", default: false) { 700 } else { 500 }
+          // „celý text“ (kalendář s wrap): zalomit do tolika řádků, kolik spočítal model
+          let lines = e.at("lines", default: 1)
+          let line-h = calc.round(ss * 1.15)
+          cells.push(if e.at("wrap", default: false) {
+            set par(linebreaks: "simple", leading: pt(line-h - 29))
+            at-base(ell-lines(e.summary, pt(29 + (lines - 1) * line-h), font: COND, size: pt(ss), weight: sw, fill: fill))
+          } else { at-base(ell(e.summary, font: COND, size: pt(ss), weight: sw, fill: fill)) })
           if tags and has(e.label) {
             cols.push(auto)
             cells.push(box(stroke: 2pt + fill, radius: 4pt, inset: (x: 6pt), height: 24pt,
               align(horizon, text(size: 15pt, weight: 700, fill: fill, txt(e.label)))))
           }
-          box(width: 100%, height: 29pt, grid(columns: cols, column-gutter: pt(gap), align: top, ..cells))
+          box(width: 100%, height: pt(29 + (lines - 1) * line-h), clip: true,
+            grid(columns: cols, column-gutter: pt(gap), align: top, ..cells))
         }
       }
     }

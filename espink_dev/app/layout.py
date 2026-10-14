@@ -153,8 +153,9 @@ def _check(value, kind, default):
             for k in ("label", "icon"):
                 if str(c.get(k) or "").strip():
                     item[k] = str(c[k]).strip()[:40]
-            if c.get("red"):
-                item["red"] = True
+            for flag in ("red", "wrap"):  # wrap = celý název události (nezkracovat)
+                if c.get(flag):
+                    item[flag] = True
             out.append(item)
         return out
     if kind == "items":

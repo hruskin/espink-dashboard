@@ -42,6 +42,11 @@ k sousedovi, duplikace, náhled „nejhorší případ“, mřížka sloupců, v
 > kreslí jako plné ikony MDI v barvě a velikosti textu; ostatní z fontu Noto Emoji
 > (černobílý, část znaků jen obrysem). Tabulku jde doplnit (emoji → název ikony MDI).
 >
+> **Celý text událostí:** u kalendáře v bloku Události jde zaškrtnout „Celý text“ –
+> názvy jeho událostí se nezkracují, ale zalomí (nejvýš 8 řádků). Model spočítá řádky
+> stejným fontem (Pillow) a podle toho, kolik událostí se vejde; agenda drží pořadí –
+> od první události, která se nevejde, jde vše do „+N dalších“.
+>
 > **Instalace firmwaru** z prohlížeče (karta Instalace, ESP Web Tools + Improv pro Wi-Fi) – viz stabilní DOCS.
 >
 > API (jen přes Ingress, `?id=` = rozvržení): `GET layout.json`, `POST layout/preview`

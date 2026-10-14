@@ -84,7 +84,7 @@ def render_typst(view: dict, updated: str, next_wake: str = "") -> str:
 def typst_binary() -> str:
     for name in (os.environ.get("TYPST"), "typst"):
         if name and shutil.which(name):
-            return shutil.which(name)
+            return os.path.abspath(shutil.which(name))  # překlad běží v dočasném adresáři
     raise RuntimeError("Typst nenalezen")
 
 

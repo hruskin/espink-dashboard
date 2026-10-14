@@ -59,7 +59,7 @@ def raw(needs: dict, now: datetime) -> dict:
         ],
         "calendar.skolka": [
             {"summary": "👟 Návštěva tělocvičny – sraz 7:40", "start": {"dateTime": at(0, 23)}, "end": {"dateTime": at(0, 23, 30)}},
-            {"summary": "♻️ Setkání malého Ekotýmu", "start": {"dateTime": at(2, 9, 30)}, "end": {"dateTime": at(2, 11)}},
+            {"summary": "♻️ Setkání malého Ekotýmu – v 10:00 ve třídě Berušek, přineste prázdné plastové lahve a víčka", "start": {"dateTime": at(2, 9, 30)}, "end": {"dateTime": at(2, 11)}},
         ],
         "calendar.plavani": [
             {"summary": "🏃 Atletika – závody 🏅", "start": {"dateTime": at(1, 16)}, "end": {"dateTime": at(1, 17)}},

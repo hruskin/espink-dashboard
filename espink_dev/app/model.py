@@ -85,18 +85,23 @@ def num(value, decimals=1) -> str | None:
 # o ¾ kroku (u celých stupňů: z 11 na 12 až od 11,75, zpět pod 11,25) – hodnota na
 # hranici zaokrouhlení pak nepřeskakuje a nevynucuje překreslení. Paměť (co je na
 # displeji) má každý panel svou; během build() je v _memory, náhled ji nepoužívá.
+# Teplota s desetinami by se při každé desetině měnila (a panel překresloval) skoro při
+# každém probuzení – nová hodnota se proto ukáže až při změně aspoň o 0,5 °C.
 HYSTERESIS = 0.75
+TEMP_MIN_CHANGE = 0.5
+TEMP_UNITS = ("°C", "°F", "K")
 _memory: dict | None = None
 
 
-def hnum(key: str, value, decimals: int = 1) -> str | None:
+def hnum(key: str, value, decimals: int = 1, min_change: float = 0.0) -> str | None:
     v = fnum(value)
     if v is None:
         return None
     if _memory is not None and key:
         k = f"{key}|{decimals}"
         prev = _memory.get(k)
-        v = prev if prev is not None and abs(v - prev) < HYSTERESIS * 10 ** -decimals else round(v, decimals)
+        limit = max(HYSTERESIS * 10 ** -decimals, min_change)
+        v = prev if prev is not None and abs(v - prev) < limit else round(v, decimals)
         _memory[k] = v
     return num(v, decimals)
 
@@ -159,11 +164,11 @@ def _weather(raw: dict, b: dict, now: datetime, tz) -> dict:
 
     out = {
         "icon": WEATHER_ICONS.get(cond or "", "weather-cloudy-alert"),
-        "temp": hnum(f"temp:{b.get('temperature') or b.get('weather')}", temp, b.get("temp_decimals", 1)),
+        "temp": hnum(f"temp:{b.get('temperature') or b.get('weather')}", temp, b.get("temp_decimals", 1), TEMP_MIN_CHANGE),
         "humidity": hnum(f"hum:{b.get('humidity') or b.get('weather')}", hum, 0),
         "rain": num(rain) if rain and rain >= 0.1 else None,
         "pressure": hnum(f"press:{b.get('pressure')}", st("pressure"), 0),
-        "indoor": hnum(f"indoor:{b.get('indoor')}", st("indoor"), b.get("temp_decimals", 1)),
+        "indoor": hnum(f"indoor:{b.get('indoor')}", st("indoor"), b.get("temp_decimals", 1), TEMP_MIN_CHANGE),
         "min": None,
         "max": None,
         "minmax_label": "zítra" if minmax_day != today else "",
@@ -540,8 +545,10 @@ def format_state(s: dict | None, attribute: str = "", decimals: int = 1, maxlen:
     if v is not None:
         if isinstance(raw, int):  # celočíselný atribut (jas, počet…) bez desetinných míst
             decimals = 0
-        out.update(value=hnum(f"{s.get('entity_id', '')}:{attribute}", v, decimals), number=v,
-                   unit="" if attribute else (a.get("unit_of_measurement") or ""))
+        unit = "" if attribute else (a.get("unit_of_measurement") or "")
+        temp = unit in TEMP_UNITS or a.get("device_class") == "temperature"
+        out.update(value=hnum(f"{s.get('entity_id', '')}:{attribute}", v, decimals, TEMP_MIN_CHANGE if temp else 0.0),
+                   number=v, unit=unit)
         return out
     text = str(raw)
     domain = s.get("entity_id", "").split(".")[0]

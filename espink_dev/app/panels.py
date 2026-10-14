@@ -91,6 +91,33 @@ def save(panels: list[dict]) -> None:
 KEY_RE = re.compile(r"^[0-9]{4,12}$")
 
 
+def stats_path() -> str:
+    return layout_mod._sibling("STATS_PATH", "stats.json")
+
+
+def load_stats() -> dict:
+    """Počty probuzení a překreslení za den a čas posledního překreslení – {mac: {...}}."""
+    try:
+        with open(stats_path(), encoding="utf-8") as f:
+            data = json.load(f)
+    except (FileNotFoundError, ValueError):
+        return {}
+    out = {}
+    for mac, s in (data.items() if isinstance(data, dict) else []):
+        if normalize_mac(mac) == mac and isinstance(s, dict):
+            out[mac] = {"day": str(s.get("day") or ""), "wakes": int(s.get("wakes") or 0), "redraws": int(s.get("redraws") or 0),
+                        "last_redraw": s.get("last_redraw") if isinstance(s.get("last_redraw"), str) else None,
+                        "last_wake": float(s.get("last_wake") or 0)}
+    return out
+
+
+def save_stats(data: dict) -> None:
+    tmp = stats_path() + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False)
+    os.replace(tmp, stats_path())
+
+
 def security_path() -> str:
     return layout_mod._sibling("SECURITY_PATH", "security.json")
 

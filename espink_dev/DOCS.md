@@ -72,8 +72,9 @@ okně přes HTTPS.
 
 ### Stav
 
-Přehled panelů: poslední kontakt, další probuzení, baterie, Wi-Fi, doba překreslení,
-důvod restartu a náhled. Tlačítko *Překreslit obsah teď* přepočítá obsah; desky si ho
+Přehled panelů: poslední kontakt, další probuzení, **poslední překreslení**, kolikrát
+se panel dnes probudil a kolikrát se z toho překreslil (zbytek = beze změny obsahu,
+deska jen usnula), baterie, Wi-Fi, doba překreslení, důvod restartu a náhled. Tlačítko *Překreslit obsah teď* přepočítá obsah; desky si ho
 vyzvednou při příštím probuzení.
 
 ## Jak to funguje
@@ -84,13 +85,15 @@ vyzvednou při příštím probuzení.
   nepřekresluje a hned usne – to je hlavní úspora baterie.
 - Číselné hodnoty se zaokrouhlují **s hysterezí**: nová hodnota se ukáže, až se
   skutečná vzdálí o ¾ kroku (z 11 °C na 12 °C až od 11,75 °C), takže hodnota na
-  hranici nepřeskakuje a nevynucuje překreslení.
+  hranici nepřeskakuje a nevynucuje překreslení. **Teplota** (°C) se navíc změní až
+  o 0,5 °C – s desetinami by se jinak panel překresloval skoro při každém probuzení.
 - Hlavička `PreciseSleep` určuje dobu spánku podle rozvrhu panelu. Firmware ji omezí
   na 1 min – 24 h.
 - **Stav panelů v HA přes MQTT discovery** (potřebuje broker, např. Mosquitto;
   přihlašovací údaje add-on vezme od Supervisoru). Každý panel je zařízení
   *ESPink <název>* se senzory Baterie, Napětí baterie, Signál WiFi, Doba překreslení,
-  Teplota procesoru, Poslední kontakt, Další probuzení a Důvod restartu. Zprávy jsou
+  Teplota procesoru, Poslední kontakt, Další probuzení, Důvod restartu, Poslední
+  překreslení, Překreslení dnes a Probuzení dnes (počty se o půlnoci nulují). Zprávy jsou
   retained. Bez brokeru se stav zapisuje přes REST API do senzoru baterie panelu.
 - Emoji z tabulky `app/emoji.py` (👟, ♻️, ⚠️, 🎂…) se kreslí jako plné ikony MDI.
 

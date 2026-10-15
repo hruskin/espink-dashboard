@@ -83,7 +83,7 @@ Přehled panelů: poslední kontakt, další probuzení, **poslední překreslen
 se panel dnes probudil a kolikrát se z toho překreslil, nebo jen usnul beze změny.
 Překreslení potvrzuje deska až při dalším probuzení (pošle dobu posledního
 překreslení), proto jsou počty o jedno probuzení pozadu. Když deska dostala nový
-obsah a nepřekreslila se, ukáže se nahoře varování. Dále baterie, Wi-Fi, doba překreslení, důvod restartu a náhled. Tlačítko *Překreslit obsah teď* přepočítá obsah; desky si ho
+obsah a nepřekreslila se, ukáže se nahoře varování. Dále baterie a **odhad výdrže**, Wi-Fi, doba překreslení, důvod restartu a náhled. Tlačítko *Překreslit obsah teď* přepočítá obsah; desky si ho
 vyzvednou při příštím probuzení.
 
 ## Jak to funguje
@@ -102,9 +102,16 @@ vyzvednou při příštím probuzení.
   přihlašovací údaje add-on vezme od Supervisoru). Každý panel je zařízení
   *ESPink <název>* se senzory Baterie, Napětí baterie, Signál WiFi, Doba překreslení,
   Teplota procesoru, Poslední kontakt, Další probuzení, Důvod restartu, Poslední
-  překreslení, Překreslení dnes, Probuzení dnes a Nepřekresleno dnes (počty se
-  o půlnoci nulují). Zprávy jsou
+  překreslení, Překreslení dnes, Probuzení dnes, Nepřekresleno dnes (počty se
+  o půlnoci nulují) a Výdrž baterie. Zprávy jsou
   retained. Bez brokeru se stav zapisuje přes REST API do senzoru baterie panelu.
+- **Výdrž baterie:** add-on si ukládá napětí z probuzení (nejvýš po 30 min, 7 dní
+  zpět, `/data/battery.json`) a proloží procenta přímkou. Výdrž = dny do vybití při
+  dosavadním poklesu. Odhad se ukáže až po dni dat; skok napětí o víc než 0,06 V
+  (nabíjení, odpojení USB, výměna baterie) historii smaže a odhad začne znovu.
+- **Upozornění na slabou baterii:** pod 15 % nebo pod 7 dní výdrže pošle add-on do HA
+  jedno upozornění (Oznámení), případně i na službu z volby `battery_notify`
+  (např. `notify.mobile_app_telefon`). Znovu až po nabití.
 - Emoji z tabulky `app/emoji.py` (👟, ♻️, ⚠️, 🎂…) se kreslí jako plné ikony MDI.
 
 ## Bezpečnost
@@ -137,6 +144,7 @@ technické volby a výchozí hodnoty:
 | `image_format` | `z2` (kompaktní, výchozí) nebo `png`. |
 | `render_interval` | Jak často add-on kontroluje data (s). |
 | `schedule` | Výchozí rozvrh probouzení pro panely bez vlastního. |
+| `battery_notify` | Služba pro upozornění na slabou baterii navíc k Oznámení v HA, např. `notify.mobile_app_telefon`. |
 | `allowed_devices` | MAC adresy povolených desek (spravuje karta Panely). |
 | ostatní (`meteo_*`, `weather`, `departures`, `calendars`…) | Výchozí obsah, dokud se rozvržení neuloží z editoru. |
 

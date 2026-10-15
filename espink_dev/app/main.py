@@ -17,6 +17,7 @@ from pathlib import Path
 import aiohttp
 from aiohttp import web
 
+import battery as battery_mod
 import ha as ha_mod
 import layout as layout_mod
 import firmware as firmware_mod
@@ -105,6 +106,7 @@ class Server:
         self.pending: dict[str, dict] = {}
         self.security = panels_mod.load_security()   # klíče desek (X-API-Key), jednorázové TOFU
         self.stats = panels_mod.load_stats()         # probuzení a překreslení za den (Stav, senzory v HA)
+        self.battery = battery_mod.load()            # napětí za poslední dny => odhad výdrže
         self.auth_lock = asyncio.Lock()
         if not self.security["tofu_done"] and (opts.get("allowed_devices") or self.panels):
             self.security["tofu_done"] = True        # instalace z doby před klíči: první deska už je
@@ -162,11 +164,42 @@ class Server:
         except OSError as e:
             print(f"[stats] nelze uložit: {e}")
 
+    def track_battery(self, t: Target) -> None:
+        """Napětí do historie pro odhad výdrže; při slabé baterii jedno upozornění v HA
+        (znovu až po nabití – skok napětí historii i příznak smaže)."""
+        mac = t.cfg["mac"]
+        h = self.battery.setdefault(mac, {})
+        if not battery_mod.add(h, time.time(), t.device.get("voltage")):
+            return
+        percent = model.battery_percent(t.device.get("voltage"))
+        days = battery_mod.estimate(h, time.time())
+        if battery_mod.low(percent, days) and not h.get("notified") and self.ha and not MOCK:
+            h["notified"] = True
+            asyncio.create_task(self.notify_battery(t.cfg, percent, days))
+        try:
+            battery_mod.save(self.battery)
+        except OSError as e:
+            print(f"[battery] nelze uložit: {e}")
+
+    async def notify_battery(self, cfg: dict, percent: int | None, days: float | None) -> None:
+        n = round(days) if days is not None else None
+        left = "" if n is None else f", vydrží ještě asi {n} {'den' if n == 1 else 'dny' if 1 < n < 5 else 'dní'}"
+        msg = f"Panel {cfg['name']}: baterie {percent} %{left}. Je čas ji nabít."
+        print(f"[battery] {msg}")
+        await self.ha.call_service("persistent_notification", "create", {
+            "title": "ESPink: slabá baterie", "message": msg,
+            "notification_id": mqtt_mod.node(cfg["mac"]) + "_battery"})
+        target = self.opts.get("battery_notify") or ""
+        if target.startswith("notify."):
+            await self.ha.call_service("notify", target.split(".", 1)[1], {"title": "ESPink: slabá baterie", "message": msg})
+
     def stats_for(self, mac: str) -> dict:
         s = self.stats.get(mac) or {}
         today = s.get("day") == now_local().date().isoformat()
         n = lambda k: s.get(k, 0) if today else 0  # noqa: E731
-        return {"wakes_today": n("wakes"), "redraws_today": n("redraws"), "unchanged_today": n("unchanged"),
+        days = battery_mod.estimate(self.battery.get(mac) or {}, time.time())
+        return {"battery_days": round(days) if days is not None else None,
+                "wakes_today": n("wakes"), "redraws_today": n("redraws"), "unchanged_today": n("unchanged"),
                 "missed_today": n("missed"), "last_redraw": s.get("last_redraw"), "last_missed": s.get("last_missed")}
 
     def save_security(self) -> None:
@@ -327,6 +360,7 @@ class Server:
             # z této odpovědi (druhý požadavek s timestampCheck=0 posílá jen stránkovaný režim)
             redraw = t.content_ts != t.served_ts
             self.count(t, now, redraw, confirmed=bool(ms(display.get("lastRefreshDuration"))))
+            self.track_battery(t)
             await self.stamp_next_wake(t, now, sleep)
             asyncio.create_task(self.publish_device(t, now, sleep))
             print(f"[device] {t.cfg['name']} {t.device['ip']} {t.device['voltage']} V,"
@@ -728,10 +762,11 @@ class Server:
                         "device": {**d, "battery": model.battery_percent(d.get("voltage"))} if d else {}})
         known = {p["mac"] for p in self.panels}
         # povolené MAC bez panelu (zapsané ručně v Konfiguraci add-onu) – panel vznikne, až se deska ozve
-        waiting = [{"mac": m, "allowed": True} for m in allowed - known]
         # čekající: nové desky a známé desky s jiným klíčem (přeinstalované); klíč do UI neposílat
         pend = [{k: v for k, v in p.items() if k != "key"} for p in self.pending.values()
                 if p["mac"] not in known or p.get("reason") == "key"]
+        # ručně zapsaná MAC, která se už ozvala (čeká na povolení klíče), se ukáže jen jednou
+        waiting = [{"mac": m, "allowed": True} for m in sorted(allowed - known - {p["mac"] for p in pend})]
         return {"panels": out, "pending": pend + waiting,
                 "layouts": self.layout_list(), "default_schedule": self.opts["schedule"], "mqtt": bool(self.mqtt),
                 "default_rotate": self.opts["rotate"], "image_format": self.opts["image_format"],

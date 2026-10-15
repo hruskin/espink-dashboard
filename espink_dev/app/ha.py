@@ -133,6 +133,15 @@ class HomeAssistant:
                 if r.status not in (200, 404):
                     raise RuntimeError(f"HTTP {r.status}")
 
+    async def call_service(self, domain: str, service: str, data: dict) -> None:
+        if not (ENTITY_RE.match(f"{domain}.{service}")):
+            print(f"[ha] neplatná služba ignorována: {domain}.{service!r}")
+            return
+        try:
+            await self._post(f"/services/{domain}/{service}", data)
+        except Exception as e:  # noqa: BLE001
+            print(f"[ha] služba {domain}.{service}: {e}")
+
     async def set_state(self, entity_id: str, state, attributes: dict) -> None:
         if not ENTITY_RE.match(entity_id or ""):
             if entity_id:

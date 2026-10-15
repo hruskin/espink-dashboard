@@ -267,7 +267,9 @@ function scheduleEditor(p, onChange) {
   const changed = () => { custom = true; onChange(); draw(); };
   const setRules = (r, keepSeg) => { rules = r; if (!keepSeg) seg = null; changed(); };
   // smazání úseku půjde vrátit (jeden krok)
-  const undoable = (r, msg) => { const prev = rules; setRules(r); toast(msg, () => { rules = prev; changed(); }); };
+  // po „Vrátit“ (tlačítko v toastu zmizí) vrátit fokus do pruhu rozvrhu, ne na začátek stránky
+  const restore = prev => { rules = prev; changed(); requestAnimationFrame(() => box.querySelector(".sched-bar button")?.focus()); };
+  const undoable = (r, msg) => { const prev = rules; setRules(r); toast(msg, () => restore(prev)); };
   const segsOf = qs => { const out = []; for (let q = 0; q < QN;) { let n = 1; while (q + n < QN && qs[q + n] === qs[q]) n++; out.push([q, q + n, qs[q]]); q += n; } return out; };
   const fromSegs = segs => { const n = []; segs.forEach(([a, b, v]) => { for (let q = a; q < b; q++) n[q] = v; }); return qToRules(n); };
   const slower = v => v === 0 ? 3600 : (SLOTS.filter(s => s.v > v && s.v).sort((a, b) => a.v - b.v)[0]?.v ?? 0);   // o stupeň úspornější
@@ -346,7 +348,7 @@ function scheduleEditor(p, onChange) {
       const commit = () => {
         const prev = rules, gone = segs.some(([a, b]) => b <= a);
         setRules(fromSegs(segs.filter(([a, b]) => b > a)));
-        if (gone) toast("Úsek zanikl – převzal ho soused.", () => { rules = prev; changed(); });
+        if (gone) toast("Úsek zanikl – převzal ho soused.", () => restore(prev));
       };
       const apply = () => { focusQ = null; commit(); };
       const relabel = i => { const [a, b] = segs[i]; btns[i].style.flex = b - a; btns[i].style.display = b > a ? "" : "none"; fitLabels(); };

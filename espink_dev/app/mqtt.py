@@ -15,6 +15,9 @@ ORIGIN = {"name": "ESPink Server", "url": "https://github.com/hruskin/espink-das
 # klíč -> (název, konfigurace komponenty); hodnoty bere šablona z JSONu ve stavovém tématu
 SENSORS = {
     "battery": ("Baterie", {"dev_cla": "battery", "unit_of_meas": "%", "stat_cla": "measurement"}),
+    # odhad z vývoje napětí za poslední dny (battery.py); prázdný, dokud není aspoň den dat
+    "battery_days": ("Výdrž baterie", {"dev_cla": "duration", "unit_of_meas": "d", "stat_cla": "measurement",
+                                       "ic": "mdi:battery-clock"}),
     "voltage": ("Napětí baterie", {"dev_cla": "voltage", "unit_of_meas": "V", "stat_cla": "measurement",
                                    "sug_dsp_prc": 2, "ent_cat": "diagnostic"}),
     "rssi": ("Signál WiFi", {"dev_cla": "signal_strength", "unit_of_meas": "dBm", "stat_cla": "measurement",

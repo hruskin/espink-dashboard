@@ -1,5 +1,5 @@
 name: ESPink Server DEV
-version: "0.6.0-dev35"
+version: "0.6.0-dev36"
 slug: espink_server_dev
 description: Vývojová verze s editorem rozvržení – lokální server protokolu Živý obraz – kreslí dashboard z dat Home Assistantu pro e-paper ESPink
 arch:
@@ -78,5 +78,6 @@ schema:
   schedule:
     - str
   battery_sensor: str?
+  battery_notify: str?
   allowed_devices:
     - "match(^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$)"

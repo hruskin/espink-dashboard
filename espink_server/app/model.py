@@ -48,7 +48,6 @@ LIPO_CURVE = [(4.20, 100), (4.15, 95), (4.11, 90), (4.08, 85), (4.02, 80), (3.98
 
 # Výšky řádků agendy v px – musí sedět se šablonou dashboard.typ (výšky bloků viz layout.py)
 EVENTS_PAD = 6
-DAY_HEADER_H = 34
 EVENT_ROW_H = 29
 MORE_ROW_H = 22
 SEP_H = 1  # tenká čára mezi dny v agendě
@@ -126,7 +125,9 @@ def parse_dt(value: str, tz) -> datetime | None:
 
 
 def short_day_label(d: date, today: date) -> str:
-    """Popisek dne do sloupce agendy: „Zítra“, jinak „So 18.“."""
+    """Popisek dne do sloupce agendy: „Dnes“, „Zítra“, jinak „So 18.“."""
+    if d == today:
+        return "Dnes"
     if d == today + timedelta(days=1):
         return "Zítra"
     return f"{DAYS_SHORT[d.weekday()]} {d.day}."
@@ -420,9 +421,9 @@ def _events(raw: dict, b: dict, now: datetime, tz, budget: int, cw: int) -> dict
             hidden += len(uniq)
             continue
         heights = [_row_height(it, m, cw) for it in uniq]
-        # Agenda: Dnes má pruh, ostatní dny jen řádky oddělené tenkou čárou
+        # Agenda: dny jsou jen řádky oddělené tenkou čárou (i Dnes, popisek je ve sloupci dne)
         # čára jen mezi dvěma bloky řádků (stejně jako CSS .aday + .aday)
-        head = DAY_HEADER_H if is_today else (SEP_H if days and days[-1]["rows"] else 0)
+        head = SEP_H if days and days[-1]["rows"] else 0
         if d > guaranteed:
             # navíc jen celé dny, které se vejdou (i s případným „+N dalších“)
             if used + head + sum(heights) + (MORE_ROW_H if hidden else 0) > EVENTS_HEIGHT:

@@ -187,11 +187,6 @@
   pad(x: 16pt, top: 6pt, {
     let first = true
     for day in b.days {
-      if day.today {
-        move(dx: -8pt, box(width: pt(cw + 16), height: 30pt, fill: black, radius: 5pt, inset: (x: 8pt, top: 3pt),
-          text(fill: white, top-edge: "ascender", { text(size: 20pt, weight: 800, "Dnes"); h(8pt); text(size: 16pt, weight: 600, txt(day.date)) })))
-        v(4pt)
-      }
       if day.rows.len() > 0 {
         if not first { box(width: 100%, height: 1pt, fill: black) }
         first = false
@@ -200,7 +195,7 @@
           let cols = (pt(dlw), pt(tw))
           let cells = (
             at-base(text(size: pt(dls), weight: 800, fill: if day.holiday_day { RED } else { black },
-              if i == 0 and not day.today { nb(day.label) } else { "" })),
+              if i == 0 { nb(day.label) } else { "" })),
             at-base(text(size: pt(ts), weight: 700, fill: fill, nb(e.time))),
           )
           if ci {

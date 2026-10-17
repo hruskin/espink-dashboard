@@ -32,6 +32,7 @@ WEATHER_PARAMS = {
     "indoor": ("", "entity"),
     # 0 = celé stupně: méně změn obsahu => méně překreslení (úspora baterie)
     "temp_decimals": (1, ("int", 0, 2)),
+    "temp_bold": (True, "bool"),   # velká teplota tučně, jinak regular
 }
 
 # Parametry: typ -> (výchozí hodnota, validátor)
@@ -45,6 +46,7 @@ BLOCK_TYPES: dict[str, dict] = {
             "nameday_calendar": ("", "entity"),
             "holiday_calendar": ("", "entity"),
             "alert": (True, "bool"),          # červené kalendáře z agendy: dnes/zítra
+            "warnings": ("", "entity"),       # výstrahy ČHMÚ (binary_sensor s atributem alerts) – přednost
             "show_weather": (True, "bool"),   # aktuální počasí vpravo v záhlaví
             **WEATHER_PARAMS,
         },
@@ -428,6 +430,7 @@ def needs(layout: dict) -> dict:
                         add(states, b[k])
                 add(forecasts, b["weather"])
             if t == "header":
+                add(states, b["warnings"])
                 add(cals, b["nameday_calendar"])
                 add(cals, b["holiday_calendar"])
         elif t == "departures":

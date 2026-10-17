@@ -89,8 +89,8 @@
   }
   let t = txt(w.temp)
   let tsize = if small { clamp(20, cw * 0.26, 46) } else if narrow { 38pt } else if t.len() > 4 { 36pt } else { 46pt }
-  top.push(box(height: tsize, align(horizon, text(font: DISP, size: tsize, weight: 800,
-    tracking: if small { -1pt } else { -1.5pt }, (if t == "" { "--" } else { t }) + "°"))))
+  top.push(box(height: tsize, align(horizon, text(font: DISP, size: tsize,
+    weight: if w.at("temp_bold", default: true) { 800 } else { 400 }, tracking: if small { -1pt } else { -1.5pt }, (if t == "" { "--" } else { t }) + "°"))))
   let isize = if small { clamp(22, cw * 0.22, 40) } else { 50pt }
   let row = hrow(top, gap: if small { 2pt } else { 4pt }, h: if small { calc.max(isize, tsize) } else { 54pt })
   if small { box(width: 100%, clip: true, align(x, row)) } else { line(54, row, x: x) }
@@ -138,8 +138,11 @@
   })
   let line-text = if has(b.alert) { b.alert } else { b.holiday }
   if has(line-text) {
+    let msg = ell(line-text, size: 19pt, weight: 800, fill: RED)
     place(bottom + left, dx: 16pt, dy: -3pt, box(width: pt(cw), height: 24pt,
-      ell(line-text, size: 19pt, weight: 800, fill: RED)))
+      if has(b.alert) and has(b.alert_icon) {
+        grid(columns: (auto, 1fr), column-gutter: 4pt, align: horizon, icon(b.alert_icon, size: 22pt, fill: RED), msg)
+      } else { msg }))
   }
 }
 

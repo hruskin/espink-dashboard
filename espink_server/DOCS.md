@@ -35,6 +35,10 @@ kolik řádků se vejde). Náhled vykresluje server stejně jako pro desku.
   Patička (i s entitami), Hodnota entity (stav nebo atribut, ikona, červeně pod/nad
   mezí, desetinná místa), Text a Šablona (Jinja v sandboxu; `states()`,
   `state_attr()`, `is_state()`, `now`, filtr `|num(1)`).
+- V Záhlaví jde vybrat **Výstrahy ČHMÚ** (`binary_sensor.…_vystrahy_chmu` z integrace
+  ČHMÚ Meteogram). Platná výstraha, nebo výstraha začínající do 24 h, se ukáže červeně
+  s ikonou v řádku upozornění, např. „Silný vítr · Bouřky, do zítra 6:00“, a má
+  přednost před červenými kalendáři.
 - U kalendáře v Událostech jde zapnout **Celý text** – názvy se nezkracují, ale
   zalomí (nejvýš 8 řádků).
 - Rozvržení může být víc (nové prázdné nebo kopie, přejmenovat, smazat), dále export
@@ -45,7 +49,10 @@ kolik řádků se vejde). Náhled vykresluje server stejně jako pro desku.
 
 Každá deska (podle MAC) je panel s názvem, přiřazeným rozvržením, otočením
 (normálně / vzhůru nohama), senzorem baterie a vlastním **rozvrhem probouzení**.
-Víc panelů může sdílet jedno rozvržení. Na širší obrazovce jsou karty vedle sebe.
+Víc panelů může sdílet jedno rozvržení. Volba **Na noc** vybere rozvržení pro poslední
+obraz před dlouhým spánkem (aspoň 3 h podle rozvrhu). Ten se sestaví k času ranního
+probuzení, takže přes noc a ráno panel ukazuje datum, jmeniny, události a předpověď
+nového dne. Na širší obrazovce jsou karty vedle sebe.
 
 Rozvrh je pruh přes celý den po čtvrthodinách; barva udává interval (5–30 min,
 1× za hodinu v :00, nebo nebudit). Hranice úseků se posouvají tažením nebo šipkami
@@ -72,7 +79,7 @@ Přehled panelů: poslední kontakt, další probuzení, **poslední překreslen
 se panel dnes probudil a kolikrát se z toho překreslil, nebo jen usnul beze změny.
 Překreslení potvrzuje deska až při dalším probuzení (pošle dobu posledního
 překreslení), proto jsou počty o jedno probuzení pozadu. Když deska dostala nový
-obsah a nepřekreslila se, ukáže se nahoře varování. Dále baterie, Wi-Fi, doba překreslení, důvod restartu a náhled. Tlačítko *Překreslit obsah teď* přepočítá obsah; desky si ho
+obsah a nepřekreslila se, ukáže se nahoře varování. Dále baterie a **odhad výdrže**, Wi-Fi, doba překreslení, důvod restartu a náhled. Tlačítko *Překreslit obsah teď* přepočítá obsah; desky si ho
 vyzvednou při příštím probuzení.
 
 ## Jak to funguje
@@ -91,9 +98,16 @@ vyzvednou při příštím probuzení.
   přihlašovací údaje add-on vezme od Supervisoru). Každý panel je zařízení
   *ESPink <název>* se senzory Baterie, Napětí baterie, Signál WiFi, Doba překreslení,
   Teplota procesoru, Poslední kontakt, Další probuzení, Důvod restartu, Poslední
-  překreslení, Překreslení dnes, Probuzení dnes a Nepřekresleno dnes (počty se
-  o půlnoci nulují). Zprávy jsou
+  překreslení, Překreslení dnes, Probuzení dnes, Nepřekresleno dnes (počty se
+  o půlnoci nulují) a Výdrž baterie. Zprávy jsou
   retained. Bez brokeru se stav zapisuje přes REST API do senzoru baterie panelu.
+- **Výdrž baterie:** add-on si ukládá napětí z probuzení (nejvýš po 30 min, 7 dní
+  zpět, `/data/battery.json`) a proloží procenta přímkou. Výdrž = dny do vybití při
+  dosavadním poklesu. Odhad se ukáže až po dni dat; skok napětí o víc než 0,06 V
+  (nabíjení, odpojení USB, výměna baterie) historii smaže a odhad začne znovu.
+- **Upozornění na slabou baterii:** pod 15 % nebo pod 7 dní výdrže pošle add-on do HA
+  jedno upozornění (Oznámení), případně i na službu z volby `battery_notify`
+  (např. `notify.mobile_app_telefon`). Znovu až po nabití.
 - Emoji z tabulky `app/emoji.py` (👟, ♻️, ⚠️, 🎂…) se kreslí jako plné ikony MDI.
 
 ## Bezpečnost
@@ -126,6 +140,7 @@ technické volby a výchozí hodnoty:
 | `image_format` | `z2` (kompaktní, výchozí) nebo `png`. |
 | `render_interval` | Jak často add-on kontroluje data (s). |
 | `schedule` | Výchozí rozvrh probouzení pro panely bez vlastního. |
+| `battery_notify` | Služba pro upozornění na slabou baterii navíc k Oznámení v HA, např. `notify.mobile_app_telefon`. |
 | `allowed_devices` | MAC adresy povolených desek (spravuje karta Panely). |
 | ostatní (`meteo_*`, `weather`, `departures`, `calendars`…) | Výchozí obsah, dokud se rozvržení neuloží z editoru. |
 

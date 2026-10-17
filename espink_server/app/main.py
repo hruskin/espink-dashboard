@@ -17,6 +17,7 @@ from pathlib import Path
 import aiohttp
 from aiohttp import web
 
+import battery as battery_mod
 import ha as ha_mod
 import layout as layout_mod
 import firmware as firmware_mod
@@ -76,6 +77,7 @@ class Target:
         self.served_ts = None     # Timestamp, který deska naposledy dostala (= má na displeji)
         self.error = ""
         self.shown: dict = {}     # zaokrouhlené hodnoty na displeji (hystereze, model.hnum)
+        self.night = False        # obsah je noční obraz (rozvržení Na noc, k času ranního probuzení)
         self.last_device_rebuild = 0.0
         self.last_publish = 0.0
         self.configure(cfg, default_schedule)
@@ -104,6 +106,7 @@ class Server:
         self.pending: dict[str, dict] = {}
         self.security = panels_mod.load_security()   # klíče desek (X-API-Key), jednorázové TOFU
         self.stats = panels_mod.load_stats()         # probuzení a překreslení za den (Stav, senzory v HA)
+        self.battery = battery_mod.load()            # napětí za poslední dny => odhad výdrže
         self.auth_lock = asyncio.Lock()
         if not self.security["tofu_done"] and (opts.get("allowed_devices") or self.panels):
             self.security["tofu_done"] = True        # instalace z doby před klíči: první deska už je
@@ -161,11 +164,42 @@ class Server:
         except OSError as e:
             print(f"[stats] nelze uložit: {e}")
 
+    def track_battery(self, t: Target) -> None:
+        """Napětí do historie pro odhad výdrže; při slabé baterii jedno upozornění v HA
+        (znovu až po nabití – skok napětí historii i příznak smaže)."""
+        mac = t.cfg["mac"]
+        h = self.battery.setdefault(mac, {})
+        if not battery_mod.add(h, time.time(), t.device.get("voltage")):
+            return
+        percent = model.battery_percent(t.device.get("voltage"))
+        days = battery_mod.estimate(h, time.time())
+        if battery_mod.low(percent, days) and not h.get("notified") and self.ha and not MOCK:
+            h["notified"] = True
+            asyncio.create_task(self.notify_battery(t.cfg, percent, days))
+        try:
+            battery_mod.save(self.battery)
+        except OSError as e:
+            print(f"[battery] nelze uložit: {e}")
+
+    async def notify_battery(self, cfg: dict, percent: int | None, days: float | None) -> None:
+        n = round(days) if days is not None else None
+        left = "" if n is None else f", vydrží ještě asi {n} {'den' if n == 1 else 'dny' if 1 < n < 5 else 'dní'}"
+        msg = f"Panel {cfg['name']}: baterie {percent} %{left}. Je čas ji nabít."
+        print(f"[battery] {msg}")
+        await self.ha.call_service("persistent_notification", "create", {
+            "title": "ESPink: slabá baterie", "message": msg,
+            "notification_id": mqtt_mod.node(cfg["mac"]) + "_battery"})
+        target = self.opts.get("battery_notify") or ""
+        if target.startswith("notify."):
+            await self.ha.call_service("notify", target.split(".", 1)[1], {"title": "ESPink: slabá baterie", "message": msg})
+
     def stats_for(self, mac: str) -> dict:
         s = self.stats.get(mac) or {}
         today = s.get("day") == now_local().date().isoformat()
         n = lambda k: s.get(k, 0) if today else 0  # noqa: E731
-        return {"wakes_today": n("wakes"), "redraws_today": n("redraws"), "unchanged_today": n("unchanged"),
+        days = battery_mod.estimate(self.battery.get(mac) or {}, time.time())
+        return {"battery_days": round(days) if days is not None else None,
+                "wakes_today": n("wakes"), "redraws_today": n("redraws"), "unchanged_today": n("unchanged"),
                 "missed_today": n("missed"), "last_redraw": s.get("last_redraw"), "last_missed": s.get("last_missed")}
 
     def save_security(self) -> None:
@@ -176,6 +210,17 @@ class Server:
 
     def layout_for(self, t: Target) -> dict:
         return self.layouts.get(t.cfg["layout"]) or next(iter(self.layouts.values()))
+
+    def night_at(self, t: Target, now: datetime) -> datetime | None:
+        """Poslední obraz před dlouhým spánkem (noc): čas ranního probuzení, pokud má panel
+        rozvržení Na noc. Obraz se pak sestaví k tomuto času – ráno ukáže nový den."""
+        if t.cfg.get("night_layout") not in self.layouts:
+            return None
+        sleep = t.schedule.sleep_seconds(now)
+        return now + timedelta(seconds=sleep) if sleep >= NIGHT_SLEEP else None
+
+    def uses_layout(self, t: Target, lid: str) -> bool:
+        return self.layout_for(t)["id"] == lid or t.cfg.get("night_layout") == lid
 
     def target(self, mac: str | None) -> Target:
         return self.targets.get(mac or "") or next(iter(self.targets.values()))
@@ -201,13 +246,15 @@ class Server:
             raws: dict[str, dict] = {}  # data z HA jednou pro každé rozvržení
             errors = []
             for t in list(self.targets.values()) if only is None else only:
-                lay = self.layout_for(t)
+                night = self.night_at(t, now)
+                lay = self.layouts[t.cfg["night_layout"]] if night else self.layout_for(t)
+                t.night = bool(night)
                 try:
                     if lay["id"] not in raws:
                         raws[lay["id"]] = await self.fetch_raw(lay, now)
                     device = t.device or await self.device_from_sensor(t.cfg["battery_sensor"])
                     # ve vlákně: šablona může běžet až 2 s a smyčka serveru (desky) musí odpovídat dál
-                    view = await asyncio.to_thread(model.build, raws[lay["id"]], lay, device, now, memory=t.shown)
+                    view = await asyncio.to_thread(model.build, raws[lay["id"]], lay, device, night or now, memory=t.shown)
                     digest = model.digest(view)
                     self.last_build = time.time()
                     if digest == t.view_hash and not force:
@@ -300,8 +347,9 @@ class Server:
             }
             # Změna baterie o celý krok (5 %) se má projevit hned v tomto probuzení
             # (nejvýš jednou za 30 s – jinak by šlo střídáním hodnot vynutit vykreslení při každém požadavku)
-            if not t.payload or (model._device(t.device)["battery"] != old_bucket
-                                 and time.time() - t.last_device_rebuild > 30):
+            # Na noc: poslední probuzení před dlouhým spánkem dostane noční obraz hned (ne až v dalším přepočtu)
+            if not t.payload or bool(self.night_at(t, now)) != t.night or (
+                    model._device(t.device)["battery"] != old_bucket and time.time() - t.last_device_rebuild > 30):
                 t.last_device_rebuild = time.time()
                 await self.rebuild(only=[t])
 
@@ -312,6 +360,7 @@ class Server:
             # z této odpovědi (druhý požadavek s timestampCheck=0 posílá jen stránkovaný režim)
             redraw = t.content_ts != t.served_ts
             self.count(t, now, redraw, confirmed=bool(ms(display.get("lastRefreshDuration"))))
+            self.track_battery(t)
             await self.stamp_next_wake(t, now, sleep)
             asyncio.create_task(self.publish_device(t, now, sleep))
             print(f"[device] {t.cfg['name']} {t.device['ip']} {t.device['voltage']} V,"
@@ -609,7 +658,7 @@ class Server:
             return web.json_response({"error": f"nelze uložit: {e}"}, status=500)
         self.layouts[new["id"]] = new
         self.layout_saved, self.layout_error = True, ""
-        await self.rebuild(force=True, only=[t for t in self.targets.values() if self.layout_for(t)["id"] == new["id"]])
+        await self.rebuild(force=True, only=[t for t in self.targets.values() if self.uses_layout(t, new["id"])])
         print(f"[layout] rozvržení {new['name']} uloženo")
         return web.json_response({"layout": new, "error": self.last_error or None})
 
@@ -649,7 +698,7 @@ class Server:
     async def handle_layout_delete(self, request: web.Request) -> web.Response:
         await self.read_json(request)  # jen kvůli kontrole Content-Type (CSRF)
         cur = self.layout_arg(request)
-        users = [p["name"] for p in self.panels if p["layout"] == cur["id"]]
+        users = [p["name"] for p in self.panels if cur["id"] in (p["layout"], p.get("night_layout"))]
         if users:
             raise bad_request(f"rozvržení používá panel {', '.join(users)} – nejdřív mu přiřaď jiné")
         if len(self.layouts) == 1:
@@ -713,10 +762,11 @@ class Server:
                         "device": {**d, "battery": model.battery_percent(d.get("voltage"))} if d else {}})
         known = {p["mac"] for p in self.panels}
         # povolené MAC bez panelu (zapsané ručně v Konfiguraci add-onu) – panel vznikne, až se deska ozve
-        waiting = [{"mac": m, "allowed": True} for m in allowed - known]
         # čekající: nové desky a známé desky s jiným klíčem (přeinstalované); klíč do UI neposílat
         pend = [{k: v for k, v in p.items() if k != "key"} for p in self.pending.values()
                 if p["mac"] not in known or p.get("reason") == "key"]
+        # ručně zapsaná MAC, která se už ozvala (čeká na povolení klíče), se ukáže jen jednou
+        waiting = [{"mac": m, "allowed": True} for m in sorted(allowed - known - {p["mac"] for p in pend})]
         return {"panels": out, "pending": pend + waiting,
                 "layouts": self.layout_list(), "default_schedule": self.opts["schedule"], "mqtt": bool(self.mqtt),
                 "default_rotate": self.opts["rotate"], "image_format": self.opts["image_format"],
@@ -854,6 +904,7 @@ class Installer:
 
 DEVICE_MAX_BODY = 16 * 1024
 LEARN_DAYS = 14                          # přechodné období učení klíčů dříve povolených desek
+NIGHT_SLEEP = 3 * 3600                   # spánek aspoň 3 h = noc: obraz z rozvržení Na noc
 FAIL_WINDOW, FAIL_MAX_MAC, FAIL_MAX_IP = 900, 5, 20   # chybné pokusy za 15 min → dočasné odmítání
 
 

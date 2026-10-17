@@ -25,6 +25,7 @@ DEFAULTS = {
     "event_days": 7,
     "schedule": ["06:00-08:00=300", "08:00-15:00=900", "15:00-18:00=300", "18:00-20:00=900", "20:00-06:00=3600"],
     "battery_sensor": "sensor.espink_baterie",
+    "battery_notify": "",
     "allowed_devices": [],
 }
 
@@ -34,7 +35,7 @@ ENTITY_RE = re.compile(r"^[a-z_]+\.[a-z0-9_]+$")
 MAC_RE = re.compile(r"^([0-9A-F]{2}:){5}[0-9A-F]{2}$")
 ENTITY_KEYS = {"meteo_temperature", "meteo_humidity", "meteo_rain_today", "meteo_pressure",
                "indoor_temperature", "weather", "departures", "disruptions",
-               "nameday_calendar", "holiday_calendar", "battery_sensor"}
+               "nameday_calendar", "holiday_calendar", "battery_sensor", "battery_notify"}
 
 
 def check_entity(value: str) -> str:

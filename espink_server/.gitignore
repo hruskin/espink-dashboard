@@ -10,3 +10,4 @@ installer.json
 *.tmp
 security.json
 stats.json
+battery.json

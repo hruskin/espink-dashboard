@@ -35,6 +35,10 @@ def raw(needs: dict, now: datetime) -> dict:
         "weather.chmu_home_predpoved": {"state": "partlycloudy", "attributes": {"temperature": 10.6}},
         "sensor.odjezdova_tabule_krizkovy_ujezdec_odjezdy": {
             "state": now.isoformat(), "attributes": {"stop_name": "Křížkový Újezdec", "departures": deps}},
+        "binary_sensor.chmu_home_vystrahy_chmu": {"state": "on", "attributes": {"alerts": [
+            {"label": "Silný vítr", "icon": "mdi:weather-windy", "severity": "Moderate",
+             "start": at(0, 6), "end": at(1, 6)},
+            {"label": "Bouřky", "icon": "mdi:weather-lightning", "severity": "Minor", "start": at(0, 14), "end": at(0, 22)}]}},
         "sensor.odjezdova_tabule_krizkovy_ujezdec_vyluky": {
             "state": "1", "attributes": {"infotexts": [{"text": "Omezení provozu linky 335"}]}},
     }

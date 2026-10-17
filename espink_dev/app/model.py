@@ -165,6 +165,7 @@ def _weather(raw: dict, b: dict, now: datetime, tz) -> dict:
 
     out = {
         "icon": WEATHER_ICONS.get(cond or "", "weather-cloudy-alert"),
+        "temp_bold": bool(b.get("temp_bold", True)),
         "temp": hnum(f"temp:{b.get('temperature') or b.get('weather')}", temp, b.get("temp_decimals", 1), TEMP_MIN_CHANGE),
         "humidity": hnum(f"hum:{b.get('humidity') or b.get('weather')}", hum, 0),
         "rain": num(rain) if rain and rain >= 0.1 else None,

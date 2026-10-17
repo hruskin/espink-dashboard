@@ -32,6 +32,7 @@ WEATHER_PARAMS = {
     "indoor": ("", "entity"),
     # 0 = celé stupně: méně změn obsahu => méně překreslení (úspora baterie)
     "temp_decimals": (1, ("int", 0, 2)),
+    "temp_bold": (True, "bool"),   # velká teplota tučně, jinak regular
 }
 
 # Parametry: typ -> (výchozí hodnota, validátor)

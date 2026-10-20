@@ -298,7 +298,7 @@
 
 #let menu-head(b) = line(26, grid(columns: (auto, 1fr), column-gutter: 6pt, align: horizon,
     icon("silverware-fork-knife", size: 22pt),
-    ell(upper("Školka · " + txt(b.when)), size: 17pt, weight: 800, tracking: 0.5pt)))
+    ell(upper(txt(b.title) + " · " + txt(b.when)), size: 17pt, weight: 800, tracking: 0.5pt)))
 
 #let menu(b, cw, ch) = pad(x: 16pt, top: 8pt, {
   menu-head(b)

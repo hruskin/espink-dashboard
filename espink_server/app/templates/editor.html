@@ -912,7 +912,7 @@ function scheduleRender(now) {
   $("#screen").classList.add("busy");
   $("#pstat").textContent = "Vykresluji…";
   if (innerWidth < 1000 && document.body.dataset.pane === "blocks") $("#segPrev").classList.add("dot");
-  timer = setTimeout(draw, now ? 0 : 700);
+  timer = setTimeout(draw, now ? 0 : 300);
 }
 async function draw() {
   if (renderStatus()) {             // překryv – server by návrh stejně odmítl

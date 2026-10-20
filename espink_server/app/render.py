@@ -15,7 +15,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageMath
 
 import emoji
 
@@ -112,15 +112,17 @@ async def rasterize(view: dict, updated: str, next_wake: str = "") -> Image.Imag
 
 
 def quantize(img: Image.Image) -> Image.Image:
-    """RGB -> paletový obrázek s indexy 0/1/2 (bez ditheringu, text zůstane ostrý)."""
-    data = img.tobytes()
-    rs, gs, bs = data[0::3], data[1::3], data[2::3]
-    codes = bytes(
-        RED if (r >= 128 and r > g + 80 and r > b + 80)
-        else (BLACK if (r * 77 + g * 150 + b * 29) >> 8 <= BLACK_THRESHOLD else WHITE)
-        for r, g, b in zip(rs, gs, bs)
-    )
-    out = Image.frombytes("P", img.size, codes)
+    """RGB -> paletový obrázek s indexy 0/1/2 (bez ditheringu, text zůstane ostrý).
+    Červená: r ≥ 128 a o víc než 80 nad g i b; černá: jas (r·77 + g·150 + b·29) >> 8 ≤ práh.
+    Počítá Pillow v C (ImageMath) – pixel po pixelu v Pythonu to bylo ~10× pomalejší."""
+    r, g, b = img.convert("RGB").split()
+    dark = BLACK_THRESHOLD * 256 + 255   # (s >> 8) <= T  ⇔  s <= T·256 + 255
+    codes = ImageMath.lambda_eval(
+        lambda a: (lambda red, black: red * RED + (1 - red) * black * BLACK)(
+            (a["r"] >= 128) & (a["r"] > a["g"] + 80) & (a["r"] > a["b"] + 80),
+            (a["r"] * 77 + a["g"] * 150 + a["b"] * 29) <= dark),
+        r=r, g=g, b=b)
+    out = Image.frombytes("P", img.size, codes.convert("L").tobytes())
     out.putpalette(PREVIEW_PALETTE)
     return out
 
@@ -152,9 +154,10 @@ def device_payload(pal: Image.Image, rotate: int, fmt: str) -> bytes:
     return encode_z2(img)
 
 
-def to_png(pal: Image.Image) -> bytes:
+def to_png(pal: Image.Image, fast: bool = False) -> bytes:
+    """fast: náhled v editoru – rychlá komprese (o pár kB větší), jinak co nejmenší."""
     buf = io.BytesIO()
-    pal.save(buf, "PNG", optimize=True)
+    pal.save(buf, "PNG", compress_level=1) if fast else pal.save(buf, "PNG", optimize=True)
     return buf.getvalue()
 
 
@@ -164,3 +167,9 @@ async def render(view: dict, updated: str, rotate: int, fmt: str, next_wake: str
     pal = await asyncio.to_thread(quantize, img)
     payload = await asyncio.to_thread(device_payload, pal, rotate, fmt)
     return to_png(pal), payload
+
+
+async def render_preview(view: dict, updated: str, next_wake: str = "") -> bytes:
+    """Jen náhled PNG (editor) – bez dat pro zařízení."""
+    img = await rasterize(view, updated, next_wake)
+    return await asyncio.to_thread(lambda: to_png(quantize(img), fast=True))

@@ -43,6 +43,7 @@ load_container_env()
 INGRESS_IP = "172.30.32.2"
 DEV = os.environ.get("DEV") == "1"
 MOCK = os.environ.get("MOCK") == "1"
+PREVIEW_TTL = 60   # s – jak dlouho editor používá stažená data z HA pro náhled (= výchozí render_interval)
 
 
 def after(now: datetime, seconds: int) -> str:
@@ -95,6 +96,7 @@ class Server:
         self.targets: dict[str, Target] = {}
         self.sync_targets()
         self.draft_lock = asyncio.Lock()
+        self.preview_cache: dict = {}   # data z HA pro náhledy v editoru (fetch_raw_preview)
         self.lock = asyncio.Lock()
         self.ha: ha_mod.HomeAssistant | None = None
         self.mqtt: mqtt_mod.Mqtt | None = None
@@ -276,7 +278,49 @@ class Server:
 
     async def fetch_raw(self, layout: dict, now: datetime) -> dict:
         needs = layout_mod.needs(layout)
-        return mock.raw(needs, now) if MOCK else await ha_mod.collect(self.ha, needs, now)
+        if MOCK:
+            return mock.raw(needs, now)
+        raw = await ha_mod.collect(self.ha, needs, now)
+        # data pro desky předvyplní mezipaměť editoru – i první náhled je pak bez stahování
+        # (ne obraz „Na noc“ sestavený k ránu: kalendáře by byly od jiného dne)
+        if abs((now - now_local()).total_seconds()) < 120:
+            self.remember_raw(needs, raw, now)
+        return raw
+
+    PREVIEW_KINDS = {"states": "states", "calendars": "events", "forecasts": "forecasts"}
+
+    def remember_raw(self, needs: dict, raw: dict, now: datetime) -> None:
+        c, t = self.preview_cache, time.time()
+        if c.get("day") != now.date():   # kalendáře se stahují od začátku dne
+            c.clear()
+            c["day"] = now.date()
+        for k, rk in self.PREVIEW_KINDS.items():
+            for e in needs[k]:
+                c[(k, e)] = (t, raw[rk].get(e))
+
+    async def cached(self, key, fetch):
+        """Mezipaměť editoru (PREVIEW_TTL s): náhled po každé úpravě nestahuje data znovu."""
+        hit = self.preview_cache.get(key)
+        if hit and time.time() - hit[0] < PREVIEW_TTL:
+            return hit[1]
+        value = await fetch()
+        self.preview_cache[key] = (time.time(), value)
+        return value
+
+    async def fetch_raw_preview(self, layout: dict, now: datetime) -> dict:
+        """Data pro náhled v editoru: z HA se stáhne jen to, co v mezipaměti chybí nebo je starší
+        než PREVIEW_TTL (nová entita v návrhu se tak stáhne hned)."""
+        needs = layout_mod.needs(layout)
+        if MOCK:
+            return mock.raw(needs, now)
+        c, t = self.preview_cache, time.time()
+        if c.get("day") != now.date():
+            c.clear()
+        missing = {k: [e for e in needs[k] if not ((k, e) in c and t - c[(k, e)][0] < PREVIEW_TTL)] for k in self.PREVIEW_KINDS}
+        if any(missing.values()):
+            self.remember_raw(missing, await ha_mod.collect(self.ha, missing, now), now)
+        get = lambda k: {e: c[(k, e)][1] for e in needs[k] if c[(k, e)][1] is not None}  # noqa: E731
+        return {"states": get("states"), "events": get("calendars"), "forecasts": get("forecasts")}
 
     async def device_from_sensor(self, sensor: str) -> dict:
         """Deska se k tomuto serveru zatím nehlásila (DEV vedle stabilního add-onu) –
@@ -718,11 +762,12 @@ class Server:
         async with self.draft_lock:  # náhledy jeden po druhém
             now = now_local()
             try:
-                raw = await self.fetch_raw(draft, now)
-                device = t.device or await self.device_from_sensor(t.cfg["battery_sensor"])
+                raw = await self.fetch_raw_preview(draft, now)
+                device = t.device or await self.cached(("device", t.cfg["battery_sensor"]),
+                                                       lambda: self.device_from_sensor(t.cfg["battery_sensor"]))
                 view = await asyncio.to_thread(model.build, raw, draft, device, now, worst=request.query.get("worst") == "1")
-                png, _ = await render.render(view, f"{now.day}. {now.month}. {now:%H:%M}",
-                                             self.opts["rotate"], "png", after(now, t.schedule.sleep_seconds(now)))
+                png = await render.render_preview(view, f"{now.day}. {now.month}. {now:%H:%M}",
+                                                  after(now, t.schedule.sleep_seconds(now)))
             except Exception as e:  # noqa: BLE001
                 return web.json_response({"error": f"{type(e).__name__}: {e}"}, status=502)
         return web.Response(body=png, content_type="image/png", headers={

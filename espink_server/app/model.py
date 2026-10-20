@@ -7,6 +7,7 @@ import functools
 import hashlib
 import math
 import json
+import re
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -648,6 +649,58 @@ def _footer_items(raw: dict, items: list) -> list:
     return out
 
 
+MENU_DAYS = ["pondeli", "utery", "streda", "ctvrtek", "patek"]
+MENU_ICONS = {"přesnídávka": "food-croissant", "oběd": "pot-steam-outline", "svačina": "food-apple-outline"}
+MENU_MD = re.compile(r"\*\*([^*]*)\*\*")
+
+
+def _menu_day(now: datetime, switch_hour: int) -> date:
+    """Dnes do switch_hour, pak další den; víkend => pondělí."""
+    d = now.date() + timedelta(days=1 if now.hour >= switch_hour else 0)
+    while d.weekday() > 4:
+        d += timedelta(days=1)
+    return d
+
+
+def _menu_text(s: str) -> list[dict]:
+    """„🥐 **Přesnídávka:** Cornflakes\n\n🍲 **Oběd:** Polévka\nHlavní jídlo“ ->
+    [{"label": "Přesnídávka", "icon": …, "lines": ["Cornflakes"]}, …]"""
+    out = []
+    for part in re.split(r"\n\s*\n", s or ""):
+        lines = [x.strip() for x in part.strip().split("\n") if x.strip()]
+        if not lines:
+            continue
+        m = MENU_MD.search(lines[0])
+        label = m.group(1).strip().rstrip(":") if m else ""
+        first = lines[0][m.end():].strip() if m else lines[0]
+        dishes = [re.sub(r"\s+,", ",", MENU_MD.sub(r"\1", x)).strip(" ,") for x in ([first] if first else []) + lines[1:]]
+        out.append({"label": label, "icon": MENU_ICONS.get(label.lower(), "food"), "lines": [d for d in dishes if d][:3]})
+    return out
+
+
+def _menu(raw: dict, b: dict, now: datetime) -> dict:
+    d = _menu_day(now, b["switch_hour"])
+    today = now.date()
+    when = "dnes" if d == today else "zítra" if d == today + timedelta(days=1) else DAYS[d.weekday()]
+    out = {"when": when, "items": [], "missing": None}
+    st = raw["states"].get(b["entity"]) if b["entity"] else None
+    a = (st or {}).get("attributes") or {}
+    try:
+        start = date.fromisoformat(str(a.get("obdobi_od") or ""))
+    except ValueError:
+        start = None
+    if not st or not a.get("je_aktualni") or start is None or not 0 <= (d - start).days < 5:
+        out["missing"] = f"Jídelníček na {'dnešek' if when == 'dnes' else 'zítřek' if when == 'zítra' else when} zatím není k dispozici"
+        return out
+    items = _menu_text(str(a.get(MENU_DAYS[d.weekday()]) or ""))
+    if not b["snacks"]:
+        items = [x for x in items if x["label"].lower() == "oběd"] or items
+    out["items"] = items
+    if not items:
+        out["missing"] = "Na tento den jídelníček nic neuvádí"
+    return out
+
+
 def _text(b: dict) -> dict:
     lines = b["text"].split("\n")[:30]
     return {"lines": lines, "size": b["size"], "align": b["align"], "bold": b["bold"], "red": b["red"]}
@@ -853,6 +906,8 @@ def _build(raw: dict, layout: dict, device: dict, now: datetime, worst: bool = F
             vb.update(_template(raw, b, now))
         elif t == "value":
             vb.update(_value(raw, b))
+        elif t == "menu":
+            vb.update(_menu(raw, b, now))
         elif t == "agenda":
             vb.update(_events(raw, b, now, tz, inner_h - EVENTS_PAD, width - ll - 32))
         blocks.append(vb)

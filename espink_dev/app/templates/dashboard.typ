@@ -233,10 +233,9 @@
 }
 
 #let menu(b, cw, ch) = pad(x: 16pt, top: 8pt, {
-  line(26, grid(columns: (auto, 1fr, auto), column-gutter: 6pt, align: horizon,
+  line(26, grid(columns: (auto, 1fr), column-gutter: 6pt, align: horizon,
     icon("silverware-fork-knife", size: 22pt),
-    ell(upper("Školka · " + txt(b.day)), size: 17pt, weight: 800, tracking: 0.5pt),
-    text(size: 17pt, weight: 800, txt(b.when))))
+    ell(upper("Školka · " + txt(b.when)), size: 17pt, weight: 800, tracking: 0.5pt)))
   if has(b.missing) {
     pad(top: 10pt, text(font: COND, size: 19pt, weight: 600, txt(b.missing)))
   } else {

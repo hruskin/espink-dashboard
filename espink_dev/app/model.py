@@ -681,8 +681,8 @@ def _menu_text(s: str) -> list[dict]:
 def _menu(raw: dict, b: dict, now: datetime) -> dict:
     d = _menu_day(now, b["switch_hour"])
     today = now.date()
-    when = "dnes" if d == today else "zítra" if d == today + timedelta(days=1) else f"{d.day}. {d.month}."
-    out = {"day": DAYS[d.weekday()], "when": when, "items": [], "missing": None}
+    when = "dnes" if d == today else "zítra" if d == today + timedelta(days=1) else DAYS[d.weekday()]
+    out = {"when": when, "items": [], "missing": None}
     st = raw["states"].get(b["entity"]) if b["entity"] else None
     a = (st or {}).get("attributes") or {}
     try:
@@ -690,7 +690,7 @@ def _menu(raw: dict, b: dict, now: datetime) -> dict:
     except ValueError:
         start = None
     if not st or not a.get("je_aktualni") or start is None or not 0 <= (d - start).days < 5:
-        out["missing"] = f"Jídelníček na {'dnešek' if when == 'dnes' else 'zítřek' if when == 'zítra' else DAYS[d.weekday()]} zatím není k dispozici"
+        out["missing"] = f"Jídelníček na {'dnešek' if when == 'dnes' else 'zítřek' if when == 'zítra' else when} zatím není k dispozici"
         return out
     items = _menu_text(str(a.get(MENU_DAYS[d.weekday()]) or ""))
     if not b["snacks"]:

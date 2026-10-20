@@ -39,6 +39,8 @@ kolik řádků se vejde). Náhled vykresluje server stejně jako pro desku.
   Jídelníček, Patička (i s entitami), Hodnota entity (stav nebo atribut, ikona, červeně pod/nad
   mezí, desetinná místa), Text a Šablona (Jinja v sandboxu; `states()`,
   `state_attr()`, `is_state()`, `now`, filtr `|num(1)`).
+- Záhlaví ukazuje za měsícem **číslo týdne** („října · 43. týden“, když není místo,
+  „října · 43. t.“); jde vypnout. V Patičce je číslo týdne pro nová rozvržení vypnuté.
 - V Záhlaví jde vybrat **Výstrahy ČHMÚ** (`binary_sensor.…_vystrahy_chmu` z integrace
   ČHMÚ Meteogram). Platná výstraha, nebo výstraha začínající do 24 h, se ukáže červeně
   s ikonou v řádku upozornění, např. „Silný vítr · Bouřky, do zítra 6:00“, a má

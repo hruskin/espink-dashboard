@@ -651,6 +651,7 @@ function params(b) {
       el("div", { className: "grid2" }, entityField("Kalendář jmenin", b, "nameday_calendar", "calendar"), entityField("Státní svátky", b, "holiday_calendar", "calendar")),
       chk("Upozornění z červených kalendářů (dnes/zítra)", b, "alert"),
       entityField("Výstrahy ČHMÚ", b, "warnings", "binary_sensor", "…_vystrahy_chmu z integrace ČHMÚ Meteogram; platná výstraha má přednost před kalendáři"),
+      chk("Číslo týdne za měsícem", b, "week"),
       chk("Aktuální počasí vpravo", b, "show_weather"),
       ...(b.p.show_weather ? weatherFields(b) : [])];
     case "weather_now": return weatherFields(b);
@@ -705,7 +706,7 @@ function summary(b) {
 function summary1(b) {
   const p = b.p;
   switch (b.type) {
-    case "header": return [p.alert && "upozornění", p.warnings && "výstrahy", p.show_weather && "počasí"].filter(Boolean).join(" · ") || "datum";
+    case "header": return [p.week && "týden", p.alert && "upozornění", p.warnings && "výstrahy", p.show_weather && "počasí"].filter(Boolean).join(" · ") || "datum";
     case "weather_now": return entName(p.temperature || p.weather);
     case "departures": return entName(p.entity, / odjezdy$/i);
     case "agenda": return `${p.calendars.length} kalendářů · ${p.days} dní`;

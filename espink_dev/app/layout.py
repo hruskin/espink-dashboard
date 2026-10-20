@@ -48,6 +48,7 @@ BLOCK_TYPES: dict[str, dict] = {
             "alert": (True, "bool"),          # červené kalendáře z agendy: dnes/zítra
             "warnings": ("", "entity"),       # výstrahy ČHMÚ (binary_sensor s atributem alerts) – přednost
             "show_weather": (True, "bool"),   # aktuální počasí vpravo v záhlaví
+            "week": (True, "bool"),           # číslo týdne za měsícem („října · 43. týden“)
             **WEATHER_PARAMS,
         },
     },
@@ -92,7 +93,7 @@ BLOCK_TYPES: dict[str, dict] = {
         "params": {
             "updated": (True, "bool"),
             "next": (True, "bool"),
-            "week": (True, "bool"),
+            "week": (False, "bool"),        # číslo týdne je v záhlaví
             "battery": (True, "bool"),
             "items": ([], "items"),         # libovolné entity: [{entity, attribute, icon, label, side, decimals}]
         },

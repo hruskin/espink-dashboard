@@ -664,6 +664,7 @@ function params(b) {
     case "forecast": return [el("div", { className: "grid2" }, entityField("Počasí", b, "weather", "weather"), numField("Počet dní", b, "days"))];
     case "menu": return [
       entityField("Jídelníček", b, "entity", "sensor", "senzor s atributy pondeli…patek, obdobi_od a je_aktualni"),
+      textField("Nadpis", b, "title", "např. Jídelníček, Oběd ve školce"),
       el("div", { className: "grid2" }, numField("Další den od", b, "switch_hour", "h")),
       chk("Přesnídávka a svačina (jinak jen oběd)", b, "snacks"),
       el("div", { className: "help", textContent: "Neaktuální jídelníček (jiný týden) se nezobrazí – blok napíše, že není k dispozici." })];

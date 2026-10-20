@@ -72,9 +72,10 @@ BLOCK_TYPES: dict[str, dict] = {
         },
     },
     "menu": {
-        "title": "Jídelníček", "size": (12, 148), "min": (6, 60),
+        "title": "Jídelníček", "size": (12, 168), "min": (6, 60),
         "params": {
             "entity": ("", "entity"),           # senzor s atributy pondeli…patek, obdobi_od, je_aktualni
+            "title": ("Jídelníček", "text"),    # nadpis před „· dnes / zítra / den“
             "switch_hour": (14, ("int", 0, 23)),  # od této hodiny se ukazuje další den
             "snacks": (True, "bool"),           # přesnídávka a svačina (jinak jen oběd)
         },

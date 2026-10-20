@@ -43,8 +43,8 @@ kolik řádků se vejde). Náhled vykresluje server stejně jako pro desku.
   „🥐 **Přesnídávka:** …\n\n🍲 **Oběd:** polévka\nhlavní jídlo …“), `obdobi_od`
   (pondělí týdne) a `je_aktualni`. Do zvolené hodiny (výchozí 14) ukazuje dnešek,
   potom další den; o víkendu pondělí. Přesnídávka a svačina jdou vypnout. Když je
-  jídelníček neaktuální nebo z jiného týdne, blok napíše, že na ten den není
-  k dispozici.
+  jídelníček neaktuální nebo z jiného týdne, blok napíše „Zatím není k dispozici“.
+  Nadpis bloku („Jídelníček“) jde přepsat.
 - U kalendáře v Událostech jde zapnout **Celý text** – názvy se nezkracují, ale
   zalomí (nejvýš 8 řádků).
 - Rozvržení může být víc (nové prázdné nebo kopie, přejmenovat, smazat), dále export

@@ -232,22 +232,92 @@
   })
 }
 
+// ── Jídelníček: zkracování po slovech/položkách a zalamování s rozpočtem řádků ──
+// výpustka na hranici položky („Veka, máslo …“) nebo slova („masem a…“), nikdy uprostřed slova
+#let cut(s, w, st) = {
+  let t(x) = text(..st, x)
+  let fits(x) = measure(t(x)).width <= w
+  if fits(s) { return s }
+  let parts = s.split(", ")
+  for k in range(parts.len() - 1, 0, step: -1) {
+    let c = parts.slice(0, k).join(", ") + " …"
+    if fits(c) { if measure(t(c)).width >= 0.55 * w { return c } else { break } }
+  }
+  let ws = s.split(" ")
+  // před výpustkou nenechat předložku/spojku („masem a…“ -> „masem…“)
+  let weak = ("a", "i", "s", "se", "z", "ze", "v", "ve", "na", "k", "ke", "o", "do", "s.", "+")
+  for k in range(ws.len() - 1, 0, step: -1) {
+    let ww = ws.slice(0, k)
+    while ww.len() > 1 and lower(ww.last()) in weak { ww = ww.slice(0, -1) }
+    let c = ww.join(" ").trim(",", at: end).trim() + "…"
+    if fits(c) { return c }
+  }
+  "…"
+}
+// rozdělí text na řádky (po slovech); víc než n => poslední řádek zkrácený
+#let wrap(s, w, n, st) = {
+  let t(x) = text(..st, x)
+  let fits(x) = measure(t(x)).width <= w
+  // jednopísmenné předložky a spojky nezůstanou na konci řádku (vlnka)
+  let ws = ()
+  for x in txt(s).split(" ") {
+    if ws.len() > 0 and lower(ws.last()) in ("a", "i", "s", "v", "k", "z", "o", "u") { ws.at(-1) = ws.last() + "\u{a0}" + x }
+    else { ws.push(x) }
+  }
+  let lines = ()
+  let cur = ""
+  for x in ws {
+    let c = if cur == "" { x } else { cur + " " + x }
+    if fits(c) or cur == "" { cur = c } else { lines.push(cur); cur = x }
+  }
+  if cur != "" { lines.push(cur) }
+  if lines.len() <= n { return lines }
+  let head = lines.slice(0, n - 1)
+  head + (cut(lines.slice(n - 1).join(" "), w, st),)
+}
+#let needed(s, w, st) = wrap(s, w, 99, st).len()
+
+// rows: pole (text, ikona, styl, výška řádku, priorita zalomení, max řádků)
+#let menu-rows(rows, avail, w) = context {
+  let n = rows.map(r => 1)
+  let used = rows.map(r => r.h).sum(default: 0pt)
+  let order = range(rows.len()).sorted(key: i => rows.at(i).prio)
+  for i in order {
+    let r = rows.at(i)
+    let need = calc.min(r.maxl, needed(r.s, w, r.st))
+    while n.at(i) < need and used + r.h2 <= avail { n.at(i) += 1; used += r.h2 }
+  }
+  for (i, r) in rows.enumerate() {
+    for (j, l) in wrap(r.s, w, n.at(i), r.st).enumerate() {
+      let h = if j == 0 { r.h } else { r.h2 }
+      box(width: 100%, height: h, clip: true, grid(columns: (28pt, 1fr), column-gutter: 4pt, align: horizon,
+        if j == 0 { r.ic } else { [] }, text(..r.st, l)))
+    }
+  }
+}
+
+#let menu-head(b) = line(26, grid(columns: (1fr, auto), column-gutter: 8pt, align: horizon,
+    ell(upper(txt(b.title)), size: 17pt, weight: 800, tracking: 0.5pt),
+    text(size: 17pt, weight: 800, tracking: 0.5pt, upper(txt(b.when)))))
+
 #let menu(b, cw, ch) = pad(x: 16pt, top: 8pt, {
-  line(26, grid(columns: (auto, 1fr), column-gutter: 6pt, align: horizon,
-    icon("silverware-fork-knife", size: 22pt),
-    ell(upper("Školka · " + txt(b.when)), size: 17pt, weight: 800, tracking: 0.5pt)))
-  if has(b.missing) {
-    pad(top: 10pt, text(font: COND, size: 19pt, weight: 600, txt(b.missing)))
-  } else {
+  menu-head(b)
+  if has(b.missing) { pad(top: 10pt, text(font: COND, size: 22pt, weight: 600, txt(b.missing))) } else {
     v(2pt)
+    let w = pt(cw) - 32pt - 32pt
+    let rows = ()
     for x in b.items {
       let lunch = lower(txt(x.label)) == "oběd"
       for (i, d) in x.lines.enumerate() {
-        line(26, grid(columns: (26pt, 1fr), column-gutter: 4pt, align: horizon,
-          if i == 0 { icon(x.icon, size: 20pt) } else { [] },
-          ell(d, font: COND, size: 19pt, weight: if lunch and i > 0 { 700 } else { 500 })))
+        rows.push(if lunch {
+          (s: d, ic: if i == 0 { icon(x.icon, size: 23pt) } else { [] }, h: 29pt, h2: 24pt, prio: if i > 0 { 0 } else { 1 }, maxl: 2,
+           st: (font: COND, size: 23pt, weight: if i > 0 { 700 } else { 500 }))
+        } else {
+          (s: d, ic: icon(x.icon, size: 19pt), h: 23pt, h2: 21pt, prio: 5, maxl: 2, st: (font: COND, size: 19pt, weight: 500))
+        })
       }
     }
+    menu-rows(rows, pt(ch) - 36pt, w)
   }
 })
 

@@ -42,6 +42,16 @@ def raw(needs: dict, now: datetime) -> dict:
         "sensor.odjezdova_tabule_krizkovy_ujezdec_vyluky": {
             "state": "1", "attributes": {"infotexts": [{"text": "Omezení provozu linky 335"}]}},
     }
+    monday = today - timedelta(days=today.weekday())
+    menu = {
+        "pondeli": "🥐 **Přesnídávka:** Cornflakes, mléko\n\n🍲 **Oběd:** Kmínová polévka s vejcem\nHovězí maso vařené, křenová omáčka, houskový knedlík\n\n🍎 **Svačina:** Rohlík, pomazánka tvarohová s bryndzou, zelenina",
+        "utery": "🥐 **Přesnídávka:** Bageta světlá, Lučina Skyr, ovoce\n\n🍲 **Oběd:** Hráškový krém\nKuřecí srbská směs, dušená rýže\n\n🍎 **Svačina:** Chléb, pomazánka tuňáková, zelenina",
+        "streda": "🥐 **Přesnídávka:** Veka, pomazánkové máslo, mozzarela, cherry rajčátka\n\n🍲 **Oběd:** Kuřecí vývar se zeleninou , masem a celestýnskými nudlemi\nVepřové na kmíně, bramborové motánky\n\n🍎 **Svačina:** Houska, sýr Kiri, zelenina",
+        "ctvrtek": "🥐 **Přesnídávka:** Chlébíček kukuřičný, tyčinky sýrové Sýráci, ovoce\n\n🍲 **Oběd:** Kulajda\nSmažené rybí prsty, vařené brambory s petrželkou\n\n🍎 **Svačina:** Chléb, pomazánka brokolicová, zelenina",
+        "patek": "🥐 **Přesnídávka:** Chléb slunečnicový s máslem a strouhaným sýrem, mléko\n\n🍲 **Oběd:** Hovězí vývar se zeleninou, masem a těstovinou\nVařená šunka, čočka na kyselo, okurka\n\n🍎 **Svačina:** Banketka uzlík světlý, jogurt Tvaroháček",
+    }
+    states["sensor.jidelnicek_skolka"] = {"state": "Aktuální", "attributes": {
+        "obdobi_od": monday.isoformat(), "je_aktualni": True, **menu}}
     for cal, icon in [("calendar.rodina", "mdi:home-heart"), ("calendar.skolka", "mdi:school"),
                       ("calendar.plavani", "mdi:swim"), ("calendar.narozeniny_2", "mdi:cake-variant"),
                       ("calendar.svoz_popelnice", "mdi:trash-can"), ("calendar.martin_hruska", "mdi:account")]:

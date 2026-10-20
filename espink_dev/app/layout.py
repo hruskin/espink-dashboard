@@ -71,6 +71,14 @@ BLOCK_TYPES: dict[str, dict] = {
             "days": (7, ("int", 1, 31)),
         },
     },
+    "menu": {
+        "title": "Jídelníček", "size": (12, 148), "min": (6, 60),
+        "params": {
+            "entity": ("", "entity"),           # senzor s atributy pondeli…patek, obdobi_od, je_aktualni
+            "switch_hour": (14, ("int", 0, 23)),  # od této hodiny se ukazuje další den
+            "snacks": (True, "bool"),           # přesnídávka a svačina (jinak jen oběd)
+        },
+    },
     "forecast": {
         "title": "Předpověď", "size": (12, 104), "min": (3, 80),
         "params": {
@@ -443,6 +451,8 @@ def needs(layout: dict) -> dict:
             add(cals, b["holiday_calendar"])
         elif t == "forecast":
             add(forecasts, b["weather"])
+        elif t == "menu":
+            add(states, b["entity"])
         elif t == "value":
             add(states, b["entity"])
         elif t == "footer":

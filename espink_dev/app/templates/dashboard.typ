@@ -232,6 +232,26 @@
   })
 }
 
+#let menu(b, cw, ch) = pad(x: 16pt, top: 8pt, {
+  line(26, grid(columns: (auto, 1fr, auto), column-gutter: 6pt, align: horizon,
+    icon("silverware-fork-knife", size: 22pt),
+    ell(upper("Školka · " + txt(b.day)), size: 17pt, weight: 800, tracking: 0.5pt),
+    text(size: 17pt, weight: 800, txt(b.when))))
+  if has(b.missing) {
+    pad(top: 10pt, text(font: COND, size: 19pt, weight: 600, txt(b.missing)))
+  } else {
+    v(2pt)
+    for x in b.items {
+      let lunch = lower(txt(x.label)) == "oběd"
+      for (i, d) in x.lines.enumerate() {
+        line(26, grid(columns: (26pt, 1fr), column-gutter: 4pt, align: horizon,
+          if i == 0 { icon(x.icon, size: 20pt) } else { [] },
+          ell(d, font: COND, size: 19pt, weight: if lunch and i > 0 { 700 } else { 500 })))
+      }
+    }
+  }
+})
+
 #let forecast(b, cw) = {
   let narrow = cw <= 330
   if b.days.len() > 0 {
@@ -364,6 +384,7 @@
       else if b.type == "value" { value(b, cw, ch) }
       else if b.type == "text" { text-block(b, cw) }
       else if b.type == "template" { template-block(b) }
+      else if b.type == "menu" { menu(b, cw, ch) }
     }))
   }))
 }

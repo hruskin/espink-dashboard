@@ -35,7 +35,7 @@ _MDI_RE = re.compile(r'\.mdi-([a-z0-9-]+)::?before\s*\{\s*content:\s*"\\([0-9A-F
 _mdi_codes: dict[str, int] = {}
 # ikony použité přímo v šabloně (ostatní – počasí, kalendáře, entity – jsou v modelu)
 TYPST_ICONS = ("bus", "alert", "update", "timer-sand", "calendar-week", "water-percent", "weather-pouring",
-               "home-thermometer-outline", "gauge", "flower-tulip-outline")
+               "home-thermometer-outline", "gauge", "flower-tulip-outline", "silverware-fork-knife")
 
 
 def mdi_codes() -> dict[str, int]:

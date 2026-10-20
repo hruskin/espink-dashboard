@@ -237,15 +237,15 @@
     icon("silverware-fork-knife", size: 22pt),
     ell(upper("Školka · " + txt(b.when)), size: 17pt, weight: 800, tracking: 0.5pt)))
   if has(b.missing) {
-    pad(top: 10pt, text(font: COND, size: 19pt, weight: 600, txt(b.missing)))
+    pad(top: 10pt, text(font: COND, size: 22pt, weight: 600, txt(b.missing)))
   } else {
     v(2pt)
     for x in b.items {
       let lunch = lower(txt(x.label)) == "oběd"
       for (i, d) in x.lines.enumerate() {
-        line(26, grid(columns: (26pt, 1fr), column-gutter: 4pt, align: horizon,
-          if i == 0 { icon(x.icon, size: 20pt) } else { [] },
-          ell(d, font: COND, size: 19pt, weight: if lunch and i > 0 { 700 } else { 500 })))
+        line(31, grid(columns: (28pt, 1fr), column-gutter: 4pt, align: horizon,
+          if i == 0 { icon(x.icon, size: 23pt) } else { [] },
+          ell(d, font: COND, size: 23pt, weight: if lunch and i > 0 { 700 } else { 500 })))
       }
     }
   }

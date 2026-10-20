@@ -43,7 +43,7 @@ load_container_env()
 INGRESS_IP = "172.30.32.2"
 DEV = os.environ.get("DEV") == "1"
 MOCK = os.environ.get("MOCK") == "1"
-PREVIEW_TTL = 30   # s – jak dlouho editor používá stažená data z HA pro náhled
+PREVIEW_TTL = 60   # s – jak dlouho editor používá stažená data z HA pro náhled (= výchozí render_interval)
 
 
 def after(now: datetime, seconds: int) -> str:
@@ -278,7 +278,25 @@ class Server:
 
     async def fetch_raw(self, layout: dict, now: datetime) -> dict:
         needs = layout_mod.needs(layout)
-        return mock.raw(needs, now) if MOCK else await ha_mod.collect(self.ha, needs, now)
+        if MOCK:
+            return mock.raw(needs, now)
+        raw = await ha_mod.collect(self.ha, needs, now)
+        # data pro desky předvyplní mezipaměť editoru – i první náhled je pak bez stahování
+        # (ne obraz „Na noc“ sestavený k ránu: kalendáře by byly od jiného dne)
+        if abs((now - now_local()).total_seconds()) < 120:
+            self.remember_raw(needs, raw, now)
+        return raw
+
+    PREVIEW_KINDS = {"states": "states", "calendars": "events", "forecasts": "forecasts"}
+
+    def remember_raw(self, needs: dict, raw: dict, now: datetime) -> None:
+        c, t = self.preview_cache, time.time()
+        if c.get("day") != now.date():   # kalendáře se stahují od začátku dne
+            c.clear()
+            c["day"] = now.date()
+        for k, rk in self.PREVIEW_KINDS.items():
+            for e in needs[k]:
+                c[(k, e)] = (t, raw[rk].get(e))
 
     async def cached(self, key, fetch):
         """Mezipaměť editoru (PREVIEW_TTL s): náhled po každé úpravě nestahuje data znovu."""
@@ -296,16 +314,11 @@ class Server:
         if MOCK:
             return mock.raw(needs, now)
         c, t = self.preview_cache, time.time()
-        if c.get("day") != now.date():   # kalendáře se stahují od začátku dne
+        if c.get("day") != now.date():
             c.clear()
-            c["day"] = now.date()
-        kinds = {"states": "states", "calendars": "events", "forecasts": "forecasts"}
-        missing = {k: [e for e in needs[k] if not ((k, e) in c and t - c[(k, e)][0] < PREVIEW_TTL)] for k in kinds}
+        missing = {k: [e for e in needs[k] if not ((k, e) in c and t - c[(k, e)][0] < PREVIEW_TTL)] for k in self.PREVIEW_KINDS}
         if any(missing.values()):
-            raw = await ha_mod.collect(self.ha, missing, now)
-            for k, rk in kinds.items():
-                for e in missing[k]:
-                    c[(k, e)] = (t, raw[rk].get(e))
+            self.remember_raw(missing, await ha_mod.collect(self.ha, missing, now), now)
         get = lambda k: {e: c[(k, e)][1] for e in needs[k] if c[(k, e)][1] is not None}  # noqa: E731
         return {"states": get("states"), "events": get("calendars"), "forecasts": get("forecasts")}
 

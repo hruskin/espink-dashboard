@@ -839,6 +839,7 @@ def _header(raw: dict, b: dict, layout: dict, now: datetime, tz) -> dict:
         "day": now.day,
         "weekday": DAYS[now.weekday()],
         "month": MONTHS_GEN[now.month - 1],
+        "week": now.isocalendar().week if b.get("week", True) else None,
         "nameday": _special_days(raw, b.get("nameday_calendar"), tz).get(today),
         "holiday": holiday,
         "alert": None,

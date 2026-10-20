@@ -122,7 +122,19 @@
     box(height: 29.4pt, align(horizon, text(font: DISP, size: 28pt, weight: 800, fill: if hol { RED } else { black }, txt(b.weekday))))
     linebreak()
     v(3pt)
-    text(size: 18pt, weight: 600, txt(b.month))
+    if has(b.week) {
+      // „října · 43. týden“; když se nevejde, „října · 43. t.“, pak úzké mezery a menší písmo
+      layout(size => {
+        let m = txt(b.month)
+        let w = str(b.week)
+        let tries = (m + " · " + w + ". týden", m + " · " + w + ". t.", m + "\u{2009}·\u{2009}" + w + ".\u{2009}t.")
+        let fits(x, fs) = measure(text(size: fs, weight: 600, nb(x))).width <= size.width
+        let (s, fs) = (tries.last(), 13pt)
+        for x in tries { if fits(x, 18pt) { (s, fs) = (x, 18pt); break } }
+        if fs == 13pt { for f in (17, 16, 15, 14) { if fits(tries.last(), f * 1pt) { fs = f * 1pt; break } } }
+        text(size: fs, weight: 600, nb(s))
+      })
+    } else { text(size: 18pt, weight: 600, txt(b.month)) }
     if has(b.nameday) {
       v(8pt)
       grid(columns: (auto, 1fr), column-gutter: 1pt, align: horizon, icon("flower-tulip-outline", size: 20pt),

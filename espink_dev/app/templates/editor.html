@@ -421,7 +421,7 @@ function commit(merge) {             // merge: rychle po sobě jdoucí kroky (š
   if (merge && now - lastMerge < 600 && hpos > 0) hist[hpos] = s;
   else { hist = hist.slice(0, hpos + 1); hist.push(s); if (hist.length > 50) hist.shift(); hpos = hist.length - 1; }
   lastMerge = merge ? now : 0;
-  refresh();
+  refresh(false, merge);
 }
 function travel(d) { if (hpos + d < 0 || hpos + d >= hist.length) return; hpos += d; blocks = JSON.parse(hist[hpos]); refresh(); }
 
@@ -912,7 +912,7 @@ function scheduleRender(now) {
   $("#screen").classList.add("busy");
   $("#pstat").textContent = "Vykresluji…";
   if (innerWidth < 1000 && document.body.dataset.pane === "blocks") $("#segPrev").classList.add("dot");
-  timer = setTimeout(draw, now ? 0 : 300);
+  timer = setTimeout(draw, now ? 0 : 300);   // psaní a šipky: počkat, až se změny usadí
 }
 async function draw() {
   if (renderStatus()) {             // překryv – server by návrh stejně odmítl
@@ -1163,7 +1163,9 @@ $("#refresh").onclick = () => scheduleRender(true);
 $("#perr").onclick = () => scheduleRender(true);
 
 // ───────── Stav, uložení ─────────
-function refresh(soft) {
+// soft: jen průběžná změna při psaní; slow: opakované kroky (šipky) – náhled s prodlevou,
+// jinak (klik, výběr, puštění bloku, Zpět…) se vykreslí hned
+function refresh(soft, slow) {
   renderStatus();
   if (!soft) renderList();
   drawBoxes(); updateSelbar();
@@ -1177,7 +1179,7 @@ function refresh(soft) {
   if (!dirty) typing = false;
   $("#undo").disabled = hpos === 0; $("#redo").disabled = hpos === hist.length - 1;
   labelButtons();
-  scheduleRender();
+  scheduleRender(!soft && !slow);
 }
 // ikonová tlačítka: aria-label z title (čtečky, dotyk)
 const labelButtons = () => document.querySelectorAll("button[title]:not([aria-label])").forEach(b => b.setAttribute("aria-label", b.title));

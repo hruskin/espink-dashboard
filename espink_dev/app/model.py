@@ -707,7 +707,7 @@ def _bedtime(raw: dict, b: dict, now: datetime) -> dict:
     a = (st or {}).get("attributes") or {}
     episode = str((st or {}).get("state") or "")
     series = str(a.get("serial") or a.get("series") or "")
-    out = {"title": b.get("title") or "Večerníček", "when": None, "series": series, "episode": episode, "missing": None}
+    out = {"icon": str(b.get("icon") or "mdi:television-classic").removeprefix("mdi:"), "when": None, "time": None, "series": series, "episode": episode, "missing": None}
     if not st or episode in ("", "unknown", "unavailable"):
         out.update(series="", episode="", missing="Zatím není k dispozici")
         return out
@@ -718,7 +718,8 @@ def _bedtime(raw: dict, b: dict, now: datetime) -> dict:
             d = None
         today = now.date()
         day = None if d is None else "dnes" if d == today else "zítra" if d == today + timedelta(days=1) else DAYS[d.weekday()]
-        out["when"] = " ".join(x for x in (day, str(a.get("cas") or "")) if x) or None
+        out["time"] = str(a.get("cas") or "") or None
+        out["when"] = " ".join(x for x in (day, out["time"]) if x) or None
     return out
 
 

@@ -333,32 +333,25 @@
   }
 })
 
-#let bedtime(b, cw, ch) = pad(x: 16pt, top: 8pt, {
-  line(26, grid(columns: (1fr, auto), column-gutter: 8pt, align: horizon,
-    ell(upper(txt(b.title)), size: 17pt, weight: 800, tracking: 0.5pt),
-    if has(b.when) { text(size: 17pt, weight: 800, tracking: 0.5pt, upper(txt(b.when))) }))
-  if has(b.missing) { pad(top: 4pt, text(font: COND, size: 22pt, weight: 600, txt(b.missing))) } else {
-    // „Seriál: Epizoda“ – seriál tučně; delší text se zalomí, kolik řádků se vejde
-    let n = calc.max(1, calc.floor((ch - 36) / 29))
-    pad(top: 2pt, context {
-      let st = (font: COND, size: 23pt, weight: 500)
-      let w = pt(cw) - 32pt
+#let bedtime(b, cw, ch) = pad(x: 16pt, box(height: pt(ch), align(horizon, {
+  // jeden řádek: ikona · „Seriál: Epizoda“ (seriál tučně, zkrácení po slovech) · vpravo „DNES 18:45“
+  let st = (font: COND, size: 23pt, weight: 500)
+  // v úzkém bloku jen čas (jinak by na název nezbylo místo)
+  let w-txt = if cw < 330 { b.time } else { b.when }
+  let when = if has(w-txt) { text(size: 17pt, weight: 800, tracking: 0.5pt, upper(nb(w-txt))) }
+  grid(columns: (auto, 1fr, auto), column-gutter: 8pt, align: horizon,
+    icon(b.icon, size: 24pt),
+    box(height: 31pt, clip: true, align(horizon, layout(size => {
+      if has(b.missing) { return text(..st, weight: 600, txt(b.missing)) }
+      let w = size.width
       let head = if has(b.series) { txt(b.series) + ": " } else { "" }
-      // seriál je tučně (širší) – zalamovat s rezervou o rozdíl šířky
-      let extra = measure(text(..st, weight: 700, head)).width - measure(text(..st, head)).width
-      let lines = wrap(head + txt(b.episode), w - extra, n, st)
-      let hc = head.clusters().len()
-      for (i, l) in lines.enumerate() {
-        // wrap() mohl dát za předložku nezlomitelnou mezeru – porovnávat bez ní
-        let lc = l.clusters()
-        let bold = i == 0 and hc > 0 and lc.len() >= hc and lc.slice(0, hc).join().replace("\u{a0}", " ") == head
-        box(width: 100%, height: if i == 0 { 29pt } else { 26pt }, clip: true, align(horizon,
-          if bold { text(..st, weight: 700, lc.slice(0, hc).join()); text(..st, lc.slice(hc).join()) }
-          else { text(..st, l) }))
-      }
-    })
-  }
-})
+      let hw = measure(text(..st, weight: 800, head)).width
+      if head == "" or hw > 0.85 * w { return text(..st, cut(head + txt(b.episode), w, st)) }
+      text(..st, weight: 800, head)
+      text(..st, cut(txt(b.episode), w - hw, st))
+    }))),
+    when)
+})))
 
 #let forecast(b, cw) = {
   let narrow = cw <= 330

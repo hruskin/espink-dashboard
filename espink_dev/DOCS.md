@@ -52,8 +52,9 @@ kolik řádků se vejde). Náhled vykresluje server stejně jako pro desku.
   jídelníček neaktuální nebo z jiného týdne, blok napíše „Zatím není k dispozici“.
   Nadpis bloku („Jídelníček“) jde přepsat.
 - **Večerníček** bere senzor z integrace ha-vecernicek (stav = název epizody, atributy
-  `serial`, `datum`, `cas`) a ukáže „Seriál: Epizoda“, vpravo kdy se vysílá
-  („dnes 18:45“). Dlouhý název se zalomí, kolik řádků výška bloku dovolí.
+  `serial`, `datum`, `cas`) a ukáže v jednom řádku ikonu (výchozí
+  `mdi:television-classic`), „Seriál: Epizoda“ a vpravo kdy se vysílá („dnes 18:45“;
+  v úzkém bloku jen čas). Dlouhý název se zkrátí po celých slovech.
 - U kalendáře v Událostech jde zapnout **Celý text** – názvy se nezkracují, ale
   zalomí (nejvýš 8 řádků).
 - Rozvržení může být víc (nové prázdné nebo kopie, přejmenovat, smazat), dále export

@@ -82,10 +82,10 @@ BLOCK_TYPES: dict[str, dict] = {
         },
     },
     "bedtime": {
-        "title": "Večerníček", "size": (12, 76), "min": (4, 40),
+        "title": "Večerníček", "size": (12, 40), "min": (4, 32),
         "params": {
             "entity": ("", "entity"),           # stav = epizoda, atributy serial, datum, cas (ha-vecernicek)
-            "title": ("Večerníček", "text"),
+            "icon": ("mdi:television-classic", "text"),
             "show_when": (True, "bool"),        # vpravo „dnes 18:45“
         },
     },

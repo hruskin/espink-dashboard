@@ -701,6 +701,27 @@ def _menu(raw: dict, b: dict, now: datetime) -> dict:
     return out
 
 
+def _bedtime(raw: dict, b: dict, now: datetime) -> dict:
+    """Večerníček: „Seriál: Epizoda“, vpravo kdy („dnes 18:45“)."""
+    st = raw["states"].get(b["entity"]) if b["entity"] else None
+    a = (st or {}).get("attributes") or {}
+    episode = str((st or {}).get("state") or "")
+    series = str(a.get("serial") or a.get("series") or "")
+    out = {"title": b.get("title") or "Večerníček", "when": None, "series": series, "episode": episode, "missing": None}
+    if not st or episode in ("", "unknown", "unavailable"):
+        out.update(series="", episode="", missing="Zatím není k dispozici")
+        return out
+    if b["show_when"]:
+        try:
+            d = date.fromisoformat(str(a.get("datum") or ""))
+        except ValueError:
+            d = None
+        today = now.date()
+        day = None if d is None else "dnes" if d == today else "zítra" if d == today + timedelta(days=1) else DAYS[d.weekday()]
+        out["when"] = " ".join(x for x in (day, str(a.get("cas") or "")) if x) or None
+    return out
+
+
 def _text(b: dict) -> dict:
     lines = b["text"].split("\n")[:30]
     return {"lines": lines, "size": b["size"], "align": b["align"], "bold": b["bold"], "red": b["red"]}
@@ -909,6 +930,8 @@ def _build(raw: dict, layout: dict, device: dict, now: datetime, worst: bool = F
             vb.update(_value(raw, b))
         elif t == "menu":
             vb.update(_menu(raw, b, now))
+        elif t == "bedtime":
+            vb.update(_bedtime(raw, b, now))
         elif t == "agenda":
             vb.update(_events(raw, b, now, tz, inner_h - EVENTS_PAD, width - ll - 32))
         blocks.append(vb)

@@ -347,7 +347,7 @@
   let w-txt = if cw < 330 { b.time } else { b.when }
   let when = if has(w-txt) { text(size: 17pt, weight: 800, tracking: 0.5pt, upper(nb(w-txt))) }
   grid(columns: (auto, 1fr, auto), column-gutter: 8pt, align: horizon,
-    icon(b.icon, size: 26pt),
+    icon(b.icon, size: 28pt),
     box(height: 31pt, clip: true, align(horizon, layout(size => {
       if has(b.missing) { return text(..st, weight: 600, txt(b.missing)) }
       let w = size.width

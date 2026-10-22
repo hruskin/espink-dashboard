@@ -53,8 +53,8 @@ kolik řádků se vejde). Náhled vykresluje server stejně jako pro desku.
   Nadpis bloku („Jídelníček“) jde přepsat.
 - **Večerníček** bere senzor z integrace ha-vecernicek (stav = název epizody, atributy
   `serial`, `datum`, `cas`) a ukáže v jednom řádku ikonu (výchozí
-  `espink:paper-hat` – papírová čepice; další varianty `espink:paper-hat-3` a
-  `espink:paper-hat-outline` jsou ve výběru ikon nahoře a jdou použít v kterémkoli bloku), „Seriál: Epizoda“ a vpravo kdy se vysílá („dnes 18:45“;
+  `espink:paper-hat` – papírová čepice; další varianty `espink:paper-hat-3`,
+  `espink:paper-hat-outline`, nakloněné `espink:paper-hat-tilt-left` a `-tilt-right` jsou ve výběru ikon nahoře a jdou použít v kterémkoli bloku), „Seriál: Epizoda“ a vpravo kdy se vysílá („dnes 18:45“;
   v úzkém bloku jen čas). Dlouhý název se zkrátí po celých slovech.
 - U kalendáře v Událostech jde zapnout **Celý text** – názvy se nezkracují, ale
   zalomí (nejvýš 8 řádků).

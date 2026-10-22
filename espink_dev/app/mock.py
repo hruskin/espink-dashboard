@@ -50,6 +50,8 @@ def raw(needs: dict, now: datetime) -> dict:
         "ctvrtek": "🥐 **Přesnídávka:** Chlébíček kukuřičný, tyčinky sýrové Sýráci, ovoce\n\n🍲 **Oběd:** Kulajda\nSmažené rybí prsty, vařené brambory s petrželkou\n\n🍎 **Svačina:** Chléb, pomazánka brokolicová, zelenina",
         "patek": "🥐 **Přesnídávka:** Chléb slunečnicový s máslem a strouhaným sýrem, mléko\n\n🍲 **Oběd:** Hovězí vývar se zeleninou, masem a těstovinou\nVařená šunka, čočka na kyselo, okurka\n\n🍎 **Svačina:** Banketka uzlík světlý, jogurt Tvaroháček",
     }
+    states["sensor.vecernicek"] = {"state": "Ludvík a Eda", "attributes": {
+        "serial": "Krysáci", "datum": today.isoformat(), "cas": "18:45"}}
     states["sensor.jidelnicek_skolka"] = {"state": "Aktuální", "attributes": {
         "obdobi_od": monday.isoformat(), "je_aktualni": True, **menu}}
     for cal, icon in [("calendar.rodina", "mdi:home-heart"), ("calendar.skolka", "mdi:school"),

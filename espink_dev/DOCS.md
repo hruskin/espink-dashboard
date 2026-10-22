@@ -36,7 +36,7 @@ kolik řádků se vejde). Náhled vykresluje server stejně jako pro desku.
 - Klávesnice v náhledu: šipky posouvají vybraný blok, Shift+šipky mění velikost,
   Enter otevře nastavení, Delete smaže, Esc zruší výběr.
 - Bloky: Záhlaví (s počasím nebo bez), Počasí teď, Odjezdy, Události, Předpověď,
-  Jídelníček, Patička (i s entitami), Hodnota entity (stav nebo atribut, ikona, červeně pod/nad
+  Jídelníček, Večerníček, Patička (i s entitami), Hodnota entity (stav nebo atribut, ikona, červeně pod/nad
   mezí, desetinná místa), Text a Šablona (Jinja v sandboxu; `states()`,
   `state_attr()`, `is_state()`, `now`, filtr `|num(1)`).
 - Záhlaví ukazuje za měsícem **číslo týdne** („října · 43. týden“, když není místo,
@@ -51,6 +51,9 @@ kolik řádků se vejde). Náhled vykresluje server stejně jako pro desku.
   potom další den; o víkendu pondělí. Přesnídávka a svačina jdou vypnout. Když je
   jídelníček neaktuální nebo z jiného týdne, blok napíše „Zatím není k dispozici“.
   Nadpis bloku („Jídelníček“) jde přepsat.
+- **Večerníček** bere senzor z integrace ha-vecernicek (stav = název epizody, atributy
+  `serial`, `datum`, `cas`) a ukáže „Seriál: Epizoda“, vpravo kdy se vysílá
+  („dnes 18:45“). Dlouhý název se zalomí, kolik řádků výška bloku dovolí.
 - U kalendáře v Událostech jde zapnout **Celý text** – názvy se nezkracují, ale
   zalomí (nejvýš 8 řádků).
 - Rozvržení může být víc (nové prázdné nebo kopie, přejmenovat, smazat), dále export

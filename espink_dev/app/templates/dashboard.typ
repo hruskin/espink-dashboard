@@ -29,16 +29,11 @@
 // pravdivost jako v Jinja/Pythonu: none, "", false, 0 a prázdný seznam = nic
 #let has(x) = not (x == none or x == "" or x == false or x == 0 or x == ())
 
-// vlastní ikony (SVG 24×24, kreslené pro tenhle displej): v konfiguraci „espink:název“
-#let CUSTOM = (
-  // papírová čepice z novin (Večerníček)
-  "paper-hat": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill-rule='evenodd' d='M12 1.5 21.5 15.5h-19zM10 8h4v1.4h-4zm-2 3h8v1.4H8z'/><path fill-rule='evenodd' d='M1 16.2h22v5.6H1zm2 2v1.6h18v-1.6z'/></svg>",
-)
-
 // ikona Material Design Icons (nebo vlastní „espink:…“); neznámý název = nic
 #let icon(name, size: 20pt, fill: auto) = {
   if has(name) and str(name).starts-with("espink:") {
-    let svg = CUSTOM.at(str(name).slice(7), default: none)
+    // vlastní ikony (SVG z icons_custom.py) – v konfiguraci „espink:název“
+    let svg = data.custom_icons.at(str(name).slice(7), default: none)
     if svg == none { return none }
     let svg = if fill == auto { svg } else { svg.replace("<svg ", "<svg fill='" + fill.to-hex() + "' ") }
     return box(height: size, image.decode(svg, format: "svg", width: size, height: size))

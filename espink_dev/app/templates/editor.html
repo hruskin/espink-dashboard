@@ -666,7 +666,8 @@ function params(b) {
     case "forecast": return [el("div", { className: "grid2" }, entityField("Počasí", b, "weather", "weather"), numField("Počet dní", b, "days"))];
     case "bedtime": return [
       entityField("Večerníček", b, "entity", "sensor", "senzor z ha-vecernicek: stav = epizoda, atribut serial"),
-      iconField("Ikona", b.p, "icon", "mdi:television-classic"),
+      iconField("Ikona", b.p, "icon", "espink:paper-hat"),
+      el("div", { className: "help", textContent: "Výchozí espink:paper-hat je papírová čepice (vlastní ikona, v náhledu vpravo); jinak libovolná mdi:…" }),
       chk("Kdy se vysílá (vpravo, např. „dnes 18:45“)", b, "show_when")];
     case "menu": return [
       entityField("Jídelníček", b, "entity", "sensor", "senzor s atributy pondeli…patek, obdobi_od a je_aktualni"),

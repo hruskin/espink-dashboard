@@ -85,7 +85,7 @@ BLOCK_TYPES: dict[str, dict] = {
         "title": "Večerníček", "size": (12, 40), "min": (4, 32),
         "params": {
             "entity": ("", "entity"),           # stav = epizoda, atributy serial, datum, cas (ha-vecernicek)
-            "icon": ("mdi:television-classic", "text"),
+            "icon": ("espink:paper-hat", "text"),  # vlastní papírová čepice (dashboard.typ CUSTOM), nebo mdi:…
             "show_when": (True, "bool"),        # vpravo „dnes 18:45“
         },
     },

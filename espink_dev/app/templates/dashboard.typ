@@ -29,8 +29,20 @@
 // pravdivost jako v Jinja/Pythonu: none, "", false, 0 a prázdný seznam = nic
 #let has(x) = not (x == none or x == "" or x == false or x == 0 or x == ())
 
-// ikona Material Design Icons; neznámý název = nic
+// vlastní ikony (SVG 24×24, kreslené pro tenhle displej): v konfiguraci „espink:název“
+#let CUSTOM = (
+  // papírová čepice z novin (Večerníček)
+  "paper-hat": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill-rule='evenodd' d='M12 1.5 21.5 15.5h-19zM10 8h4v1.4h-4zm-2 3h8v1.4H8z'/><path fill-rule='evenodd' d='M1 16.2h22v5.6H1zm2 2v1.6h18v-1.6z'/></svg>",
+)
+
+// ikona Material Design Icons (nebo vlastní „espink:…“); neznámý název = nic
 #let icon(name, size: 20pt, fill: auto) = {
+  if has(name) and str(name).starts-with("espink:") {
+    let svg = CUSTOM.at(str(name).slice(7), default: none)
+    if svg == none { return none }
+    let svg = if fill == auto { svg } else { svg.replace("<svg ", "<svg fill='" + fill.to-hex() + "' ") }
+    return box(height: size, image.decode(svg, format: "svg", width: size, height: size))
+  }
   let cp = if not has(name) { none } else { ICONS.at(str(name), default: none) }
   if cp != none {
     let t = text(font: MDI, size: size, top-edge: 0.875em, bottom-edge: -0.125em, str.from-unicode(cp))
@@ -340,7 +352,7 @@
   let w-txt = if cw < 330 { b.time } else { b.when }
   let when = if has(w-txt) { text(size: 17pt, weight: 800, tracking: 0.5pt, upper(nb(w-txt))) }
   grid(columns: (auto, 1fr, auto), column-gutter: 8pt, align: horizon,
-    icon(b.icon, size: 24pt),
+    icon(b.icon, size: 26pt),
     box(height: 31pt, clip: true, align(horizon, layout(size => {
       if has(b.missing) { return text(..st, weight: 600, txt(b.missing)) }
       let w = size.width

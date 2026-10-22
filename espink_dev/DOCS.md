@@ -53,7 +53,7 @@ kolik řádků se vejde). Náhled vykresluje server stejně jako pro desku.
   Nadpis bloku („Jídelníček“) jde přepsat.
 - **Večerníček** bere senzor z integrace ha-vecernicek (stav = název epizody, atributy
   `serial`, `datum`, `cas`) a ukáže v jednom řádku ikonu (výchozí
-  `mdi:television-classic`), „Seriál: Epizoda“ a vpravo kdy se vysílá („dnes 18:45“;
+  `espink:paper-hat` – papírová čepice, nebo libovolná `mdi:…`), „Seriál: Epizoda“ a vpravo kdy se vysílá („dnes 18:45“;
   v úzkém bloku jen čas). Dlouhý název se zkrátí po celých slovech.
 - U kalendáře v Událostech jde zapnout **Celý text** – názvy se nezkracují, ale
   zalomí (nejvýš 8 řádků).

@@ -707,7 +707,7 @@ def _bedtime(raw: dict, b: dict, now: datetime) -> dict:
     a = (st or {}).get("attributes") or {}
     episode = str((st or {}).get("state") or "")
     series = str(a.get("serial") or a.get("series") or "")
-    out = {"icon": str(b.get("icon") or "mdi:television-classic").removeprefix("mdi:"), "when": None, "time": None, "series": series, "episode": episode, "missing": None}
+    out = {"icon": str(b.get("icon") or "espink:paper-hat").removeprefix("mdi:"), "when": None, "time": None, "series": series, "episode": episode, "missing": None}
     if not st or episode in ("", "unknown", "unavailable"):
         out.update(series="", episode="", missing="Zatím není k dispozici")
         return out

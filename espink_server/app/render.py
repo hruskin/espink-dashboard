@@ -18,6 +18,7 @@ from pathlib import Path
 from PIL import Image, ImageMath
 
 import emoji
+from icons_custom import CUSTOM
 
 APP_DIR = Path(__file__).resolve().parent
 STATIC_DIR = APP_DIR / "static"
@@ -76,7 +77,9 @@ def render_typst(view: dict, updated: str, next_wake: str = "") -> str:
     tpl = {b["id"]: re.sub(r"\s+", " ", re.sub(r"<[^>]*>", " ", str(b.get("html") or ""))).strip()
            for b in view["blocks"] if b["type"] == "template"}
     data = {"view": view, "updated": updated, "updated_time": updated.split()[-1], "next_wake": next_wake or "",
-            "icons": {n: codes[n] for n in names if n in codes}, "template_text": tpl}
+            "icons": {n: codes[n] for n in names if n in codes}, "template_text": tpl,
+            "custom_icons": {n.removeprefix("espink:"): CUSTOM[n.removeprefix("espink:")]
+                             for n in names if n.removeprefix("espink:") in CUSTOM}}
     source = (APP_DIR / "templates" / "dashboard.typ").read_text(encoding="utf-8")
     return f"#let data = json.decode({typst_str(json.dumps(data, ensure_ascii=False, default=str))})\n" + source
 

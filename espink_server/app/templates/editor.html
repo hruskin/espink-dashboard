@@ -21,6 +21,7 @@
   html, body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.4 Roboto, system-ui, sans-serif; }
   button { font: inherit; color: inherit; cursor: pointer; }
   .mdi { font-size: 20px; line-height: 1; }
+  .cicon { font-size: 20px; line-height: 1; display: inline-flex; }
 
   /* app bar */
   .appbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 16px;
@@ -215,7 +216,7 @@
   .icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 4px; max-height: 50vh; overflow: auto; margin-top: 10px; }
   .icons button { border: 1px solid var(--line); background: var(--bg); border-radius: 6px; padding: 6px 2px; display: flex; flex-direction: column;
                   align-items: center; gap: 2px; font-size: 9px; color: var(--muted); overflow: hidden; }
-  .icons button .mdi { font-size: 26px; color: var(--ink); }
+  .icons button .mdi, .icons button .cicon { font-size: 26px; color: var(--ink); }
   .icons button:hover { border-color: var(--primary); }
   dialog { width: min(560px, calc(100vw - 32px)); max-width: none; }
   dialog input[type=search] { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font: inherit; }
@@ -403,7 +404,14 @@ let blocks = [], saved = "[]", hist = [], hpos = 0, openId = null;
 
 const $ = s => document.querySelector(s);
 const el = (t, a = {}, ...k) => { const e = Object.assign(document.createElement(t), a); k.forEach(x => x != null && e.append(x)); return e; };
-const icon = n => el("i", { className: "mdi mdi-" + n });
+// ikona MDI, nebo vlastní „espink:…“ (SVG ze serveru, SCHEMA.custom_icons)
+const icon = n => {
+  const svg = String(n || "").startsWith("espink:") && SCHEMA?.custom_icons?.[n.slice(7)];
+  if (!svg) return el("i", { className: "mdi mdi-" + n });
+  const s = document.createElement("span");
+  s.className = "cicon"; s.innerHTML = svg.replace("<svg ", "<svg fill='currentColor' width='1em' height='1em' ");
+  return s;
+};
 const say = t => { $("#live").textContent = t; };
 const name = t => SCHEMA.types[t].title;
 const snap = () => JSON.stringify(blocks);
@@ -534,7 +542,8 @@ function iconField(label, obj, key, ph, dropEmpty) {   // obj = b.p nebo položk
   const set = v => { obj[key] = v; if (!v && dropEmpty) delete obj[key]; commit(); };
   const i = el("input", { type: "text", value: obj[key] || "", placeholder: ph || "mdi:…" });
   i.onchange = () => set(i.value.trim());
-  const prev = el("i", { className: "mdi mdi-" + String(obj[key] || "").replace(/^mdi:/, ""), style: "font-size:24px;width:28px;text-align:center" });
+  const prev = el("span", { style: "font-size:24px;width:28px;text-align:center;display:inline-flex;justify-content:center" },
+                  icon(String(obj[key] || "").replace(/^mdi:/, "")));
   const pick = el("button", { className: "icon-btn", title: "Vybrat ikonu", type: "button" }, icon("magnify"));
   pick.onclick = e => { e.preventDefault(); pickIcon(set); };
   if (!label) {                       // kompaktní varianta do řádku kalendáře: jen tlačítko s ikonou
@@ -666,7 +675,8 @@ function params(b) {
     case "forecast": return [el("div", { className: "grid2" }, entityField("Počasí", b, "weather", "weather"), numField("Počet dní", b, "days"))];
     case "bedtime": return [
       entityField("Večerníček", b, "entity", "sensor", "senzor z ha-vecernicek: stav = epizoda, atribut serial"),
-      iconField("Ikona", b.p, "icon", "mdi:television-classic"),
+      iconField("Ikona", b.p, "icon", "espink:paper-hat"),
+      el("div", { className: "help", textContent: "Papírové čepice (espink:paper-hat…) jsou ve výběru ikon nahoře." }),
       chk("Kdy se vysílá (vpravo, např. „dnes 18:45“)", b, "show_when")];
     case "menu": return [
       entityField("Jídelníček", b, "entity", "sensor", "senzor s atributy pondeli…patek, obdobi_od a je_aktualni"),
@@ -1274,12 +1284,14 @@ async function pickIcon(cb) {
 function showIcons(q) {
   q = q.trim().toLowerCase();
   const hits = (q ? ICONS.filter(n => n.includes(q)).sort((a, b) => b.startsWith(q) - a.startsWith(q) || a.length - b.length) : ICONS.filter(n => /^(home|thermometer|water|weather-|bus|calendar|trash|car|baby|school|cake|account|heart|flower)/.test(n))).slice(0, 120);
-  $("#iconGrid").replaceChildren(...hits.map(n => {
+  // vlastní ikony (papírová čepice…) vždy nahoře, při hledání jen odpovídající
+  const own = Object.keys(SCHEMA?.custom_icons || {}).map(n => "espink:" + n).filter(n => !q || n.includes(q));
+  $("#iconGrid").replaceChildren(...own.concat(hits).map(n => {
     const b = el("button", { title: n, type: "button" }, icon(n), el("span", { textContent: n }));
-    b.onclick = () => { $("#iconDlg").close(); iconCb("mdi:" + n); };
+    b.onclick = () => { $("#iconDlg").close(); iconCb(n.startsWith("espink:") ? n : "mdi:" + n); };
     return b;
   }));
-  if (!hits.length) $("#iconGrid").append(el("span", { textContent: "Nic nenalezeno." }));
+  if (!hits.length && !own.length) $("#iconGrid").append(el("span", { textContent: "Nic nenalezeno." }));
 }
 $("#iconSearch").oninput = e => showIcons(e.target.value);
 $("#iconNone").onclick = () => { $("#iconDlg").close(); iconCb(""); };

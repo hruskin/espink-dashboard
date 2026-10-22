@@ -12,6 +12,7 @@ import re
 import time
 import uuid
 
+from icons_custom import CUSTOM
 from options import ENTITY_RE
 
 SCREEN_W, SCREEN_H = 480, 800
@@ -85,7 +86,7 @@ BLOCK_TYPES: dict[str, dict] = {
         "title": "Večerníček", "size": (12, 40), "min": (4, 32),
         "params": {
             "entity": ("", "entity"),           # stav = epizoda, atributy serial, datum, cas (ha-vecernicek)
-            "icon": ("mdi:television-classic", "text"),
+            "icon": ("espink:paper-hat", "text"),  # vlastní papírová čepice (dashboard.typ CUSTOM), nebo mdi:…
             "show_when": (True, "bool"),        # vpravo „dnes 18:45“
         },
     },
@@ -487,6 +488,7 @@ def schema() -> dict:
                       "params": {k: {"default": d, "kind": list(kind) if isinstance(kind, tuple) else kind}
                                  for k, (d, kind) in s["params"].items()}}
                   for t, s in BLOCK_TYPES.items()},
+        "custom_icons": CUSTOM,
         "grid": {"w": SCREEN_W, "h": SCREEN_H, "cols": COLS, "col_w": COL_W, "step": ROW_STEP, "lines": LINES,
                  "text_line": TEXT_LINE_H, "text_pad": 8},
     }

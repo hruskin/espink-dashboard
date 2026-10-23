@@ -56,7 +56,8 @@ kolik řádků se vejde). Náhled vykresluje server stejně jako pro desku.
   `espink:paper-hat` – papírová čepice; další varianty `espink:paper-hat-3`,
   `espink:paper-hat-outline`, nakloněné `espink:paper-hat-tilt-left`, `-tilt-right`,
   `espink:paper-hat-outline-tilt-left` a `-outline-tilt-right` jsou ve výběru ikon nahoře a jdou použít v kterémkoli bloku), „Seriál: Epizoda“ a vpravo kdy se vysílá („dnes 18:45“;
-  v úzkém bloku jen čas). Dlouhý název se zkrátí po celých slovech.
+  v úzkém bloku jen čas). Dlouhý název se zkrátí po celých slovech. Deset minut
+  po začátku vysílání ukáže další díl z atributu `program` (integrace přepíná později).
 - U kalendáře v Událostech jde zapnout **Celý text** – názvy se nezkracují, ale
   zalomí (nejvýš 8 řádků).
 - Rozvržení může být víc (nové prázdné nebo kopie, přejmenovat, smazat), dále export

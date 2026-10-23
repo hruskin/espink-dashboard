@@ -701,24 +701,42 @@ def _menu(raw: dict, b: dict, now: datetime) -> dict:
     return out
 
 
+BEDTIME_LENGTH = timedelta(minutes=10)   # díl (~10 min) skončí tolik po začátku – pak se ukáže další;
+# s rezervou před celou hodinou: obsah se přepočítává po minutě a desky se často budí v :00
+
+
 def _bedtime(raw: dict, b: dict, now: datetime) -> dict:
-    """Večerníček: „Seriál: Epizoda“, vpravo kdy („dnes 18:45“)."""
+    """Večerníček: „Seriál: Epizoda“, vpravo kdy („dnes 18:45“). Po skončení vysílání se ukáže
+    další díl z atributu program hned (integrace přepíná až později, třeba v 19:00)."""
     st = raw["states"].get(b["entity"]) if b["entity"] else None
     a = (st or {}).get("attributes") or {}
-    episode = str((st or {}).get("state") or "")
-    series = str(a.get("serial") or a.get("series") or "")
-    out = {"icon": str(b.get("icon") or "espink:paper-hat").removeprefix("mdi:"), "when": None, "time": None, "series": series, "episode": episode, "missing": None}
-    if not st or episode in ("", "unknown", "unavailable"):
-        out.update(series="", episode="", missing="Zatím není k dispozici")
-        return out
-    if b["show_when"]:
+    out = {"icon": str(b.get("icon") or "espink:paper-hat").removeprefix("mdi:"), "when": None, "time": None,
+           "series": "", "episode": "", "missing": None}
+    current = {"datum": a.get("datum"), "cas": a.get("cas"), "serial": a.get("serial") or a.get("series"),
+               "epizoda": (st or {}).get("state")}
+    program = [p for p in (a.get("program") or []) if isinstance(p, dict)]
+
+    def start(p: dict) -> datetime | None:
         try:
-            d = date.fromisoformat(str(a.get("datum") or ""))
-        except ValueError:
-            d = None
+            d = date.fromisoformat(str(p.get("datum") or ""))
+            h, m = (int(x) for x in str(p.get("cas") or "").split(":"))
+            return datetime(d.year, d.month, d.day, h, m, tzinfo=now.tzinfo)
+        except (ValueError, TypeError):
+            return None
+
+    # první díl, který ještě neskončil (z programu i aktuálního stavu); jinak aktuální stav
+    upcoming = [p for p in [current] + program if start(p) and start(p) + BEDTIME_LENGTH > now]
+    item = min(upcoming, key=start) if upcoming else current
+    episode = str(item.get("epizoda") or "")
+    if not st or episode in ("", "unknown", "unavailable"):
+        out["missing"] = "Zatím není k dispozici"
+        return out
+    out.update(series=str(item.get("serial") or ""), episode=episode)
+    if b["show_when"]:
+        t0 = start(item)
         today = now.date()
-        day = None if d is None else "dnes" if d == today else "zítra" if d == today + timedelta(days=1) else DAYS[d.weekday()]
-        out["time"] = str(a.get("cas") or "") or None
+        day = None if t0 is None else "dnes" if t0.date() == today else "zítra" if t0.date() == today + timedelta(days=1) else DAYS[t0.weekday()]
+        out["time"] = str(item.get("cas") or "") or None
         out["when"] = " ".join(x for x in (day, out["time"]) if x) or None
     return out
 

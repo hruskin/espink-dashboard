@@ -115,7 +115,9 @@ def load_stats() -> dict:
                         "last_redraw": text("last_redraw"), "last_missed": text("last_missed"),
                         # čekané překreslení z minulého probuzení (potvrdí ho až to další)
                         "expect": s.get("expect") if isinstance(s.get("expect"), bool) else None,
-                        "expect_at": text("expect_at")}
+                        "expect_at": text("expect_at"), "last_reason": text("last_reason"),
+                        "reasons": {str(k)[:80]: int(v) for k, v in (s.get("reasons") or {}).items()
+                                    if isinstance(v, int)} if isinstance(s.get("reasons"), dict) else {}}
     return out
 
 

@@ -76,6 +76,7 @@ class Target:
         self.updated_text = ""
         self.next_text = ""       # „další obnova“ v aktuálním obrázku
         self.served_ts = None     # Timestamp, který deska naposledy dostala (= má na displeji)
+        self.served_view: dict | None = None   # model zobrazení na displeji (proč se překresluje)
         self.error = ""
         self.shown: dict = {}     # zaokrouhlené hodnoty na displeji (hystereze, model.hnum)
         self.night = False        # obsah je noční obraz (rozvržení Na noc, k času ranního probuzení)
@@ -138,7 +139,7 @@ class Server:
         r = t.cfg.get("rotate")
         return self.opts["rotate"] if r is None else r
 
-    def count(self, t: Target, now: datetime, expect: bool, confirmed: bool) -> None:
+    def count(self, t: Target, now: datetime, expect: bool, confirmed: bool, reasons: list[str] = ()) -> None:
         """Probuzení a překreslení za dnešek. Deska překreslí, když dostane jiný Timestamp, než má
         (expect). Jestli to opravdu udělala, pozná server až při dalším probuzení: deska pošle
         lastRefreshDuration jen po překreslení (confirmed). Nesoulad se zaloguje."""
@@ -146,7 +147,7 @@ class Server:
         s = self.stats.setdefault(mac, {})
         day = now.date().isoformat()
         if s.get("day") != day:
-            s.update(day=day, wakes=0, redraws=0, unchanged=0, missed=0)
+            s.update(day=day, wakes=0, redraws=0, unchanged=0, missed=0, reasons={})
         prev = s.get("expect")   # co se čekalo při minulém probuzení (None = nevíme, např. první kontakt)
         if confirmed:
             s["redraws"] = s.get("redraws", 0) + 1
@@ -159,6 +160,11 @@ class Server:
             print(f"[device] {name}: měla se překreslit ({s.get('expect_at')}), ale nepřekreslila")
         elif prev is False:
             s["unchanged"] = s.get("unchanged", 0) + 1
+        if expect:   # důvody překreslení za den (co se změnilo od obsahu na displeji)
+            r = s.setdefault("reasons", {})
+            for x in reasons:
+                r[x] = r.get(x, 0) + 1
+            s["last_reason"] = ", ".join(reasons)[:250]
         s["wakes"] = s.get("wakes", 0) + 1
         s["expect"], s["expect_at"] = expect, now.isoformat(timespec="seconds")
         try:
@@ -202,7 +208,9 @@ class Server:
         days = battery_mod.estimate(self.battery.get(mac) or {}, time.time())
         return {"battery_days": round(days) if days is not None else None,
                 "wakes_today": n("wakes"), "redraws_today": n("redraws"), "unchanged_today": n("unchanged"),
-                "missed_today": n("missed"), "last_redraw": s.get("last_redraw"), "last_missed": s.get("last_missed")}
+                "missed_today": n("missed"), "last_redraw": s.get("last_redraw"), "last_missed": s.get("last_missed"),
+                "redraw_reasons": dict(sorted((s.get("reasons") or {}).items(), key=lambda x: -x[1])) if today else {},
+                "last_redraw_reason": s.get("last_reason")}
 
     def save_security(self) -> None:
         try:
@@ -403,12 +411,13 @@ class Server:
             # Deska překresluje, když dostane jiný Timestamp, než má – obrázek si přečte rovnou
             # z této odpovědi (druhý požadavek s timestampCheck=0 posílá jen stránkovaný režim)
             redraw = t.content_ts != t.served_ts
-            self.count(t, now, redraw, confirmed=bool(ms(display.get("lastRefreshDuration"))))
+            reasons = model.change_reasons(t.served_view, t.view) if redraw else []
+            self.count(t, now, redraw, confirmed=bool(ms(display.get("lastRefreshDuration"))), reasons=reasons)
             self.track_battery(t)
             await self.stamp_next_wake(t, now, sleep)
             asyncio.create_task(self.publish_device(t, now, sleep))
             print(f"[device] {t.cfg['name']} {t.device['ip']} {t.device['voltage']} V,"
-                  f" {t.device['rssi']} dBm, spánek {sleep} s{', překreslí' if redraw else ''}")
+                  f" {t.device['rssi']} dBm, spánek {sleep} s{', překreslí – ' + ', '.join(reasons) if redraw else ''}")
         headers = {
             "Timestamp": str(t.content_ts),
             "PreciseSleep": str(sleep),
@@ -430,7 +439,7 @@ class Server:
                         t.next_text = wanted
                     except Exception as e:  # noqa: BLE001 – raději starý odhad než nic
                         print(f"[render] patička: {e}")
-        t.served_ts = t.content_ts
+        t.served_ts, t.served_view = t.content_ts, t.view
 
     def blocked(self, *who: str) -> bool:
         """Příliš mnoho chybných pokusů z MAC nebo IP (hádání klíče) → na čas odmítat bez dalšího."""

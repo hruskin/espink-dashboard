@@ -97,7 +97,10 @@ Přehled panelů: poslední kontakt, další probuzení, **poslední překreslen
 se panel dnes probudil a kolikrát se z toho překreslil, nebo jen usnul beze změny.
 Překreslení potvrzuje deska až při dalším probuzení (pošle dobu posledního
 překreslení), proto jsou počty o jedno probuzení pozadu. Když deska dostala nový
-obsah a nepřekreslila se, ukáže se nahoře varování. Dále baterie a **odhad výdrže**, Wi-Fi, doba překreslení, důvod restartu a náhled. Tlačítko *Překreslit obsah teď* přepočítá obsah; desky si ho
+obsah a nepřekreslila se, ukáže se nahoře varování. **Proč se překreslila:** při každém probuzení
+s novým obsahem server porovná obsah na displeji s novým a zapíše, co se změnilo
+(„záhlaví: teplota“, „odjezdy“, „patička: baterie“…). Stav ukazuje počty za dnešek
+a poslední důvod; v HA je to senzor *Důvod překreslení* (počty za den v atributech). Dále baterie a **odhad výdrže**, Wi-Fi, doba překreslení, důvod restartu a náhled. Tlačítko *Překreslit obsah teď* přepočítá obsah; desky si ho
 vyzvednou při příštím probuzení.
 
 ## Jak to funguje
@@ -117,7 +120,7 @@ vyzvednou při příštím probuzení.
   *ESPink <název>* se senzory Baterie, Napětí baterie, Signál WiFi, Doba překreslení,
   Teplota procesoru, Poslední kontakt, Další probuzení, Důvod restartu, Poslední
   překreslení, Překreslení dnes, Probuzení dnes, Nepřekresleno dnes (počty se
-  o půlnoci nulují) a Výdrž baterie. Zprávy jsou
+  o půlnoci nulují), Důvod překreslení a Výdrž baterie. Zprávy jsou
   retained. Bez brokeru se stav zapisuje přes REST API do senzoru baterie panelu.
 - **Výdrž baterie:** add-on si ukládá napětí z probuzení (nejvýš po 30 min, 7 dní
   zpět, `/data/battery.json`) a proloží procenta přímkou. Výdrž = dny do vybití při

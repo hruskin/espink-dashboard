@@ -109,7 +109,7 @@ vyzvednou při příštím probuzení.
   skutečná vzdálí o ¾ kroku (z 11 °C na 12 °C až od 11,75 °C), takže hodnota na
   hranici nepřeskakuje a nevynucuje překreslení. **Teplota** (°C) se navíc změní až
   o 0,5 °C – s desetinami by se jinak panel překresloval skoro při každém probuzení.
-  **Vlhkost** se změní až o 3 % (venku kolísá o 1–2 % během minut) a **srážky dnes**
+  **Vlhkost** se změní až o 5 % (venku kolísá o několik % během minut) a **srážky dnes**
   po 0,5 mm.
 - Hlavička `PreciseSleep` určuje dobu spánku podle rozvrhu panelu. Firmware ji omezí
   na 1 min – 24 h.

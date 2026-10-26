@@ -939,5 +939,49 @@ def _build(raw: dict, layout: dict, device: dict, now: datetime, worst: bool = F
     return {"blocks": blocks, "device": _device(device)}
 
 
+# ── Proč se panel překreslil: rozdíl mezi obsahem na displeji a novým obsahem ──
+_GEOMETRY = {"id", "type", "left", "top", "width", "height", "line_top", "line_left", "inner_w", "inner_h", "pad_top"}
+_KEY_LABELS = {
+    "day": "datum", "weekday": "datum", "month": "datum", "week": "týden", "nameday": "jmeniny",
+    "holiday": "svátek", "alert": "upozornění", "alert_icon": "upozornění",
+    "temp": "teplota", "humidity": "vlhkost", "rain": "srážky", "icon": "ikona počasí", "max": "min/max",
+    "min": "min/max", "minmax_label": "min/max", "indoor": "teplota doma", "pressure": "tlak", "temp_bold": "vzhled",
+    "items": "hodnoty", "week_label": "týden", "battery": "baterie", "updated": "vzhled", "next": "vzhled",
+}
+
+
+def change_reasons(old: dict | None, new: dict) -> list[str]:
+    """Co se mezi dvěma modely zobrazení změnilo, česky: ["záhlaví: teplota", "odjezdy"]."""
+    if not old:
+        return ["start serveru"]
+    out: list[str] = []
+    add = lambda r: out.append(r) if r not in out else None  # noqa: E731
+    ob = {b["id"]: b for b in old.get("blocks", [])}
+    nb = {b["id"]: b for b in new.get("blocks", [])}
+    if set(ob) != set(nb) or any({k: ob[i].get(k) for k in _GEOMETRY} != {k: nb[i].get(k) for k in _GEOMETRY} for i in nb if i in ob):
+        add("rozvržení")
+    for i, b in nb.items():
+        o = ob.get(i)
+        if not o or o == b:
+            continue
+        title = layout_mod.BLOCK_TYPES.get(b["type"], {}).get("title", b["type"]).lower()
+        keys = [k for k in set(o) | set(b) if k not in _GEOMETRY and o.get(k) != b.get(k)]
+        if b["type"] in ("header", "weather_now", "footer"):
+            for k in keys:
+                if k == "weather":
+                    ow, nw = o.get(k) or {}, b.get(k) or {}
+                    for wk in sorted(set(ow) | set(nw)):
+                        if ow.get(wk) != nw.get(wk):
+                            add(f"{title}: {_KEY_LABELS.get(wk, wk)}")
+                else:
+                    add(f"{title}: {_KEY_LABELS.get(k, k)}")
+        elif keys:
+            add(title)
+    if (old.get("device") or {}) != (new.get("device") or {}):
+        od, nd = old.get("device") or {}, new.get("device") or {}
+        add("Wi-Fi" if od.get("wifi_icon") != nd.get("wifi_icon") else "baterie")
+    return out or ["beze změny obsahu"]
+
+
 def digest(view: dict) -> str:
     return hashlib.sha1(json.dumps(view, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8", "surrogatepass")).hexdigest()

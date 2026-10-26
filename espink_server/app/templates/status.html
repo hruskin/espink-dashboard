@@ -154,6 +154,8 @@ function render(D) {
     const rows = [["Rozvržení", L[p.layout] || "–"], ["Poslední kontakt", d.last_seen ? rel(d.last_seen) : "zatím se neozvala"], ["Další probuzení", rel(p.next_wake, true)],
       ["Poslední překreslení", s.last_redraw ? rel(s.last_redraw) : "–"],
       ["Dnes", s.wakes_today ? `${s.wakes_today}× probuzení: ${s.redraws_today}× překreslení, ${s.unchanged_today}× beze změny` : "zatím se neprobudila"],
+      ["Proč se dnes překreslila", Object.entries(s.redraw_reasons || {}).map(([k, n]) => `${k} ${n}×`).join(", ") || "–"],
+      ["Naposledy kvůli", s.last_redraw_reason || "–"],
       ["Rozvrh teď", every(p.interval_now) + (p.schedule.length ? "" : " · výchozí rozvrh")],
       ["Baterie", d.battery != null ? `${d.battery} % (${num(d.voltage, 2)} V)` : "–"],
       ["Výdrž baterie", s.battery_days != null ? `asi ${s.battery_days} ${s.battery_days === 1 ? "den" : s.battery_days < 5 && s.battery_days > 0 ? "dny" : "dní"}` : "zatím málo dat (odhad až po dni na baterii)"],

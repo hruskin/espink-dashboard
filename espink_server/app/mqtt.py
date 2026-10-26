@@ -33,6 +33,8 @@ SENSORS = {
     "last_redraw": ("Poslední překreslení", {"dev_cla": "timestamp"}),
     "redraws_today": ("Překreslení dnes", {"stat_cla": "total_increasing", "ic": "mdi:monitor-shimmer"}),
     "wakes_today": ("Probuzení dnes", {"stat_cla": "total_increasing", "ic": "mdi:alarm", "ent_cat": "diagnostic"}),
+    # co se změnilo při posledním překreslení; počty důvodů za dnešek v atributech
+    "last_redraw_reason": ("Důvod překreslení", {"ic": "mdi:help-circle-outline"}),
     "missed_today": ("Nepřekresleno dnes", {"stat_cla": "total_increasing", "ic": "mdi:monitor-off", "ent_cat": "diagnostic"}),
 }
 
@@ -66,6 +68,9 @@ def discovery(cfg: dict, fw: str | None) -> dict:
             c["json_attr_tpl"] = "{{ {'ip': value_json.ip, 'mac': value_json.mac, 'firmware': value_json.firmware} | tojson }}"
             if cfg.get("battery_sensor"):
                 c["default_entity_id"] = cfg["battery_sensor"]
+        if key == "last_redraw_reason":
+            c["json_attr_t"] = state_topic(cfg["mac"])
+            c["json_attr_tpl"] = "{{ value_json.redraw_reasons | tojson }}"
         cmps[key] = c
     return {"dev": dev, "o": ORIGIN, "stat_t": state_topic(cfg["mac"]), "cmps": cmps, "qos": 1}
 

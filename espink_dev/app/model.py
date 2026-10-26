@@ -89,6 +89,8 @@ def num(value, decimals=1) -> str | None:
 # každém probuzení – nová hodnota se proto ukáže až při změně aspoň o 0,5 °C.
 HYSTERESIS = 0.75
 TEMP_MIN_CHANGE = 0.5
+HUM_MIN_CHANGE = 3.0    # % – vlhkost venku kolísá o 1–2 % během minut, nepřekreslovat kvůli tomu
+RAIN_MIN_CHANGE = 0.5   # mm – při dešti nepřekreslovat po každé desetině
 TEMP_UNITS = ("°C", "°F", "K")
 _memory: dict | None = None
 
@@ -104,6 +106,14 @@ def hnum(key: str, value, decimals: int = 1, min_change: float = 0.0) -> str | N
         v = prev if prev is not None and abs(v - prev) < limit else round(v, decimals)
         _memory[k] = v
     return num(v, decimals)
+
+
+def _rain(b: dict, rain: float | None) -> str | None:
+    """Srážky dnes po 0,5 mm (hystereze); pod 0,1 mm nic."""
+    if rain is None:
+        return None
+    shown = hnum(f"rain:{b.get('rain')}", rain, 1, RAIN_MIN_CHANGE)
+    return shown if shown and fnum(shown.replace(",", ".")) >= 0.1 else None
 
 
 def fnum(value) -> float | None:
@@ -168,8 +178,8 @@ def _weather(raw: dict, b: dict, now: datetime, tz) -> dict:
         "icon": WEATHER_ICONS.get(cond or "", "weather-cloudy-alert"),
         "temp_bold": bool(b.get("temp_bold", True)),
         "temp": hnum(f"temp:{b.get('temperature') or b.get('weather')}", temp, b.get("temp_decimals", 1), TEMP_MIN_CHANGE),
-        "humidity": hnum(f"hum:{b.get('humidity') or b.get('weather')}", hum, 0),
-        "rain": num(rain) if rain and rain >= 0.1 else None,
+        "humidity": hnum(f"hum:{b.get('humidity') or b.get('weather')}", hum, 0, HUM_MIN_CHANGE),
+        "rain": _rain(b, rain),
         "pressure": hnum(f"press:{b.get('pressure')}", st("pressure"), 0),
         "indoor": hnum(f"indoor:{b.get('indoor')}", st("indoor"), b.get("temp_decimals", 1), TEMP_MIN_CHANGE),
         "min": None,
@@ -596,7 +606,9 @@ def format_state(s: dict | None, attribute: str = "", decimals: int = 1, maxlen:
             decimals = 0
         unit = "" if attribute else (a.get("unit_of_measurement") or "")
         temp = unit in TEMP_UNITS or a.get("device_class") == "temperature"
-        out.update(value=hnum(f"{s.get('entity_id', '')}:{attribute}", v, decimals, TEMP_MIN_CHANGE if temp else 0.0),
+        hum = a.get("device_class") == "humidity"
+        out.update(value=hnum(f"{s.get('entity_id', '')}:{attribute}", v, decimals,
+                              TEMP_MIN_CHANGE if temp else HUM_MIN_CHANGE if hum and not attribute else 0.0),
                    number=v, unit=unit)
         return out
     text = str(raw)

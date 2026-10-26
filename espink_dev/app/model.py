@@ -89,7 +89,7 @@ def num(value, decimals=1) -> str | None:
 # každém probuzení – nová hodnota se proto ukáže až při změně aspoň o 0,5 °C.
 HYSTERESIS = 0.75
 TEMP_MIN_CHANGE = 0.5
-HUM_MIN_CHANGE = 3.0    # % – vlhkost venku kolísá o 1–2 % během minut, nepřekreslovat kvůli tomu
+HUM_MIN_CHANGE = 5.0    # % – vlhkost venku kolísá o několik % během minut (v létě by se jinak překreslovalo ~20× denně)
 RAIN_MIN_CHANGE = 0.5   # mm – při dešti nepřekreslovat po každé desetině
 TEMP_UNITS = ("°C", "°F", "K")
 _memory: dict | None = None

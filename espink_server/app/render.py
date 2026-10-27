@@ -114,14 +114,15 @@ async def rasterize(view: dict, updated: str, next_wake: str = "") -> Image.Imag
     return img
 
 
-def quantize(img: Image.Image) -> Image.Image:
+def quantize(img: Image.Image, colors: str = "bwr") -> Image.Image:
     """RGB -> paletový obrázek s indexy 0/1/2 (bez ditheringu, text zůstane ostrý).
     Červená: r ≥ 128 a o víc než 80 nad g i b; černá: jas (r·77 + g·150 + b·29) >> 8 ≤ práh.
     Počítá Pillow v C (ImageMath) – pixel po pixelu v Pythonu to bylo ~10× pomalejší."""
     r, g, b = img.convert("RGB").split()
     dark = BLACK_THRESHOLD * 256 + 255   # (s >> 8) <= T  ⇔  s <= T·256 + 255
+    red_code = BLACK if colors == "bw" else RED   # černobílý displej: červená jako černá
     codes = ImageMath.lambda_eval(
-        lambda a: (lambda red, black: red * RED + (1 - red) * black * BLACK)(
+        lambda a: (lambda red, black: red * red_code + (1 - red) * black * BLACK)(
             (a["r"] >= 128) & (a["r"] > a["g"] + 80) & (a["r"] > a["b"] + 80),
             (a["r"] * 77 + a["g"] * 150 + a["b"] * 29) <= dark),
         r=r, g=g, b=b)
@@ -164,15 +165,16 @@ def to_png(pal: Image.Image, fast: bool = False) -> bytes:
     return buf.getvalue()
 
 
-async def render(view: dict, updated: str, rotate: int, fmt: str, next_wake: str = "") -> tuple[bytes, bytes]:
+async def render(view: dict, updated: str, rotate: int, fmt: str, next_wake: str = "",
+                 colors: str = "bwr") -> tuple[bytes, bytes]:
     """Vrátí (náhled PNG v portrétu, data pro zařízení)."""
     img = await rasterize(view, updated, next_wake)
-    pal = await asyncio.to_thread(quantize, img)
+    pal = await asyncio.to_thread(quantize, img, colors)
     payload = await asyncio.to_thread(device_payload, pal, rotate, fmt)
     return to_png(pal), payload
 
 
-async def render_preview(view: dict, updated: str, next_wake: str = "") -> bytes:
+async def render_preview(view: dict, updated: str, next_wake: str = "", colors: str = "bwr") -> bytes:
     """Jen náhled PNG (editor) – bez dat pro zařízení."""
     img = await rasterize(view, updated, next_wake)
-    return await asyncio.to_thread(lambda: to_png(quantize(img), fast=True))
+    return await asyncio.to_thread(lambda: to_png(quantize(img, colors), fast=True))

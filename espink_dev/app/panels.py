@@ -31,6 +31,8 @@ def default_name(mac: str, taken: set[str]) -> str:
     return name if name not in taken else mac
 
 
+COLORS = ("bwr", "bw")
+
 def sanitize(raw: dict, layouts: dict) -> dict:
     if not isinstance(raw, dict):
         raise ValueError("neplatný panel")
@@ -54,8 +56,12 @@ def sanitize(raw: dict, layouts: dict) -> dict:
         rotate = None
     elif rotate not in (90, 270, "90", "270"):  # rozvržení je na výšku, displej nativně na šířku
         raise ValueError(f"neplatné otočení: {rotate} (jen 90 nebo 270)")
+    # barvy displeje: "bwr" = černá/bílá/červená (GDEY075Z08), "bw" = černobílý (GDEY075T7) – červená jako černá
+    colors = raw.get("colors") or "bwr"
+    if colors not in COLORS:
+        raise ValueError(f"neplatné barvy displeje: {colors}")
     return {"mac": mac, "name": name, "layout": lid, "night_layout": night, "schedule": check_rules(raw.get("schedule")),
-            "battery_sensor": sensor, "rotate": None if rotate is None else int(rotate)}
+            "battery_sensor": sensor, "rotate": None if rotate is None else int(rotate), "colors": colors}
 
 
 def load(opts: dict, layouts: dict) -> list[dict]:

@@ -65,6 +65,24 @@ USB-C desky vede na převodník CH343 (UART0). Kdyby se nahrávání nechytilo, 
 
 Ověřené sestavení: RAM 29,4 %, flash 15,2 % (~1 MB z 6,25 MB aplikačního oddílu, rozdělení `default_16MB.csv` se dvěma OTA sloty).
 
+### ESPink 2.x s displejem GDEY075T7 (černobílý)
+
+Prostředí `espink_v2_gdey075t7` (`DISPLAY_TYPE=GDEY075T7BW`, `COLOR_TYPE=BW`) je pro
+ESPink 2.x, kterému se trojbarevný GDEY075Z08 vymění za černobílý GDEY075T7. Konektor,
+rozměry i řadič (UC8179) jsou stejné, stačí přepojit plochý kabel. Černobílé překreslení
+trvá jednotky sekund místo ~25 s. V add-onu nastav u panelu **Barvy displeje = černobílý**:
+červená se pošle jako černá (kód červené by černobílý firmware vykreslil jako světle šedou).
+
+ESPink 2.x nemá tlačítko BOOT a webový instalátor ho nepřepne do režimu nahrávání, nahrává
+se z počítače:
+
+```sh
+cd zivyobraz-fw
+pio run -e espink_v2_gdey075t7 -t upload   # nebo esptool write_flash se soubory z .pio/build/espink_v2_gdey075t7
+```
+
+Klíč desky (X-API-Key) zůstane, pokud se nemaže celá flash; jinak desku v add-onu znovu povol.
+
 ## První připojení k WiFi
 
 Upstream firmware nabízí dva způsoby:

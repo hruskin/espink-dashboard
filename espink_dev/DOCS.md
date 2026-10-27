@@ -72,6 +72,11 @@ obraz před dlouhým spánkem (aspoň 3 h podle rozvrhu). Ten se sestaví k čas
 probuzení, takže přes noc a ráno panel ukazuje datum, jmeniny, události a předpověď
 nového dne. Na širší obrazovce jsou karty vedle sebe.
 
+**Barvy displeje** musí odpovídat displeji a firmwaru desky: *černá, bílá, červená*
+(GDEY075Z08) nebo *černobílý* (GDEY075T7 – firmware `espink_v2_gdey075t7`, překreslení
+za pár sekund). U černobílého pošle add-on červený text (upozornění, svátky, zpoždění)
+jako černý – kód červené by černobílý firmware vykreslil jako světle šedou.
+
 Rozvrh je pruh přes celý den po čtvrthodinách; barva udává interval (5–30 min,
 1× za hodinu v :00, nebo nebudit). Hranice úseků se posouvají tažením nebo šipkami
 (PageUp/PageDown po hodině), klepnutím na úsek jde změnit interval, čas od–do,

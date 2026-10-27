@@ -273,7 +273,7 @@ class Server:
                     # odhad; přesná doba se dokreslí, až se deska ozve (handle_device)
                     next_text = after(now, t.schedule.sleep_seconds(now))
                     t.preview, t.payload = await render.render(
-                        view, updated, self.rotate_for(t), self.opts["image_format"], next_text)
+                        view, updated, self.rotate_for(t), self.opts["image_format"], next_text, t.cfg.get("colors", "bwr"))
                     t.view, t.view_hash, t.content_ts = view, digest, int(now.timestamp())
                     t.updated_text, t.next_text, t.error = updated, next_text, ""
                     print(f"[render] {t.cfg['name']}: nový obsah {digest[:8]} ({len(t.payload)} B)")
@@ -435,7 +435,8 @@ class Server:
                 async with self.lock:
                     try:
                         t.preview, t.payload = await render.render(
-                            t.view, t.updated_text, self.rotate_for(t), self.opts["image_format"], wanted)
+                            t.view, t.updated_text, self.rotate_for(t), self.opts["image_format"], wanted,
+                            t.cfg.get("colors", "bwr"))
                         t.next_text = wanted
                     except Exception as e:  # noqa: BLE001 – raději starý odhad než nic
                         print(f"[render] patička: {e}")
@@ -776,7 +777,7 @@ class Server:
                                                        lambda: self.device_from_sensor(t.cfg["battery_sensor"]))
                 view = await asyncio.to_thread(model.build, raw, draft, device, now, worst=request.query.get("worst") == "1")
                 png = await render.render_preview(view, f"{now.day}. {now.month}. {now:%H:%M}",
-                                                  after(now, t.schedule.sleep_seconds(now)))
+                                                  after(now, t.schedule.sleep_seconds(now)), t.cfg.get("colors", "bwr"))
             except Exception as e:  # noqa: BLE001
                 return web.json_response({"error": f"{type(e).__name__}: {e}"}, status=502)
         return web.Response(body=png, content_type="image/png", headers={
@@ -842,12 +843,13 @@ class Server:
             raise bad_request("rozvržení neexistuje")
         if any(p["name"] == cfg["name"] and p["mac"] != mac for p in self.panels):
             raise bad_request(f"panel {cfg['name']} už existuje")
-        old_rotate = self.rotate_for(self.targets[mac])
+        old_rotate, old_colors = self.rotate_for(self.targets[mac]), self.targets[mac].cfg.get("colors", "bwr")
         self.save_panels([cfg if p["mac"] == mac else p for p in self.panels])
         await self.announce(cfg)  # nový název zařízení v HA
         # obrázek (a tím překreslení desky) se změní, jen když se změní obsah – např. jiné rozvržení;
-        # jiné otočení mění jen data pro desku (model zobrazení stejný) -> vynutit
-        await self.rebuild(force=self.rotate_for(self.targets[mac]) != old_rotate, only=[self.targets[mac]])
+        # jiné otočení nebo barvy mění jen data pro desku (model zobrazení stejný) -> vynutit
+        await self.rebuild(force=self.rotate_for(self.targets[mac]) != old_rotate or cfg["colors"] != old_colors,
+                           only=[self.targets[mac]])
         print(f"[panels] panel {cfg['name']} uložen")
         return web.json_response(self.panels_json())
 

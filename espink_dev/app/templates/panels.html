@@ -514,19 +514,22 @@ function panelCard(p) {
   const rot = el("select");
   rot.append(el("option", { value: "", textContent: "Normálně" }),
              el("option", { value: String(flip), textContent: "Vzhůru nohama (otočeno o 180°)", selected: (p.rotate ?? DATA.default_rotate) === flip }));
+  const colors = el("select");
+  colors.append(el("option", { value: "bwr", textContent: "Černá, bílá, červená (GDEY075Z08)", selected: (p.colors || "bwr") === "bwr" }),
+                el("option", { value: "bw", textContent: "Černobílý (GDEY075T7) – červená jako černá", selected: p.colors === "bw" }));
   const save = el("button", { className: "primary", textContent: "Uložit", disabled: true });
   const discard = el("button", { className: "txtbtn", textContent: "Zahodit", hidden: true });
   const del = el("button", { className: "txtbtn danger" }, icon("delete-outline"), "Odebrat");
   let card = null;
   const mark = () => { save.disabled = false; discard.hidden = false; dirty.add(p.mac); card?.classList.add("dirty"); };
   discard.onclick = () => { dirty.delete(p.mac); render(); toast("Změny panelu zahozeny."); };
-  [name, lay, night, sensor, rot].forEach(i => i.addEventListener("input", mark));
+  [name, lay, night, sensor, rot, colors].forEach(i => i.addEventListener("input", mark));
 
   save.onclick = async () => {
     save.disabled = true;
     try {
       DATA = await post("panels/save", { mac: p.mac, name: name.value, layout: lay.value, night_layout: night.value, battery_sensor: sensor.value,
-                                         schedule: sched.rules(), rotate: rot.value === "" ? null : +rot.value });
+                                         schedule: sched.rules(), rotate: rot.value === "" ? null : +rot.value, colors: colors.value });
       dirty.delete(p.mac); render(); toast(`Panel „${name.value.trim()}“ uložen. Změna se projeví při příštím probuzení desky.`);
     } catch (e) { save.disabled = false; toast("Nelze uložit: " + e.message); }
   };
@@ -551,6 +554,7 @@ function panelCard(p) {
       el("div", { className: "grid2" }, field("Název", name), field("Rozvržení", el("div", { className: "withbtn" }, lay, edit))),
       field("Na noc", night, el("div", { className: "help", textContent: "Poslední obraz před dlouhým spánkem (aspoň 3 h podle rozvrhu) z tohoto rozvržení, sestavený k času ranního probuzení – ráno ukáže datum, jmeniny, události a předpověď nového dne." })),
       field("Otočení obrazu", rot, el("div", { className: "help", textContent: "Je-li obraz na panelu vzhůru nohama, zvol „Vzhůru nohama“. Projeví se při příštím probuzení desky." })),
+      field("Barvy displeje", colors, el("div", { className: "help", textContent: "Musí odpovídat displeji a firmwaru desky. Černobílý displej by červený text nezobrazil – add-on ho pošle jako černý." })),
       field("Senzor baterie v HA", el("div", { className: "withbtn" }, sensor, sug),
             el("div", { className: "help", textContent: DATA.mqtt
         ? "Panel má v Home Assistantu vlastní zařízení se stavem baterie, signálu a překreslení. Tady je jen název (ID) senzoru baterie – použije se při prvním vytvoření, později ho přejmenuješ přímo v HA. Nech prázdné, pokud stav v HA nechceš."

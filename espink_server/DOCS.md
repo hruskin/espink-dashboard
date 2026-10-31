@@ -127,8 +127,9 @@ vyzvednou při příštím probuzení.
   retained. Bez brokeru se stav zapisuje přes REST API do senzoru baterie panelu.
 - **Výdrž baterie:** add-on si ukládá napětí z probuzení (nejvýš po 30 min, 7 dní
   zpět, `/data/battery.json`) a proloží procenta přímkou. Výdrž = dny do vybití při
-  dosavadním poklesu. Odhad se ukáže až po dni dat; skok napětí o víc než 0,06 V
-  (nabíjení, odpojení USB, výměna baterie) historii smaže a odhad začne znovu.
+  dosavadním poklesu. Odhad se ukáže až po dni dat. Skok napětí o víc než 0,1 V,
+  který potvrdí i další měření (nabití, výměna baterie), historii smaže a odhad začne
+  znovu; jednorázový výkyv se zahodí. Napětí nad 4,25 V (deska na USB) se nepočítá.
 - **Upozornění na slabou baterii:** pod 15 % nebo pod 7 dní výdrže pošle add-on do HA
   jedno upozornění (Oznámení), případně i na službu z volby `battery_notify`
   (např. `notify.mobile_app_telefon`). Znovu až po nabití.

@@ -20,6 +20,7 @@ MIN_SPAN = 86400           # s – odhad až z dat aspoň za den (šum ±0,02 V 
 MIN_SAMPLES = 8
 CHARGE_JUMP = 0.1          # V – skok proti mediánu posledních 3 h = nabití / výměna (potvrdí ho další měření)
 USB_VOLTS = 4.25           # V – víc baterie nemá: deska běží z USB / nabíjí se
+EMPTY_PERCENT = 5          # % (~3,6 V) – níž deska při překreslení padá (brownout), = „vybito“
 MAX_DAYS = 365
 LOW_PERCENT = 15           # upozornění pod tolik procent …
 LOW_DAYS = 7               # … nebo pod tolik dní výdrže
@@ -82,7 +83,7 @@ def add(h: dict, ts: float, volts: float | None) -> bool:
 
 
 def estimate(h: dict, now: float) -> float | None:
-    """Dny do vybití (0 %) podle přímky proložené procenty; None = málo dat nebo baterie neklesá."""
+    """Dny do vybití (EMPTY_PERCENT) podle přímky proložené procenty; None = málo dat nebo baterie neklesá."""
     pts = [(t, battery_percent(v)) for t, v in h.get("samples") or [] if now - t <= KEEP]
     pts = [(t, p) for t, p in pts if p is not None]
     if len(pts) < MIN_SAMPLES or pts[-1][0] - pts[0][0] < MIN_SPAN:
@@ -95,7 +96,7 @@ def estimate(h: dict, now: float) -> float | None:
     if slope >= 0:
         return None
     level = mp + slope * (now - mt) / 86400                           # proložená hodnota teď
-    return min(MAX_DAYS, max(0.0, level / -slope))
+    return min(MAX_DAYS, max(0.0, (level - EMPTY_PERCENT) / -slope))
 
 
 def low(percent: int | None, days: float | None) -> bool:

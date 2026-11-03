@@ -116,6 +116,8 @@ vyzvednou při příštím probuzení.
   o 0,5 °C – s desetinami by se jinak panel překresloval skoro při každém probuzení.
   **Vlhkost** se změní až o 5 % (venku kolísá o několik % během minut) a **srážky dnes**
   po 0,5 mm.
+- **Stav baterie** v patičce sám překreslení nevyvolá – nové procento se ukáže až
+  s jinou změnou obsahu.
 - Hlavička `PreciseSleep` určuje dobu spánku podle rozvrhu panelu. Firmware ji omezí
   na 1 min – 24 h.
 - **Stav panelů v HA přes MQTT discovery** (potřebuje broker, např. Mosquitto;

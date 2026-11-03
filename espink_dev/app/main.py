@@ -80,7 +80,6 @@ class Target:
         self.error = ""
         self.shown: dict = {}     # zaokrouhlené hodnoty na displeji (hystereze, model.hnum)
         self.night = False        # obsah je noční obraz (rozvržení Na noc, k času ranního probuzení)
-        self.last_device_rebuild = 0.0
         self.last_publish = 0.0
         self.configure(cfg, default_schedule)
 
@@ -379,7 +378,6 @@ class Server:
         sleep = t.schedule.sleep_seconds(now)
 
         if check == "1":
-            old_bucket = model._device(t.device)["battery"]
             prev = t.device
             t.device = {
                 "voltage": model.fnum(system.get("vccVoltage")),
@@ -397,12 +395,8 @@ class Server:
                 "last_seen": now.isoformat(timespec="seconds"),
                 "sleep": sleep,
             }
-            # Změna baterie o celý krok (5 %) se má projevit hned v tomto probuzení
-            # (nejvýš jednou za 30 s – jinak by šlo střídáním hodnot vynutit vykreslení při každém požadavku)
             # Na noc: poslední probuzení před dlouhým spánkem dostane noční obraz hned (ne až v dalším přepočtu)
-            if not t.payload or bool(self.night_at(t, now)) != t.night or (
-                    model._device(t.device)["battery"] != old_bucket and time.time() - t.last_device_rebuild > 30):
-                t.last_device_rebuild = time.time()
+            if not t.payload or bool(self.night_at(t, now)) != t.night:
                 await self.rebuild(only=[t])
 
         if not t.payload:

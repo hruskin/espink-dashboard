@@ -989,11 +989,15 @@ def change_reasons(old: dict | None, new: dict) -> list[str]:
                     add(f"{title}: {_KEY_LABELS.get(k, k)}")
         elif keys:
             add(title)
-    if (old.get("device") or {}) != (new.get("device") or {}):
-        od, nd = old.get("device") or {}, new.get("device") or {}
-        add("Wi-Fi" if od.get("wifi_icon") != nd.get("wifi_icon") else "baterie")
+    if (old.get("device") or {}).get("wifi_icon") != (new.get("device") or {}).get("wifi_icon"):
+        add("Wi-Fi")
     return out or ["beze změny obsahu"]
 
 
+# stav baterie se kreslí (patička), ale sám překreslení nevyvolá – přibude s jinou změnou
+_NO_REDRAW = ("battery", "battery_icon", "battery_low")
+
+
 def digest(view: dict) -> str:
+    view = {**view, "device": {k: v for k, v in (view.get("device") or {}).items() if k not in _NO_REDRAW}}
     return hashlib.sha1(json.dumps(view, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8", "surrogatepass")).hexdigest()

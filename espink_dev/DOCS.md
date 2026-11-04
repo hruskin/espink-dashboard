@@ -124,6 +124,10 @@ vyzvednou při příštím probuzení.
   s jinou změnou obsahu.
 - Hlavička `PreciseSleep` určuje dobu spánku podle rozvrhu panelu. Firmware ji omezí
   na 1 min – 24 h.
+- **Výpadek Wi-Fi** displej nepřekreslí chybovou obrazovkou – zůstane poslední obsah
+  (hlavička `ShowNoWifiError: 0`; platí od prvního spojení po resetu desky).
+- **Pomalý HA:** deska čeká na přepočet obsahu nejvýš 8 s, pak dostane dosavadní
+  obrázek a nový si vezme při dalším probuzení (na baterii nečeká vzhůru).
 - **Stav panelů v HA přes MQTT discovery** (potřebuje broker, např. Mosquitto;
   přihlašovací údaje add-on vezme od Supervisoru). Každý panel je zařízení
   *ESPink <název>* se senzory Baterie, Napětí baterie, Signál WiFi, Doba překreslení,

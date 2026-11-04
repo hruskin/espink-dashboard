@@ -98,6 +98,7 @@ class Server:
         self.draft_lock = asyncio.Lock()
         self.preview_cache: dict = {}   # data z HA pro náhledy v editoru (fetch_raw_preview)
         self.lock = asyncio.Lock()
+        self.tasks: set[asyncio.Task] = set()
         self.ha: ha_mod.HomeAssistant | None = None
         self.mqtt: mqtt_mod.Mqtt | None = None
         self.announced: dict[str, str] = {}   # MAC -> poslední odeslaná konfigurace discovery
@@ -182,7 +183,7 @@ class Server:
         days = battery_mod.estimate(h, time.time())
         if battery_mod.low(percent, days) and not h.get("notified") and self.ha and not MOCK:
             h["notified"] = True
-            asyncio.create_task(self.notify_battery(t.cfg, percent, days))
+            self.spawn(self.notify_battery(t.cfg, percent, days))
         try:
             battery_mod.save(self.battery)
         except OSError as e:
@@ -395,12 +396,9 @@ class Server:
                 "last_seen": now.isoformat(timespec="seconds"),
                 "sleep": sleep,
             }
-            # Na noc: poslední probuzení před dlouhým spánkem dostane noční obraz hned (ne až v dalším přepočtu)
-            if not t.payload or bool(self.night_at(t, now)) != t.night:
-                await self.rebuild(only=[t])
-
-        if not t.payload:
-            await self.rebuild(force=True, only=[t])
+        # Na noc: poslední probuzení před dlouhým spánkem dostane noční obraz hned (ne až v dalším přepočtu)
+        if not t.payload or (check == "1" and bool(self.night_at(t, now)) != t.night):
+            await self.rebuild_for_device(t)
         if check == "1":
             # Deska překresluje, když dostane jiný Timestamp, než má – obrázek si přečte rovnou
             # z této odpovědi (druhý požadavek s timestampCheck=0 posílá jen stránkovaný režim)
@@ -409,16 +407,40 @@ class Server:
             self.count(t, now, redraw, confirmed=bool(ms(display.get("lastRefreshDuration"))), reasons=reasons)
             self.track_battery(t)
             await self.stamp_next_wake(t, now, sleep)
-            asyncio.create_task(self.publish_device(t, now, sleep))
+            self.spawn(self.publish_device(t, now, sleep))
             print(f"[device] {t.cfg['name']} {t.device['ip']} {t.device['voltage']} V,"
                   f" {t.device['rssi']} dBm, spánek {sleep} s{', překreslí – ' + ', '.join(reasons) if redraw else ''}")
         headers = {
             "Timestamp": str(t.content_ts),
             "PreciseSleep": str(sleep),
+            # bez Wi-Fi nechat na displeji poslední obsah místo chybové obrazovky (drží se v RTC
+            # paměti desky; po resetu / výměně baterie platí výchozí 1, dokud se deska neozve)
+            "ShowNoWifiError": "0",
             "Content-Type": "image/png" if self.opts["image_format"] == "png" else "application/octet-stream",
             "Connection": "close",
         }
         return web.Response(body=t.payload, headers=headers)
+
+    async def rebuild_for_device(self, t: Target) -> None:
+        """Deska čeká vzhůru na baterii – na pomalý HA (nebo běžící přepočet) nejvýš DEVICE_WAIT s,
+        pak dostane dosavadní obrázek; přepočet doběhne na pozadí a deska ho vezme příště."""
+        task = self.spawn(self.rebuild(force=not t.payload, only=[t]))
+        try:
+            await asyncio.wait_for(asyncio.shield(task), DEVICE_WAIT)
+        except asyncio.TimeoutError:
+            print(f"[device] {t.cfg['name']}: přepočet trvá déle než {DEVICE_WAIT} s, posílám dosavadní obrázek")
+
+    def spawn(self, coro) -> asyncio.Task:
+        """Úloha na pozadí: drží se reference (jinak ji může GC zrušit) a chyba se vypíše."""
+        task = asyncio.create_task(coro)
+        self.tasks.add(task)
+        task.add_done_callback(self._task_done)
+        return task
+
+    def _task_done(self, task: asyncio.Task) -> None:
+        self.tasks.discard(task)
+        if not task.cancelled() and task.exception():
+            print(f"[task] chyba: {type(task.exception()).__name__}: {task.exception()}")
 
     async def stamp_next_wake(self, t: Target, now: datetime, sleep: int) -> None:
         """Deska bude překreslovat => dokreslit do patičky přesnou dobu do další obnovy.
@@ -954,6 +976,7 @@ class Installer:
 
 DEVICE_MAX_BODY = 16 * 1024
 LEARN_DAYS = 14                          # přechodné období učení klíčů dříve povolených desek
+DEVICE_WAIT = 8                          # s – nejdéle čeká deska na přepočet obsahu
 NIGHT_SLEEP = 3 * 3600                   # spánek aspoň 3 h = noc: obraz z rozvržení Na noc
 FAIL_WINDOW, FAIL_MAX_MAC, FAIL_MAX_IP = 900, 5, 20   # chybné pokusy za 15 min → dočasné odmítání
 

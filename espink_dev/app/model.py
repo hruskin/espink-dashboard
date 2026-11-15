@@ -970,6 +970,8 @@ def change_reasons(old: dict | None, new: dict) -> list[str]:
         return ["start serveru"]
     out: list[str] = []
     add = lambda r: out.append(r) if r not in out else None  # noqa: E731
+    if bool(old.get("stale")) != bool(new.get("stale")):
+        add("výpadek dat" if new.get("stale") else "data znovu dostupná")
     ob = {b["id"]: b for b in old.get("blocks", [])}
     nb = {b["id"]: b for b in new.get("blocks", [])}
     if set(ob) != set(nb) or any({k: ob[i].get(k) for k in _GEOMETRY} != {k: nb[i].get(k) for k in _GEOMETRY} for i in nb if i in ob):
@@ -994,6 +996,13 @@ def change_reasons(old: dict | None, new: dict) -> list[str]:
     if (old.get("device") or {}).get("wifi_icon") != (new.get("device") or {}).get("wifi_icon"):
         add("Wi-Fi")
     return out or ["beze změny obsahu"]
+
+
+def stale_view(view: dict, text: str) -> dict:
+    """Model zobrazení při výpadku dat: pruh s textem přes spodek displeje, bez odjezdů (už neplatí)."""
+    blocks = [{**b, "rows": [], "error": "Odjezdy nejsou k dispozici", "disruptions": None} if b.get("type") == "departures" else b
+              for b in view.get("blocks", [])]
+    return {**view, "blocks": blocks, "stale": text}
 
 
 # stav baterie se kreslí (patička), ale sám překreslení nevyvolá – přibude s jinou změnou

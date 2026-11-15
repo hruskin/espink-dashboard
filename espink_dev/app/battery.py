@@ -24,6 +24,8 @@ EMPTY_PERCENT = 5          # % (~3,6 V) – níž deska při překreslení padá
 MAX_DAYS = 365
 LOW_PERCENT = 15           # upozornění pod tolik procent …
 LOW_DAYS = 7               # … nebo pod tolik dní výdrže
+SAVER_SKIP = 2             # úsporný režim (pod LOW_PERCENT): z každých 3 probuzení podle rozvrhu jen jedno …
+SAVER_MAX_SLEEP = 3600     # s – … ale z takhle dlouhého spánku (noc) už nic nepřeskakovat
 
 
 def path() -> str:
@@ -43,7 +45,7 @@ def load() -> dict:
             continue
         samples = [[float(t), float(v)] for t, v in (h.get("samples") or [])
                    if isinstance(t, (int, float)) and isinstance(v, (int, float))]
-        out[mac] = {"samples": samples, "notified": bool(h.get("notified"))}
+        out[mac] = {"samples": samples, "notified": bool(h.get("notified")), "saver": bool(h.get("saver"))}
         p = h.get("pending")
         if isinstance(p, list) and len(p) == 2 and all(isinstance(x, (int, float)) for x in p):
             out[mac]["pending"] = [float(p[0]), float(p[1])]
@@ -70,7 +72,7 @@ def add(h: dict, ts: float, volts: float | None) -> bool:
             h["pending"] = sample          # zatím jen výkyv – počkat na další měření
             return True
         s[:] = [pending]                   # nová úroveň potvrzená: nabito / jiná baterie
-        h["notified"] = False
+        h["notified"] = h["saver"] = False
         h.pop("pending", None)
         changed = True
     else:

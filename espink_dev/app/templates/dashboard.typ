@@ -497,3 +497,9 @@
     }))
   }))
 }
+
+// výpadek dat (model.stale_view): černý pruh je vidět i na č/b panelu a nezávisí na rozvržení
+#if view.at("stale", default: none) != none {
+  place(bottom + left, box(width: 100%, height: 36pt, fill: black,
+    align(center + horizon, text(size: 19pt, weight: 800, fill: white, nb(view.stale)))))
+}

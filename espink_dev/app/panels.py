@@ -122,6 +122,7 @@ def load_stats() -> dict:
                         # čekané překreslení z minulého probuzení (potvrdí ho až to další)
                         "expect": s.get("expect") if isinstance(s.get("expect"), bool) else None,
                         "expect_at": text("expect_at"), "last_reason": text("last_reason"),
+                        "next_wake": text("next_wake"), "problem_notified": s.get("problem_notified") is True,
                         "reasons": {str(k)[:80]: int(v) for k, v in (s.get("reasons") or {}).items()
                                     if isinstance(v, int)} if isinstance(s.get("reasons"), dict) else {}}
     return out

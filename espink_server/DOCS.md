@@ -116,10 +116,25 @@ vyzvednou při příštím probuzení.
   o 0,5 °C – s desetinami by se jinak panel překresloval skoro při každém probuzení.
   **Vlhkost** se změní až o 5 % (venku kolísá o několik % během minut) a **srážky dnes**
   po 0,5 mm.
+  Hystereze brání jen překreslení kvůli malé změně: když se panel překresluje z jiného
+  důvodu, ukáže všechny hodnoty aktuální. Obsah se navíc přepočítá ~25 s před čekaným
+  probuzením desky, takže nepropásne hodnotu, kterou čidlo poslalo těsně předtím.
 - **Stav baterie** v patičce sám překreslení nevyvolá – nové procento se ukáže až
   s jinou změnou obsahu.
 - Hlavička `PreciseSleep` určuje dobu spánku podle rozvrhu panelu. Firmware ji omezí
   na 1 min – 24 h.
+- **Výpadek Wi-Fi** displej nepřekreslí chybovou obrazovkou – zůstane poslední obsah
+  (hlavička `ShowNoWifiError: 0`; platí od prvního spojení po resetu desky).
+- **Výpadek dat:** když se data z HA nepodaří obnovit 30 min, displej to přizná: spodní pruh
+  „Data nejsou aktuální (naposledy …)“ a odjezdy zmizí. Stojí jedno překreslení na výpadek
+  a jedno po obnovení.
+- **Úsporný režim:** pod 15 % baterie se deska budí jen při každém třetím probuzení
+  z rozvrhu (noční spánek se neprodlužuje) a zůstane v něm do nabití. Na *Stavu* je to vidět.
+- **Hlídač panelů:** binární senzor *Problém* a upozornění v HA, když se deska 30 min po
+  čekaném probuzení neozve, opakovaně se nepřekreslí, překreslení narazí na limit
+  ovladače nebo jdou stará data. Po vyřešení upozornění samo zmizí.
+- **Pomalý HA:** deska čeká na přepočet obsahu nejvýš 8 s, pak dostane dosavadní
+  obrázek a nový si vezme při dalším probuzení (na baterii nečeká vzhůru).
 - **Stav panelů v HA přes MQTT discovery** (potřebuje broker, např. Mosquitto;
   přihlašovací údaje add-on vezme od Supervisoru). Každý panel je zařízení
   *ESPink <název>* se senzory Baterie, Napětí baterie, Signál WiFi, Doba překreslení,

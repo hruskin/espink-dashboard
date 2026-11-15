@@ -7,6 +7,7 @@ obrázek (Z2 nebo PNG).
 """
 import argparse
 import asyncio
+import functools
 import html
 import json
 import os
@@ -77,10 +78,16 @@ class Target:
         self.next_text = ""       # „další obnova“ v aktuálním obrázku
         self.served_ts = None     # Timestamp, který deska naposledy dostala (= má na displeji)
         self.served_view: dict | None = None   # model zobrazení na displeji (proč se překresluje)
+        self.served_hash = ""     # jeho digest – liší-li se nový obsah, deska se překreslí
+        self.reason_view: dict | None = None   # obsah s hysterezí (co překreslení vyvolalo, change_reasons)
+        self.prewake = ""         # čekané probuzení, pro které už proběhl přepočet těsně předem
         self.error = ""
-        self.shown: dict = {}     # zaokrouhlené hodnoty na displeji (hystereze, model.hnum)
+        self.shown: dict = {}     # zaokrouhlené hodnoty v obsahu, který deska dostane (model.hnum)
+        self.served_shown: dict = {}   # … a v obsahu, který má na displeji – z nich vychází hystereze
         self.night = False        # obsah je noční obraz (rozvržení Na noc, k času ranního probuzení)
         self.last_publish = 0.0
+        self.last_ok: datetime | None = None   # poslední úspěšné sestavení obsahu (zastaralá data)
+        self.problems: list[str] | None = None # co hlídač naposledy hlásil (None = zatím nic)
         self.configure(cfg, default_schedule)
 
     def configure(self, cfg: dict, default_schedule: list[str]) -> None:
@@ -98,6 +105,8 @@ class Server:
         self.draft_lock = asyncio.Lock()
         self.preview_cache: dict = {}   # data z HA pro náhledy v editoru (fetch_raw_preview)
         self.lock = asyncio.Lock()
+        self.tasks: set[asyncio.Task] = set()
+        self.started = now_local()
         self.ha: ha_mod.HomeAssistant | None = None
         self.mqtt: mqtt_mod.Mqtt | None = None
         self.announced: dict[str, str] = {}   # MAC -> poslední odeslaná konfigurace discovery
@@ -138,7 +147,7 @@ class Server:
         r = t.cfg.get("rotate")
         return self.opts["rotate"] if r is None else r
 
-    def count(self, t: Target, now: datetime, expect: bool, confirmed: bool, reasons: list[str] = ()) -> None:
+    def count(self, t: Target, now: datetime, expect: bool, confirmed: bool, reasons: list[str], sleep: int) -> None:
         """Probuzení a překreslení za dnešek. Deska překreslí, když dostane jiný Timestamp, než má
         (expect). Jestli to opravdu udělala, pozná server až při dalším probuzení: deska pošle
         lastRefreshDuration jen po překreslení (confirmed). Nesoulad se zaloguje."""
@@ -166,6 +175,7 @@ class Server:
             s["last_reason"] = ", ".join(reasons)[:250]
         s["wakes"] = s.get("wakes", 0) + 1
         s["expect"], s["expect_at"] = expect, now.isoformat(timespec="seconds")
+        s["next_wake"] = datetime.fromtimestamp(now.timestamp() + sleep).astimezone().isoformat(timespec="seconds")
         try:
             panels_mod.save_stats(self.stats)
         except OSError as e:
@@ -180,9 +190,12 @@ class Server:
             return
         percent = model.battery_percent(t.device.get("voltage"))
         days = battery_mod.estimate(h, time.time())
+        if percent is not None and percent <= battery_mod.LOW_PERCENT and not h.get("saver"):
+            h["saver"] = True  # platí, dokud skok napětí neukáže nabití (battery.add)
+            print(f"[battery] {t.cfg['name']}: úsporný režim ({percent} %)")
         if battery_mod.low(percent, days) and not h.get("notified") and self.ha and not MOCK:
             h["notified"] = True
-            asyncio.create_task(self.notify_battery(t.cfg, percent, days))
+            self.spawn(self.notify_battery(t.cfg, percent, days))
         try:
             battery_mod.save(self.battery)
         except OSError as e:
@@ -191,14 +204,65 @@ class Server:
     async def notify_battery(self, cfg: dict, percent: int | None, days: float | None) -> None:
         n = round(days) if days is not None else None
         left = "" if n is None else f", vydrží ještě asi {n} {'den' if n == 1 else 'dny' if 1 < n < 5 else 'dní'}"
-        msg = f"Panel {cfg['name']}: baterie {percent} %{left}. Je čas ji nabít."
+        saver = " Do nabití se budí méně často." if (self.battery.get(cfg["mac"]) or {}).get("saver") else ""
+        msg = f"Panel {cfg['name']}: baterie {percent} %{left}. Je čas ji nabít.{saver}"
         print(f"[battery] {msg}")
+        await self.notify(cfg, "ESPink: slabá baterie", msg, "battery")
+
+    async def notify(self, cfg: dict, title: str, msg: str, kind: str) -> None:
         await self.ha.call_service("persistent_notification", "create", {
-            "title": "ESPink: slabá baterie", "message": msg,
-            "notification_id": mqtt_mod.node(cfg["mac"]) + "_battery"})
+            "title": title, "message": msg, "notification_id": f"{mqtt_mod.node(cfg['mac'])}_{kind}"})
         target = self.opts.get("battery_notify") or ""
         if target.startswith("notify."):
-            await self.ha.call_service("notify", target.split(".", 1)[1], {"title": "ESPink: slabá baterie", "message": msg})
+            await self.ha.call_service("notify", target.split(".", 1)[1], {"title": title, "message": msg})
+
+    def problems(self, t: Target, now: datetime) -> list[str]:
+        """Co je s panelem špatně (hlídač). Deska se o sobě ozvat nemůže, když nežije – proto
+        se porovnává čas čekaného probuzení; po startu serveru dostane desky čas znovu."""
+        out, s, d = [], self.stats.get(t.cfg["mac"]) or {}, t.device
+        try:
+            due = datetime.fromisoformat(s["next_wake"]) if s.get("next_wake") else None
+        except ValueError:
+            due = None
+        if due and (now - max(due, self.started)).total_seconds() > LATE_GRACE:
+            out.append(f"neozvala se, čekala se {due.day}. {due.month}. v {due:%H:%M}")
+        if self.stats_for(t.cfg["mac"])["missed_today"] >= MISSED_MAX:
+            out.append("opakovaně se nepřekreslila, i když dostala nový obsah")
+        if (d.get("refresh_ms") or 0) >= REFRESH_TIMEOUT_MS:
+            out.append("překreslení narazilo na časový limit ovladače")
+        if t.view and t.view.get("stale"):
+            out.append("data z Home Assistantu nejdou obnovit")
+        return out
+
+    async def watch_panels(self) -> None:
+        """Hlídač: změnu stavu pošle do binárního senzoru a jako upozornění v HA (jedno na výpadek)."""
+        now = now_local()
+        for t in self.targets.values():
+            problems = self.problems(t, now)
+            if problems == t.problems:
+                continue
+            t.problems = problems
+            mac = t.cfg["mac"]
+            if self.mqtt:
+                self.mqtt.publish(mqtt_mod.problem_topic(mac), {"problem": "ON" if problems else "OFF", "problems": problems})
+            if MOCK or not self.ha:
+                continue
+            s = self.stats.setdefault(mac, {})
+            if problems and not s.get("problem_notified"):
+                s["problem_notified"] = True
+                print(f"[hlídač] {t.cfg['name']}: {', '.join(problems)}")
+                await self.notify(t.cfg, "ESPink: problém s panelem", f"Panel {t.cfg['name']}: {', '.join(problems)}.", "problem")
+            elif not problems and s.get("problem_notified"):
+                s["problem_notified"] = False
+                print(f"[hlídač] {t.cfg['name']}: v pořádku")
+                await self.ha.call_service("persistent_notification", "dismiss",
+                                           {"notification_id": f"{mqtt_mod.node(mac)}_problem"})
+            else:
+                continue
+            try:
+                panels_mod.save_stats(self.stats)
+            except OSError as e:
+                print(f"[stats] nelze uložit: {e}")
 
     def stats_for(self, mac: str) -> dict:
         s = self.stats.get(mac) or {}
@@ -225,8 +289,19 @@ class Server:
         rozvržení Na noc. Obraz se pak sestaví k tomuto času – ráno ukáže nový den."""
         if t.cfg.get("night_layout") not in self.layouts:
             return None
-        sleep = t.schedule.sleep_seconds(now)
+        sleep = self.sleep_for(t, now)
         return now + timedelta(seconds=sleep) if sleep >= NIGHT_SLEEP else None
+
+    def sleep_for(self, t: Target, now: datetime) -> int:
+        """Spánek podle rozvrhu; v úsporném režimu (slabá baterie) se přeskočí pár dalších probuzení,
+        takže časy zůstanou zarovnané na rozvrh a noční spánek se nepřidává k už dlouhému."""
+        sleep = t.schedule.sleep_seconds(now)
+        if (self.battery.get(t.cfg["mac"]) or {}).get("saver"):
+            for _ in range(battery_mod.SAVER_SKIP):
+                if sleep >= battery_mod.SAVER_MAX_SLEEP:
+                    break
+                sleep += t.schedule.sleep_seconds(now + timedelta(seconds=sleep))
+        return sleep
 
     def uses_layout(self, t: Target, lid: str) -> bool:
         return self.layout_for(t)["id"] == lid or t.cfg.get("night_layout") == lid
@@ -263,25 +338,54 @@ class Server:
                         raws[lay["id"]] = await self.fetch_raw(lay, now)
                     device = t.device or await self.device_from_sensor(t.cfg["battery_sensor"])
                     # ve vlákně: šablona může běžet až 2 s a smyčka serveru (desky) musí odpovídat dál
-                    view = await asyncio.to_thread(model.build, raws[lay["id"]], lay, device, night or now, memory=t.shown)
-                    digest = model.digest(view)
+                    build = functools.partial(model.build, raws[lay["id"]], lay, device, night or now)
+                    memory = dict(t.served_shown)
+                    view = await asyncio.to_thread(build, memory=memory)
+                    reason_view, digest = view, model.digest(view)
+                    if digest != t.served_hash:
+                        # deska se překreslí tak jako tak => aktuální hodnoty bez hystereze (ta brání
+                        # jen překreslení kvůli malé změně); hystereze pak vychází z nich
+                        memory = {}
+                        view = await asyncio.to_thread(build, memory=memory)
+                        digest = model.digest(view)
+                    t.shown = memory
                     self.last_build = time.time()
+                    t.last_ok, t.error = now, ""
                     if digest == t.view_hash and not force:
                         continue
                     updated = f"{now.day}. {now.month}. {now:%H:%M}"  # %-d nefunguje v musl (Alpine)
                     # odhad; přesná doba se dokreslí, až se deska ozve (handle_device)
-                    next_text = after(now, t.schedule.sleep_seconds(now))
+                    next_text = after(now, self.sleep_for(t, now))
                     t.preview, t.payload = await render.render(
                         view, updated, self.rotate_for(t), self.opts["image_format"], next_text, t.cfg.get("colors", "bwr"))
                     t.view, t.view_hash, t.content_ts = view, digest, int(now.timestamp())
+                    t.reason_view = reason_view
                     t.updated_text, t.next_text, t.error = updated, next_text, ""
                     print(f"[render] {t.cfg['name']}: nový obsah {digest[:8]} ({len(t.payload)} B)")
                 except Exception as e:  # noqa: BLE001 – server musí běžet dál i při chybě
                     t.error = f"{now:%H:%M:%S} {type(e).__name__}: {e}"
                     errors.append(f"{t.cfg['name']}: {t.error}" if len(self.targets) > 1 else t.error)
                     print(f"[render] {t.cfg['name']}: chyba: {t.error}")
+                    await self.mark_stale(t, now)
             if only is None or errors:
                 self.last_error = "; ".join(errors)
+
+    async def mark_stale(self, t: Target, now: datetime) -> None:
+        """Data dlouho nejdou obnovit: obsah zůstane, ale displej to přizná a odjezdy zmizí
+        (jinak by „za 6 min“ vypadalo platně celou noc). Stojí jedno překreslení na výpadek."""
+        if not t.view or t.view.get("stale") or not t.last_ok or (now - t.last_ok).total_seconds() < STALE_AFTER:
+            return
+        at = t.last_ok
+        view = model.stale_view(t.view, f"Data nejsou aktuální (naposledy {at.day}. {at.month}. {at:%H:%M})")
+        try:
+            t.preview, t.payload = await render.render(view, t.updated_text, self.rotate_for(t), self.opts["image_format"],
+                                                       t.next_text, t.cfg.get("colors", "bwr"))
+        except Exception as e:  # noqa: BLE001 – raději starý obrázek než nic
+            print(f"[render] {t.cfg['name']}: varianta se starými daty: {e}")
+            return
+        t.view, t.view_hash, t.content_ts = view, model.digest(view), int(now.timestamp())
+        t.reason_view = view
+        print(f"[render] {t.cfg['name']}: {view['stale']}")
 
     async def fetch_raw(self, layout: dict, now: datetime) -> dict:
         needs = layout_mod.needs(layout)
@@ -347,7 +451,26 @@ class Server:
             if time.time() >= next_data or tpl != last_tpl:
                 await self.rebuild(force=tpl != last_tpl)
                 next_data, last_tpl = time.time() + self.opts["render_interval"], tpl
-            await asyncio.sleep(1 if DEV else self.opts["render_interval"])
+                await self.watch_panels()
+            else:
+                due = [t for t in self.targets.values() if self.prewake_due(t)]
+                if due:  # data co nejčerstvější: čidlo mohlo poslat hodnotu až po pravidelném přepočtu
+                    await self.rebuild(only=due)
+            await asyncio.sleep(1 if DEV else LOOP_TICK)
+
+    def prewake_due(self, t: Target) -> bool:
+        """Přepočet PREWAKE s před čekaným probuzením desky (jednou na probuzení)."""
+        nxt = (self.stats.get(t.cfg["mac"]) or {}).get("next_wake")
+        if not nxt or nxt == t.prewake:
+            return False
+        try:
+            left = (datetime.fromisoformat(nxt) - now_local()).total_seconds()
+        except ValueError:
+            return False
+        if 0 < left <= PREWAKE:
+            t.prewake = nxt
+            return True
+        return False
 
     # ── zařízení ─────────────────────────────────────────────────────────
     async def handle_device(self, request: web.Request) -> web.Response:
@@ -375,7 +498,7 @@ class Server:
             self.add_panel(mac)
         t = self.targets[mac]
         now = now_local()
-        sleep = t.schedule.sleep_seconds(now)
+        sleep = self.sleep_for(t, now)
 
         if check == "1":
             prev = t.device
@@ -387,7 +510,7 @@ class Server:
                 "fw": short_text(body.get("fwVersion")),
                 # deska posílá délku překreslení jen po probuzení, které následuje po překreslení
                 # (potvrzení pro count) – jinak ponechat poslední známou hodnotu
-                # (≈20 000 ms = vypršel limit ovladače panelu)
+                # (≈45 000 ms = vypršel limit ovladače panelu)
                 "refresh_ms": ms(display.get("lastRefreshDuration")) or prev.get("refresh_ms"),
                 "download_ms": ms(network.get("lastDownloadDuration")) or prev.get("download_ms"),
                 "cpu_temp": model.fnum(system.get("cpuTemp")),
@@ -395,30 +518,51 @@ class Server:
                 "last_seen": now.isoformat(timespec="seconds"),
                 "sleep": sleep,
             }
-            # Na noc: poslední probuzení před dlouhým spánkem dostane noční obraz hned (ne až v dalším přepočtu)
-            if not t.payload or bool(self.night_at(t, now)) != t.night:
-                await self.rebuild(only=[t])
-
-        if not t.payload:
-            await self.rebuild(force=True, only=[t])
+        # Na noc: poslední probuzení před dlouhým spánkem dostane noční obraz hned (ne až v dalším přepočtu)
+        if not t.payload or (check == "1" and bool(self.night_at(t, now)) != t.night):
+            await self.rebuild_for_device(t)
         if check == "1":
             # Deska překresluje, když dostane jiný Timestamp, než má – obrázek si přečte rovnou
             # z této odpovědi (druhý požadavek s timestampCheck=0 posílá jen stránkovaný režim)
             redraw = t.content_ts != t.served_ts
-            reasons = model.change_reasons(t.served_view, t.view) if redraw else []
-            self.count(t, now, redraw, confirmed=bool(ms(display.get("lastRefreshDuration"))), reasons=reasons)
+            reasons = model.change_reasons(t.served_view, t.reason_view or t.view) if redraw else []
+            self.count(t, now, redraw, confirmed=bool(ms(display.get("lastRefreshDuration"))), reasons=reasons, sleep=sleep)
             self.track_battery(t)
             await self.stamp_next_wake(t, now, sleep)
-            asyncio.create_task(self.publish_device(t, now, sleep))
+            self.spawn(self.publish_device(t, now, sleep))
             print(f"[device] {t.cfg['name']} {t.device['ip']} {t.device['voltage']} V,"
                   f" {t.device['rssi']} dBm, spánek {sleep} s{', překreslí – ' + ', '.join(reasons) if redraw else ''}")
         headers = {
             "Timestamp": str(t.content_ts),
             "PreciseSleep": str(sleep),
+            # bez Wi-Fi nechat na displeji poslední obsah místo chybové obrazovky (drží se v RTC
+            # paměti desky; po resetu / výměně baterie platí výchozí 1, dokud se deska neozve)
+            "ShowNoWifiError": "0",
             "Content-Type": "image/png" if self.opts["image_format"] == "png" else "application/octet-stream",
             "Connection": "close",
         }
         return web.Response(body=t.payload, headers=headers)
+
+    async def rebuild_for_device(self, t: Target) -> None:
+        """Deska čeká vzhůru na baterii – na pomalý HA (nebo běžící přepočet) nejvýš DEVICE_WAIT s,
+        pak dostane dosavadní obrázek; přepočet doběhne na pozadí a deska ho vezme příště."""
+        task = self.spawn(self.rebuild(force=not t.payload, only=[t]))
+        try:
+            await asyncio.wait_for(asyncio.shield(task), DEVICE_WAIT)
+        except asyncio.TimeoutError:
+            print(f"[device] {t.cfg['name']}: přepočet trvá déle než {DEVICE_WAIT} s, posílám dosavadní obrázek")
+
+    def spawn(self, coro) -> asyncio.Task:
+        """Úloha na pozadí: drží se reference (jinak ji může GC zrušit) a chyba se vypíše."""
+        task = asyncio.create_task(coro)
+        self.tasks.add(task)
+        task.add_done_callback(self._task_done)
+        return task
+
+    def _task_done(self, task: asyncio.Task) -> None:
+        self.tasks.discard(task)
+        if not task.cancelled() and task.exception():
+            print(f"[task] chyba: {type(task.exception()).__name__}: {task.exception()}")
 
     async def stamp_next_wake(self, t: Target, now: datetime, sleep: int) -> None:
         """Deska bude překreslovat => dokreslit do patičky přesnou dobu do další obnovy.
@@ -434,7 +578,7 @@ class Server:
                         t.next_text = wanted
                     except Exception as e:  # noqa: BLE001 – raději starý odhad než nic
                         print(f"[render] patička: {e}")
-        t.served_ts, t.served_view = t.content_ts, t.view
+        t.served_ts, t.served_view, t.served_hash, t.served_shown = t.content_ts, t.view, t.view_hash, t.shown
 
     def blocked(self, *who: str) -> bool:
         """Příliš mnoho chybných pokusů z MAC nebo IP (hádání klíče) → na čas odmítat bez dalšího."""
@@ -771,7 +915,7 @@ class Server:
                                                        lambda: self.device_from_sensor(t.cfg["battery_sensor"]))
                 view = await asyncio.to_thread(model.build, raw, draft, device, now, worst=request.query.get("worst") == "1")
                 png = await render.render_preview(view, f"{now.day}. {now.month}. {now:%H:%M}",
-                                                  after(now, t.schedule.sleep_seconds(now)), t.cfg.get("colors", "bwr"))
+                                                  after(now, self.sleep_for(t, now)), t.cfg.get("colors", "bwr"))
             except Exception as e:  # noqa: BLE001
                 return web.json_response({"error": f"{type(e).__name__}: {e}"}, status=502)
         return web.Response(body=png, content_type="image/png", headers={
@@ -808,6 +952,8 @@ class Server:
                         "error": t.error if t else "", "size": len(t.payload) if t else 0,
                         "interval_now": t.schedule.interval_at(now) if t else None, "next_wake": nxt,
                         "rotate_used": self.rotate_for(t) if t else None, "stats": self.stats_for(p["mac"]),
+                        "problems": self.problems(t, now) if t else [],
+                        "saver": bool((self.battery.get(p["mac"]) or {}).get("saver")),
                         "device": {**d, "battery": model.battery_percent(d.get("voltage"))} if d else {}})
         known = {p["mac"] for p in self.panels}
         # povolené MAC bez panelu (zapsané ručně v Konfiguraci add-onu) – panel vznikne, až se deska ozve
@@ -954,6 +1100,13 @@ class Installer:
 
 DEVICE_MAX_BODY = 16 * 1024
 LEARN_DAYS = 14                          # přechodné období učení klíčů dříve povolených desek
+STALE_AFTER = 30 * 60                    # s – po takové době bez nových dat to displej přizná
+LATE_GRACE = 30 * 60                     # s – rezerva na čekané probuzení (drift RTC, výpadek Wi-Fi), pak hlídač
+MISSED_MAX = 3                           # nepřekreslení za den, než je to problém (jedno se občas stane)
+REFRESH_TIMEOUT_MS = 44000               # ≈45 s = vypršel limit ovladače panelu (patch 03-busy-timeout)
+PREWAKE = 25                             # s – přepočet před čekaným probuzením (deska chodí ~5 s dřív)
+LOOP_TICK = 5                            # s – jak často smyčka kontroluje, jestli se nějaká deska neblíží
+DEVICE_WAIT = 8                          # s – nejdéle čeká deska na přepočet obsahu
 NIGHT_SLEEP = 3 * 3600                   # spánek aspoň 3 h = noc: obraz z rozvržení Na noc
 FAIL_WINDOW, FAIL_MAX_MAC, FAIL_MAX_IP = 900, 5, 20   # chybné pokusy za 15 min → dočasné odmítání
 

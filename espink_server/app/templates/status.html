@@ -166,7 +166,9 @@ function render(D) {
       ["Teplota procesoru", d.cpu_temp != null ? Math.round(d.cpu_temp) + " °C" : "–"], ["MAC", p.mac]];
     if (p.error) rows.push(["Chyba vykreslení", p.error]);
     // nepovolená deska nedostává obrázek – upozornit hned nahoře, ne v tabulce
+    if (p.saver) rows.push(["Úsporný režim", "ano – slabá baterie, budí se méně často (do nabití)"]);
     const warn = !p.allowed ? el("div", { className: "warnbar" }, "Deska není povolená a nedostává obrázek. ", el("a", { href: "panels", textContent: "Povolit v Panelech" }))
+      : p.problems.length ? el("div", { className: "warnbar" }, "Problém: " + p.problems.join(", ") + ".")
       : s.missed_today ? el("div", { className: "warnbar" }, `Dnes se ${s.missed_today}× nepřekreslila, i když dostala nový obsah (naposledy ${rel(s.last_missed)}).`)
       : null;
     return el("section", { className: "card" }, el("div", { className: "phead" }, el("b", { textContent: p.name })), warn,

@@ -3,6 +3,7 @@
 Model obsahuje jen hotové řetězce/příznaky, které se opravdu vykreslí. Jeho hash
 proto přesně odpovídá tomu, zda se obrázek změnil (=> hlavička Timestamp).
 """
+import contextvars
 import functools
 import hashlib
 import math
@@ -84,7 +85,8 @@ def num(value, decimals=1) -> str | None:
 # Hystereze zaokrouhlených hodnot: zobrazená hodnota se změní, až se skutečná vzdálí
 # o ¾ kroku (u celých stupňů: z 11 na 12 až od 11,75, zpět pod 11,25) – hodnota na
 # hranici zaokrouhlení pak nepřeskakuje a nevynucuje překreslení. Paměť (co je na
-# displeji) má každý panel svou; během build() je v _memory, náhled ji nepoužívá.
+# displeji) má každý panel svou; během build() je v _memory (ContextVar – build() panelu
+# a náhledu běží v různých vláknech zároveň a nesmí si paměť přepsat), náhled ji nepoužívá.
 # Teplota s desetinami by se při každé desetině měnila (a panel překresloval) skoro při
 # každém probuzení – nová hodnota se proto ukáže až při změně aspoň o 0,5 °C.
 HYSTERESIS = 0.75
@@ -92,19 +94,20 @@ TEMP_MIN_CHANGE = 0.5
 HUM_MIN_CHANGE = 5.0    # % – vlhkost venku kolísá o několik % během minut (v létě by se jinak překreslovalo ~20× denně)
 RAIN_MIN_CHANGE = 0.5   # mm – při dešti nepřekreslovat po každé desetině
 TEMP_UNITS = ("°C", "°F", "K")
-_memory: dict | None = None
+_memory: contextvars.ContextVar[dict | None] = contextvars.ContextVar("memory", default=None)
 
 
 def hnum(key: str, value, decimals: int = 1, min_change: float = 0.0) -> str | None:
     v = fnum(value)
     if v is None:
         return None
-    if _memory is not None and key:
+    memory = _memory.get()
+    if memory is not None and key:
         k = f"{key}|{decimals}"
-        prev = _memory.get(k)
+        prev = memory.get(k)
         limit = max(HYSTERESIS * 10 ** -decimals, min_change)
         v = prev if prev is not None and abs(v - prev) < limit else round(v, decimals)
-        _memory[k] = v
+        memory[k] = v
     return num(v, decimals)
 
 
@@ -893,12 +896,11 @@ def _header_alert(raw: dict, b: dict, red_cals: list, now: datetime, tz) -> dict
 def build(raw: dict, layout: dict, device: dict, now: datetime, worst: bool = False,
           memory: dict | None = None) -> dict:
     """memory: hodnoty zobrazené na panelu (hystereze zaokrouhlení); None = bez hystereze."""
-    global _memory
-    _memory = memory
+    token = _memory.set(memory)
     try:
         return _build(raw, layout, device, now, worst)
     finally:
-        _memory = None
+        _memory.reset(token)
 
 
 def _build(raw: dict, layout: dict, device: dict, now: datetime, worst: bool = False) -> dict:
@@ -968,6 +970,8 @@ def change_reasons(old: dict | None, new: dict) -> list[str]:
         return ["start serveru"]
     out: list[str] = []
     add = lambda r: out.append(r) if r not in out else None  # noqa: E731
+    if bool(old.get("stale")) != bool(new.get("stale")):
+        add("výpadek dat" if new.get("stale") else "data znovu dostupná")
     ob = {b["id"]: b for b in old.get("blocks", [])}
     nb = {b["id"]: b for b in new.get("blocks", [])}
     if set(ob) != set(nb) or any({k: ob[i].get(k) for k in _GEOMETRY} != {k: nb[i].get(k) for k in _GEOMETRY} for i in nb if i in ob):
@@ -992,6 +996,13 @@ def change_reasons(old: dict | None, new: dict) -> list[str]:
     if (old.get("device") or {}).get("wifi_icon") != (new.get("device") or {}).get("wifi_icon"):
         add("Wi-Fi")
     return out or ["beze změny obsahu"]
+
+
+def stale_view(view: dict, text: str) -> dict:
+    """Model zobrazení při výpadku dat: pruh s textem přes spodek displeje, bez odjezdů (už neplatí)."""
+    blocks = [{**b, "rows": [], "error": "Odjezdy nejsou k dispozici", "disruptions": None} if b.get("type") == "departures" else b
+              for b in view.get("blocks", [])]
+    return {**view, "blocks": blocks, "stale": text}
 
 
 # stav baterie se kreslí (patička), ale sám překreslení nevyvolá – přibude s jinou změnou

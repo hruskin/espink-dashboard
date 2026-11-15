@@ -36,6 +36,8 @@ SENSORS = {
     # co se změnilo při posledním překreslení; počty důvodů za dnešek v atributech
     "last_redraw_reason": ("Důvod překreslení", {"ic": "mdi:help-circle-outline"}),
     "missed_today": ("Nepřekresleno dnes", {"stat_cla": "total_increasing", "ic": "mdi:monitor-off", "ent_cat": "diagnostic"}),
+    # hlídač (Server.watch_panels): zvlášť téma, posílá se i když deska nežije a stav nemá co říct
+    "problem": ("Problém", {"p": "binary_sensor", "dev_cla": "problem", "ent_cat": "diagnostic"}),
 }
 
 
@@ -45,6 +47,10 @@ def node(mac: str) -> str:
 
 def state_topic(mac: str) -> str:
     return f"{BASE}/{node(mac)}/state"
+
+
+def problem_topic(mac: str) -> str:
+    return f"{BASE}/{node(mac)}/problem"
 
 
 def config_topic(mac: str) -> str:
@@ -71,6 +77,9 @@ def discovery(cfg: dict, fw: str | None) -> dict:
         if key == "last_redraw_reason":
             c["json_attr_t"] = state_topic(cfg["mac"])
             c["json_attr_tpl"] = "{{ value_json.redraw_reasons | tojson }}"
+        if key == "problem":
+            c["stat_t"] = c["json_attr_t"] = problem_topic(cfg["mac"])
+            c["json_attr_tpl"] = "{{ {'problems': value_json.problems} | tojson }}"
         cmps[key] = c
     return {"dev": dev, "o": ORIGIN, "stat_t": state_topic(cfg["mac"]), "cmps": cmps, "qos": 1}
 

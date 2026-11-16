@@ -71,6 +71,9 @@ BLOCK_TYPES: dict[str, dict] = {
             "calendars": ([], "calendars"),
             "holiday_calendar": ("", "entity"),  # státní svátky jako červený řádek
             "days": (7, ("int", 1, 31)),
+            # celodenní události na 3+ dny (model.MULTI_DAY): once = jednou s koncem („do pá“),
+            # ongoing = probíhající v řádku Probíhá nahoře, ends = jednou + poslední den, repeat = v každém dni
+            "multi_day": ("once", ("enum", "once", "ongoing", "ends", "repeat")),
         },
     },
     "menu": {

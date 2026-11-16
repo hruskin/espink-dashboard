@@ -41,6 +41,12 @@ kolik řádků se vejde). Náhled vykresluje server stejně jako pro desku.
   ČHMÚ Meteogram). Platná výstraha, nebo výstraha začínající do 24 h, se ukáže červeně
   s ikonou v řádku upozornění, např. „Silný vítr · Bouřky, do zítra 6:00“, a má
   přednost před červenými kalendáři.
+- **Vícedenní události** (celodenní na 3 a více dní, např. prázdniny) v Událostech:
+  volba v nastavení bloku – *jednou, s koncem* (výchozí: „Dnes · do pá · Prázdniny“,
+  konec za víc než týden datem za názvem), *v řádku Probíhá nahoře* (probíhající
+  dlouhé události v jednom řádku nad dny), *jednou + poslední den* (navíc připomínka
+  v den konce) nebo *v každém dni* (jako dřív). Časová událost přes víc dní ukazuje
+  u dneška den konce („do st“), končí-li dnes, čas („do 18:00“).
 - **Jídelníček** (ve školce) bere senzor s atributy `pondeli` … `patek` (text
   „🥐 **Přesnídávka:** …\n\n🍲 **Oběd:** polévka\nhlavní jídlo …“), `obdobi_od`
   (pondělí týdne) a `je_aktualni`. Do zvolené hodiny (výchozí 14) ukazuje dnešek,

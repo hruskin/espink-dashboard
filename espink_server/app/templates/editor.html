@@ -671,7 +671,10 @@ function params(b) {
       el("div", { className: "grid2" }, numField("Cesta na zastávku", b, "walk_minutes", "min")),
       el("div", { className: "help", textContent: "Počet spojů se řídí výškou bloku (30 px na spoj)." })];
     case "agenda": return [calRows(b), el("div", { className: "grid2" }, numField("Dní dopředu (vždy)", b, "days"),
-      entityField("Státní svátky jako řádek", b, "holiday_calendar", "calendar"))];
+      entityField("Státní svátky jako řádek", b, "holiday_calendar", "calendar")),
+      selectField("Vícedenní události (3 a více dní)", b, "multi_day", {
+        once: "jednou, s koncem („do pá“)", ongoing: "probíhající v řádku Probíhá nahoře",
+        ends: "jednou s koncem + poslední den", repeat: "v každém dni" })];
     case "forecast": return [el("div", { className: "grid2" }, entityField("Počasí", b, "weather", "weather"), numField("Počet dní", b, "days"))];
     case "bedtime": return [
       entityField("Večerníček", b, "entity", "sensor", "senzor z ha-vecernicek: stav = epizoda, atribut serial"),

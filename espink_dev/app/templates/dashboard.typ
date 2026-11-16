@@ -207,6 +207,12 @@
   let base = calc.max(0.928 * ss, 0.969 * ts, 0.969 * dls)
   let at-base(body) = text(top-edge: pt(base), bottom-edge: pt(base - 29), body)
   pad(x: 16pt, top: 6pt, {
+    // model.multi_day = ongoing: dlouhé probíhající události v jednom řádku nad dny
+    if has(b.at("ongoing", default: none)) {
+      box(width: 100%, height: 29pt, clip: true,
+        at-base(ell("Probíhá: " + b.ongoing, font: COND, size: pt(ss), weight: 700)))
+      if b.days.len() > 0 { box(width: 100%, height: 1pt, fill: black) }
+    }
     let first = true
     for day in b.days {
       if day.rows.len() > 0 {

@@ -382,6 +382,19 @@ def _row_height(it: dict, m: dict, cw: int) -> int:
     return EVENT_ROW_H + (it["lines"] - 1) * m["line_h"]
 
 
+MULTI_DAY = 3   # celodenní událost aspoň na tolik dní se v agendě ukáže jen jednou (s koncem)
+
+
+def _until(last_day: date, shown: date, today: date) -> tuple[str, str]:
+    """Konec vícedenní události: do týdne dnem ve sloupci času („do pá“), dál datem za názvem
+    (do sloupce se nevejde). Končí-li v den, kdy je zobrazená, nic."""
+    if last_day <= shown:
+        return "", ""
+    if (last_day - today).days <= 6:
+        return "do " + DAYS_SHORT[last_day.weekday()].lower(), ""
+    return "", f" (do {last_day.day}. {last_day.month}.)"
+
+
 def _events(raw: dict, b: dict, now: datetime, tz, budget: int, cw: int) -> dict:
     EVENTS_HEIGHT = budget  # noqa: N806 – lokální rozpočet
     today = now.date()
@@ -389,6 +402,8 @@ def _events(raw: dict, b: dict, now: datetime, tz, budget: int, cw: int) -> dict
     guaranteed = today + timedelta(days=b["days"] - 1)
     last = today + timedelta(days=max(b["days"], LOOKAHEAD_DAYS) - 1)
     per_day: dict[date, list] = {}
+    mode = b.get("multi_day", "once")
+    ongoing: list[tuple[date, str]] = []   # režim „ongoing“: probíhající dlouhé události v řádku nahoře
     icons = calendar_icons(raw, b["calendars"])
     for cal in b["calendars"]:
         for ev in raw["events"].get(cal["entity"], []):
@@ -399,6 +414,20 @@ def _events(raw: dict, b: dict, now: datetime, tz, budget: int, cw: int) -> dict
                     "red": bool(cal.get("red")), "icon": icons.get(cal["entity"]), "wrap": bool(cal.get("wrap"))}
             if n["all_day"]:
                 d = max(n["start"], today)
+                end_day = n["end"] - timedelta(days=1)
+                if (n["end"] - n["start"]).days >= MULTI_DAY and mode != "repeat":
+                    # dlouhá událost (týden prázdnin…) jen jednou, s koncem – neopakovat v každém dni
+                    if mode == "ongoing" and n["start"] <= today:
+                        time, summary = _until(end_day, today, today)
+                        ongoing.append((end_day, base["summary"] + (f" ({time})" if time else summary)))
+                    elif d <= last:
+                        time, summary = _until(end_day, d, today)
+                        per_day.setdefault(d, []).append({**base, "summary": base["summary"] + summary,
+                                                          "time": time, "allday": True, "sort": ""})
+                    if mode == "ends" and d < end_day <= last:
+                        per_day.setdefault(end_day, []).append({**base, "summary": base["summary"] + " – poslední den",
+                                                                "time": "", "allday": True, "sort": ""})
+                    continue
                 while d < n["end"] and d <= last:
                     per_day.setdefault(d, []).append({**base, "time": "", "allday": True, "sort": ""})
                     d += timedelta(days=1)
@@ -407,12 +436,17 @@ def _events(raw: dict, b: dict, now: datetime, tz, budget: int, cw: int) -> dict
                 continue  # už proběhlo
             st = n["start"]
             if st.date() < today:  # začalo dříve a stále trvá
-                per_day.setdefault(today, []).append({**base, "time": "do " + n["end"].strftime("%H:%M"), "sort": "00"})
+                end = n["end"].date()
+                time, summary = (f"do {n['end']:%H:%M}", "") if end == today else _until(end, today, today)
+                per_day.setdefault(today, []).append({**base, "summary": base["summary"] + summary, "time": time, "sort": "00"})
             elif st.date() <= last:
                 per_day.setdefault(st.date(), []).append({**base, "time": st.strftime("%H:%M"), "sort": st.strftime("%H:%M")})
 
     m = agenda_metrics(cw, bool(icons))
     days, used, hidden = [], 0, 0
+    ongoing_text = " · ".join(dict.fromkeys(s for _, s in sorted(ongoing)))   # bez duplicit, dřív končící první
+    if ongoing_text:
+        used = EVENT_ROW_H + SEP_H
     full = False  # první událost, která se nevešla – pozdější už se nepřeskakují dopředu
     for d in sorted(per_day):
         items = sorted(per_day[d], key=lambda x: (x["sort"], x["summary"]))
@@ -469,8 +503,9 @@ def _events(raw: dict, b: dict, now: datetime, tz, budget: int, cw: int) -> dict
         hidden += 1
         if not days[-1]["rows"]:
             days.pop()
-    empty = not days
-    return {"days": days, "hidden": hidden, "range": b["days"], "icons": bool(icons), "empty": empty}
+    empty = not days and not ongoing_text
+    return {"days": days, "hidden": hidden, "range": b["days"], "icons": bool(icons), "empty": empty,
+            "ongoing": ongoing_text or None}
 
 
 def _alert(raw: dict, calendars: list, now: datetime, tz) -> str | None:

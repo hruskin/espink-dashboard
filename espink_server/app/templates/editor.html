@@ -680,7 +680,10 @@ function params(b) {
       entityField("Večerníček", b, "entity", "sensor", "senzor z ha-vecernicek: stav = epizoda, atribut serial"),
       iconField("Ikona", b.p, "icon", "espink:paper-hat"),
       el("div", { className: "help", textContent: "Papírové čepice (espink:paper-hat…) jsou ve výběru ikon nahoře." }),
-      chk("Kdy se vysílá (vpravo, např. „dnes 18:45“)", b, "show_when")];
+      chk("Kdy se vysílá (vpravo, např. „dnes 18:45“)", b, "show_when"),
+      el("div", { className: "help", textContent: b.h - D.lines[b.line_top] >= 56
+        ? "Dlouhý název se rozdělí na dva řádky: seriál nahoře, epizoda pod ním."
+        : `Dlouhý název se zkrátí. Na dva řádky (seriál nad epizodou) potřebuje blok výšku aspoň ${56 + D.lines[b.line_top]} px – teď má ${b.h} px.` })];
     case "menu": return [
       entityField("Jídelníček", b, "entity", "sensor", "senzor s atributy pondeli…patek, obdobi_od a je_aktualni"),
       textField("Nadpis", b, "title", "např. Jídelníček, Oběd ve školce"),

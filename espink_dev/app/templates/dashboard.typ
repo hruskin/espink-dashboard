@@ -347,22 +347,33 @@
 })
 
 #let bedtime(b, cw, ch) = pad(x: 16pt, box(height: pt(ch), align(horizon, {
-  // jeden řádek: ikona · „Seriál: Epizoda“ (seriál tučně, zkrácení po slovech) · vpravo „DNES 18:45“
+  // ikona · „Seriál: Epizoda“ (seriál tučně, zkrácení po slovech) · vpravo „DNES 18:45“
   let st = (font: COND, size: 23pt, weight: 500)
   // v úzkém bloku jen čas (jinak by na název nezbylo místo)
   let w-txt = if cw < 330 { b.time } else { b.when }
   let when = if has(w-txt) { text(size: 17pt, weight: 800, tracking: 0.5pt, upper(nb(w-txt))) }
   grid(columns: (auto, 1fr, auto), column-gutter: 8pt, align: horizon,
     icon(b.icon, size: 28pt),
-    box(height: 31pt, clip: true, align(horizon, layout(size => {
-      if has(b.missing) { return text(..st, weight: 600, txt(b.missing)) }
+    layout(size => {
+      let one(body) = box(height: 31pt, clip: true, align(horizon, body))
+      if has(b.missing) { return one(text(..st, weight: 600, txt(b.missing))) }
       let w = size.width
       let head = if has(b.series) { txt(b.series) + ": " } else { "" }
       let hw = measure(text(..st, weight: 800, head)).width
-      if head == "" or hw > 0.85 * w { return text(..st, cut(head + txt(b.episode), w, st)) }
-      text(..st, weight: 800, head)
-      text(..st, cut(txt(b.episode), w - hw, st))
-    }))),
+      // nevejde-li se „Seriál: Epizoda“ na řádek, seriál nahoře a epizoda pod ním (stejné písmo);
+      // jen když blok má výšku na dva řádky (aspoň 56 px; editor na to upozorní), jinak jeden zkrácený
+      if head != "" and hw + measure(text(..st, txt(b.episode))).width > w and ch >= 56 {
+        let row(body) = box(height: 27pt, clip: true, align(horizon, body))
+        return stack(dir: ttb,
+          row(text(..st, weight: 800, cut(txt(b.series), w, (..st, weight: 800)))),
+          row(text(..st, cut(txt(b.episode), w, st))))
+      }
+      if head == "" or hw > 0.85 * w { return one(text(..st, cut(head + txt(b.episode), w, st))) }
+      one({
+        text(..st, weight: 800, head)
+        text(..st, cut(txt(b.episode), w - hw, st))
+      })
+    }),
     when)
 })))
 
